@@ -1,0 +1,153 @@
+:root {
+    --bg: #f6f7f9;
+    --fg: #1c2430;
+    --card: #ffffff;
+    --border: #dde2e8;
+    --muted: #6b7684;
+    --accent: #1c64d9;
+    --ok: #1e7d3f;
+    --ok-bg: #e2f4e8;
+    --warn: #925e09;
+    --warn-bg: #fdf1d7;
+    --error: #b12a2a;
+    --error-bg: #fbe4e4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.topbar {
+    background: #10203a;
+    padding: 0.7rem 1.2rem;
+}
+
+.topbar .brand {
+    color: #fff;
+    text-decoration: none;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.2rem;
+}
+
+h1 { font-size: 1.5rem; margin: 0.6rem 0; }
+h2 { font-size: 1.15rem; margin: 1.6rem 0 0.6rem; }
+h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+
+a { color: var(--accent); }
+
+.breadcrumb { color: var(--muted); font-size: 0.9rem; }
+.breadcrumb a { text-decoration: none; }
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; }
+.muted { color: var(--muted); font-size: 0.88em; }
+.empty { color: var(--muted); font-style: italic; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+th {
+    background: #eef1f5;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+tr:last-child td { border-bottom: none; }
+
+.badge {
+    display: inline-block;
+    padding: 0.05rem 0.5rem;
+    border-radius: 99px;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.badge-ok    { color: var(--ok); background: var(--ok-bg); }
+.badge-warn  { color: var(--warn); background: var(--warn-bg); }
+.badge-error { color: var(--error); background: var(--error-bg); }
+.badge-muted { color: var(--muted); background: #e9ecf0; }
+
+.probe-chip { margin-right: 0.5rem; white-space: nowrap; }
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 0.9rem;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+}
+
+.card dl { margin: 0; }
+.card dt { font-size: 0.78rem; text-transform: uppercase; color: var(--muted); margin-top: 0.5rem; }
+.card dd { margin: 0.1rem 0 0; }
+
+.card .raw-link { float: right; font-weight: 400; }
+
+.error-line {
+    color: var(--error);
+    background: var(--error-bg);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.86em;
+}
+
+details { margin-top: 0.6rem; }
+details summary { cursor: pointer; color: var(--accent); }
+
+pre {
+    background: #10203a;
+    color: #dce7f5;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    max-height: 480px;
+}
+
+.search { margin: 0.8rem 0; display: flex; gap: 0.5rem; }
+.search input {
+    flex: 1;
+    max-width: 420px;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+.search button {
+    padding: 0.45rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+}
