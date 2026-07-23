@@ -91,6 +91,66 @@
     <?php endif; ?>
 <?php endif; ?>
 
+<?php if ($findings !== null): ?>
+    <?php $counts = $findings['counts']; ?>
+    <h2>
+        Constats
+        <span class="muted">
+            — <?= e($counts['fail']) ?> en échec sur <?= e($counts['total']) ?> règles
+            (<?= e($counts['pass']) ?> conformes, <?= e($counts['na']) ?> n/a, <?= e($counts['unknown']) ?> indéterminées)
+        </span>
+    </h2>
+
+    <p class="severity-tally">
+        <?php foreach (['C' => 'Critique', 'E' => 'Élevée', 'M' => 'Moyenne', 'I' => 'Info'] as $key => $label): ?>
+            <span class="badge <?= $counts['by_severity'][$key] > 0 ? 'badge-error' : 'badge-muted' ?>">
+                <?= e($label) ?> : <?= e($counts['by_severity'][$key]) ?>
+            </span>
+        <?php endforeach; ?>
+        <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
+    </p>
+
+    <table>
+        <thead>
+        <tr><th>Id</th><th>Catégorie</th><th>Sévérité</th><th>Règle</th><th>Constat</th></tr>
+        </thead>
+        <tbody>
+        <?php foreach ($findings['findings'] as $finding): ?>
+            <?php if ($finding['status'] !== 'fail') { continue; } ?>
+            <tr>
+                <td class="mono"><?= e($finding['id']) ?></td>
+                <td><?= e($finding['category']) ?></td>
+                <td><?= badge_severity($finding['severity'], $finding['severity_label']) ?></td>
+                <td><?= e($finding['title']) ?></td>
+                <td>
+                    <?= e($finding['message']) ?>
+                    <?php if (!empty($finding['detail'])): ?>
+                        <div class="muted"><?= e($finding['detail']) ?></div>
+                    <?php endif; ?>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+
+    <details>
+        <summary>Règles conformes, non applicables et indéterminées</summary>
+        <table>
+            <tbody>
+            <?php foreach ($findings['findings'] as $finding): ?>
+                <?php if ($finding['status'] === 'fail') { continue; } ?>
+                <tr>
+                    <td class="mono"><?= e($finding['id']) ?></td>
+                    <td><?= badge($finding['status'] === 'pass' ? 'ok' : ($finding['status'] === 'na' ? 'n/a' : 'indéterminé')) ?></td>
+                    <td><?= e($finding['title']) ?></td>
+                    <td class="muted"><?= e($finding['detail'] ?? '') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </details>
+<?php endif; ?>
+
 <h2>Probes</h2>
 <?php if ($probes === []): ?>
     <p class="empty">Aucune probe exécutée pour l’instant (en attente du pipeline).</p>

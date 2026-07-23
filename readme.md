@@ -91,6 +91,8 @@ define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
 | `pipeline:run <site_id> [extraction] [--probe=a,b]` | Pipeline complet ou partiel (défaut : dernière extraction) |
 | `probe:run <probe> <site_id> [extraction]` | Une probe seule, imprime l'enveloppe JSON |
 | `probe:list` | Probes enregistrées |
+| `rules:evaluate <site_id> [extraction] [--all] [--json]` | Ré-évalue le catalogue (sans réseau) |
+| `rules:list [--category=…]` | Catalogue de règles |
 | `sites:list [--search=…]` / `extractions:list <site_id>` | Listes |
 | `keys:add/list/revoke` | Gestion des clés API par site |
 | `index:rebuild` | Régénère SQLite depuis `data/` |
@@ -103,8 +105,9 @@ data/sites/<site_id>/
 ├── extractions/<AAAAMMJJTHHMMSSZ>/
 │   ├── payload.json               # payload brut, tel que reçu
 │   ├── meta.json                  # réception (ip, signature, taille)
-│   ├── probes/{dns,rdap,tls,http}.json
-│   └── summary.json               # digest plat → rapports et listes
+│   ├── probes/{dns,rdap,tls,http,pagespeed}.json
+│   ├── summary.json               # digest plat → rapports et listes
+│   └── findings.json              # constats du moteur de règles
 ├── extractions/latest             # symlink
 ├── events/AAAA-MM.jsonl           # événements, append-only
 └── integrity/<horodatage>.json
@@ -112,6 +115,48 @@ data/sites/<site_id>/
 
 Enveloppe commune de chaque probe :
 `{probe, probe_version, site_id, target, ran_at, duration_ms, status: ok|warn|error, data, errors}`.
+
+## Moteur de règles
+
+Les probes collectent, le moteur de règles **juge**. Après chaque pipeline, le
+catalogue est évalué sur `payload.json` + `probes/*.json` (aucun appel réseau) et
+produit un `findings.json` : la matière première du bilan de santé.
+
+Le catalogue vit dans [`config/rules.php`](config/rules.php) et suit
+`.github/validations-techniques.txt` du repo plugin — mêmes identifiants (`A1`,
+`B7a`, `I1`…), mêmes catégories, mêmes sévérités **(C)ritique / (É)levée /
+(M)oyenne / (I)nfo**. Deux préfixes sont des ajouts hors catalogue, volontairement
+distincts pour ne jamais entrer en collision : `W*` (domaine WHOIS/RDAP) et `PS*`
+(scores Lighthouse).
+
+Chaque constat porte : id, catégorie, source, sévérité, statut, valeur observée,
+seuil, message d'action et badge rapport (rouge/jaune/bleu).
+
+Quatre statuts, et la distinction compte pour un rapport client :
+
+| Statut | Sens |
+| --- | --- |
+| `pass` | Conforme |
+| `fail` | À corriger — seul cas qui porte un message d'action |
+| `na` | Non applicable (ex. aucun asset CSS/JS à compresser) |
+| `unknown` | Donnée absente ou sonde en échec — **jamais** présenté comme un problème |
+
+Seuils ajustables **sans toucher au catalogue**, par identifiant :
+
+```php
+// config/config.local.php
+'rules' => ['thresholds' => ['I1' => 1048576, 'M1' => 3, 'C6' => 800]],
+```
+
+```bash
+./bin/xtractor rules:list                          # catalogue
+./bin/xtractor rules:evaluate <site_id> [--all]    # ré-évalue (sans réseau)
+```
+
+Ajouter une règle = un tableau dans `config/rules.php` avec une closure `check`
+recevant un `Context` (`$c->number('payload.autoload.total_bytes')`,
+`$c->bool('probe.http.redirects.forces_https')`). Une règle qui lève une
+exception devient `unknown` et n'interrompt jamais l'évaluation.
 
 ## Ajouter une probe
 

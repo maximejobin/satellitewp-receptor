@@ -45,6 +45,14 @@ return [
         'min_score' => 90,
     ],
 
+    // Rule engine. The catalogue itself lives in config/rules.php; thresholds
+    // can be overridden per rule id without touching it, e.g.:
+    //   'thresholds' => ['I1' => 1048576, 'M1' => 3],
+    'rules' => [
+        'catalog'    => __DIR__ . '/rules.php',
+        'thresholds' => [],
+    ],
+
     // Web UI protection. Set both in config.local.php to enable Basic auth.
     // 'web_pass_hash' is a password_hash() value.
     'web' => [

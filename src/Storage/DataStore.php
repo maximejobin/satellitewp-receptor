@@ -158,6 +158,18 @@ final class DataStore
         return $this->readJson($this->extractionDir($siteId, $extractionId) . '/summary.json');
     }
 
+    /** @param array<string, mixed> $findings */
+    public function writeFindings(string $siteId, string $extractionId, array $findings): void
+    {
+        $this->writeJson($this->extractionDir($siteId, $extractionId) . '/findings.json', $findings);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function readFindings(string $siteId, string $extractionId): ?array
+    {
+        return $this->readJson($this->extractionDir($siteId, $extractionId) . '/findings.json');
+    }
+
     /** @return array<string, mixed>|null */
     public function readMeta(string $siteId, string $extractionId): ?array
     {

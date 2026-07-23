@@ -1,0 +1,126 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SatelliteWP\Xtractor\Tests\Rules;
+
+use SatelliteWP\Xtractor\Rules\Context;
+use SatelliteWP\Xtractor\Rules\RuleCatalog;
+use SatelliteWP\Xtractor\Rules\RuleEngine;
+use SatelliteWP\Xtractor\Rules\Status;
+use SatelliteWP\Xtractor\Tests\TestCase;
+
+/**
+ * Guards the real catalogue: it must load, have unique ids, and behave sanely
+ * against both a healthy site and an empty payload.
+ */
+final class RuleCatalogTest extends TestCase
+{
+    private const string CATALOG = __DIR__ . '/../../config/rules.php';
+
+    private function engine(array $thresholds = []): RuleEngine
+    {
+        return new RuleEngine(RuleCatalog::load(self::CATALOG, $thresholds));
+    }
+
+    public function testCatalogLoadsWithUniqueIdsAndRequiredFields(): void
+    {
+        $rules = RuleCatalog::load(self::CATALOG);
+
+        $this->assertNotEmpty($rules);
+
+        $ids = array_map(static fn ($r): string => $r->id, $rules);
+        $this->assertSame($ids, array_unique($ids), 'rule ids must be unique');
+
+        foreach ($rules as $rule) {
+            $this->assertNotSame('', $rule->title, "{$rule->id} needs a title");
+            $this->assertNotSame('', $rule->message, "{$rule->id} needs an action message");
+            $this->assertContains($rule->source, ['DATA', 'EXT', 'EMAIL'], "{$rule->id} source");
+        }
+    }
+
+    public function testEmptyPayloadYieldsNoFailuresOnlyUnknowns(): void
+    {
+        $result = $this->engine()->evaluate(new Context([]));
+
+        $this->assertSame(
+            0,
+            $result['counts']['fail'],
+            'with no data at all, rules must report unknown rather than invent failures'
+        );
+        $this->assertGreaterThan(0, $result['counts']['unknown']);
+    }
+
+    public function testHealthySiteFixturePassesTheDataRules(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+
+        // Make the fixture fully healthy for the [DATA] rules under test.
+        $payload['php']['max_input_vars'] = '5000';
+        $payload['php']['extensions']     = ['curl', 'mbstring', 'openssl', 'zip', 'dom', 'xml', 'json', 'gd', 'Zend OPcache'];
+        $payload['db_table_prefix']       = 'swp_';
+        $payload['object_cache']          = ['external' => true, 'dropin' => true, 'page_cache' => true];
+        $payload['filesystem']['core_writable'] = false;
+        $payload['plugins'][0]['new_version']   = null;
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        foreach (['G1', 'G4', 'G5', 'G6', 'H9', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'L5', 'M1', 'M2', 'F1', 'F4'] as $id) {
+            $this->assertSame(
+                Status::Pass->value,
+                $findings[$id]['status'],
+                "{$id} should pass on a healthy site, got: " . ($findings[$id]['detail'] ?? $findings[$id]['message'] ?? '')
+            );
+        }
+    }
+
+    public function testDataRulesDetectRealProblems(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $payload['constants']['WP_DEBUG']    = true;   // K1
+        $payload['autoload']['total_bytes']  = 2_000_000; // I1
+        $payload['cron']['overdue_events']   = 7;      // J2
+        $payload['administrators']           = [['id' => 1, 'login' => 'admin']]; // M2
+        $payload['filesystem']['disk_free_bytes'] = 1_000_000; // L1, ~1%
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        foreach (['K1', 'I1', 'J2', 'M2', 'L1'] as $id) {
+            $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
+            $this->assertNotNull($findings[$id]['message'], "{$id} must carry an action message");
+        }
+    }
+
+    public function testThresholdOverrideIsApplied(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json'); // autoload = 512000
+
+        $strict   = $this->engine(['I1' => 100_000])->evaluate(new Context($payload));
+        $findings = array_column($strict['findings'], null, 'id');
+
+        $this->assertSame(Status::Fail->value, $findings['I1']['status']);
+        $this->assertSame(100_000, $findings['I1']['threshold']);
+    }
+
+    public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void
+    {
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($this->fixtureArray('extraction-valid.json')))['findings'],
+            null,
+            'id'
+        );
+
+        // No probe data at all — external rules must not claim a failure.
+        foreach (['A1', 'A10', 'B1', 'C6', 'D1', 'W1'] as $id) {
+            $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} without probes");
+        }
+    }
+}

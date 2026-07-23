@@ -94,6 +94,10 @@ tr:last-child td { border-bottom: none; }
 
 .probe-chip { margin-right: 0.5rem; white-space: nowrap; }
 
+.badge-critical { outline: 2px solid var(--error); outline-offset: 1px; }
+
+.severity-tally { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
 .cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

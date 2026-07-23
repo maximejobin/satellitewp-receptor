@@ -10,6 +10,8 @@ use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Probe\ProbeInterface;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
+use SatelliteWP\Xtractor\Rules\Context as RuleContext;
+use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use Throwable;
@@ -25,6 +27,7 @@ final class Pipeline
         private readonly DataStore $store,
         private readonly Index $index,
         private readonly SummaryBuilder $summaryBuilder,
+        private readonly ?RuleEngine $ruleEngine = null,
     ) {
     }
 
@@ -62,17 +65,39 @@ final class Pipeline
             $results[$probe->name()] = $result;
         }
 
-        // Summary always reflects every probe file on disk (including previous runs).
+        // Summary and findings always reflect every probe file on disk
+        // (including probes run in a previous pass), not just this run.
+        $allProbes = $this->store->readAllProbeResults($siteId, $extractionId);
+
         $summary = $this->summaryBuilder->build(
             $payload,
-            $this->store->readAllProbeResults($siteId, $extractionId),
+            $allProbes,
             $this->store->readMeta($siteId, $extractionId) ?? []
         );
         $this->store->writeSummary($siteId, $extractionId, $summary);
 
+        $this->evaluateRules($siteId, $extractionId, $payload, $allProbes);
+
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_DONE);
 
         return $results;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, array<string, mixed>> $probes
+     */
+    private function evaluateRules(string $siteId, string $extractionId, array $payload, array $probes): void
+    {
+        if ($this->ruleEngine === null) {
+            return;
+        }
+
+        $findings = $this->ruleEngine->evaluate(new RuleContext($payload, $probes));
+        $findings['site_id']       = $siteId;
+        $findings['extraction_id'] = $extractionId;
+
+        $this->store->writeFindings($siteId, $extractionId, $findings);
     }
 
     public function runSingleProbe(string $siteId, string $extractionId, string $probeName): ProbeResult

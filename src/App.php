@@ -15,6 +15,8 @@ use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Probe\RdapProbe;
 use SatelliteWP\Xtractor\Probe\TlsProbe;
+use SatelliteWP\Xtractor\Rules\RuleCatalog;
+use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
@@ -114,13 +116,24 @@ final class App
         return $this->services[ProbeRegistry::class];
     }
 
+    public function ruleEngine(): RuleEngine
+    {
+        return $this->services[RuleEngine::class] ??= new RuleEngine(
+            RuleCatalog::load(
+                (string) $this->config->get('rules.catalog', dirname(__DIR__) . '/config/rules.php'),
+                (array) $this->config->get('rules.thresholds', [])
+            )
+        );
+    }
+
     public function pipeline(): Pipeline
     {
         return $this->services[Pipeline::class] ??= new Pipeline(
             $this->probeRegistry(),
             $this->dataStore(),
             $this->index(),
-            new SummaryBuilder()
+            new SummaryBuilder(),
+            $this->ruleEngine()
         );
     }
 }

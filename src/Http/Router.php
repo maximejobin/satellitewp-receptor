@@ -18,7 +18,10 @@ use SatelliteWP\Xtractor\App;
 final class Router
 {
     /** Files servable through /raw/ — never anything else. */
-    private const array RAW_FILES = ['payload', 'meta', 'summary', 'dns', 'rdap', 'tls', 'http'];
+    private const array RAW_FILES = [
+        'payload', 'meta', 'summary', 'findings',
+        'dns', 'rdap', 'tls', 'http', 'pagespeed',
+    ];
 
     public function __construct(private readonly App $app)
     {
@@ -120,6 +123,7 @@ final class Router
             'payload'      => $payload,
             'meta'         => $store->readMeta($siteId, $extractionId) ?? [],
             'summary'      => $store->readSummary($siteId, $extractionId),
+            'findings'     => $store->readFindings($siteId, $extractionId),
             'probes'       => $store->readAllProbeResults($siteId, $extractionId),
             'row'          => $this->app->index()->getExtraction($siteId, $extractionId),
         ]);
@@ -136,7 +140,7 @@ final class Router
         }
 
         $dir  = $this->app->dataStore()->extractionDir($siteId, $extractionId);
-        $file = in_array($name, ['payload', 'meta', 'summary'], true)
+        $file = in_array($name, ['payload', 'meta', 'summary', 'findings'], true)
             ? "{$dir}/{$name}.json"
             : "{$dir}/probes/{$name}.json";
 

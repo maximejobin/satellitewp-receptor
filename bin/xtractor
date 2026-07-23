@@ -17,6 +17,8 @@ $console->addCommands([
     new Console\PipelineRunCommand($app),
     new Console\ProbeRunCommand($app),
     new Console\ProbeListCommand($app),
+    new Console\RulesEvaluateCommand($app),
+    new Console\RulesListCommand($app),
     new Console\SitesListCommand($app),
     new Console\ExtractionsListCommand($app),
     new Console\KeysAddCommand($app),
