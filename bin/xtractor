@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+use SatelliteWP\Xtractor\Bootstrap;
+use SatelliteWP\Xtractor\Console;
+use Symfony\Component\Console\Application;
+
+$app = Bootstrap::app();
+
+$console = new Application('SatelliteWP Xtractor', '1.0.0');
+$console->addCommands([
+    new Console\IngestProcessCommand($app),
+    new Console\PipelineRunCommand($app),
+    new Console\ProbeRunCommand($app),
+    new Console\ProbeListCommand($app),
+    new Console\SitesListCommand($app),
+    new Console\ExtractionsListCommand($app),
+    new Console\KeysAddCommand($app),
+    new Console\KeysListCommand($app),
+    new Console\KeysRevokeCommand($app),
+    new Console\IndexRebuildCommand($app),
+]);
+$console->run();

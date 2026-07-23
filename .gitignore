@@ -1,0 +1,6 @@
+/vendor/
+/data/
+/config/config.local.php
+.phpunit.result.cache
+.phpunit.cache/
+.DS_Store

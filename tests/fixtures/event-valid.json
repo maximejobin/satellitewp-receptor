@@ -1,0 +1,25 @@
+{
+    "schema_version": "1.0",
+    "site_id": "3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c",
+    "events": [
+        {
+            "schema_version": "1.0",
+            "event": "admin_created",
+            "actor_user_id": 1,
+            "actor_login": "maxadmin",
+            "timestamp_gmt": "2026-07-22 14:00:00",
+            "user_id": 7,
+            "login": "newadmin"
+        },
+        {
+            "schema_version": "1.0",
+            "event": "option_changed",
+            "actor_user_id": 1,
+            "actor_login": "maxadmin",
+            "timestamp_gmt": "2026-07-22 14:05:00",
+            "option": "users_can_register",
+            "old": "0",
+            "new": "1"
+        }
+    ]
+}

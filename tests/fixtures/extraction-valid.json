@@ -1,0 +1,116 @@
+{
+    "extractor_version": "1.4.0",
+    "schema_version": "1.0",
+    "generated_at": "2026-07-22 14:30:00",
+    "site_id": "3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c",
+    "wp_version": "6.8.1",
+    "site_title": "Site de démonstration",
+    "site_url": "https://www.example.com",
+    "home_url": "https://www.example.com",
+    "admin_url": "https://www.example.com/wp-admin/",
+    "site_locale": "fr_CA",
+    "timezone_offset": "-5",
+    "timezone_string": "America/Toronto",
+    "permalink_structure": "/%postname%/",
+    "is_ssl": true,
+    "is_backend_ssl": true,
+    "is_multisite": false,
+    "web_server": "nginx",
+    "document_root": "/var/www/html",
+    "website_administrator_email": "admin@example.com",
+    "php": {
+        "version": "8.3.11",
+        "extensions": ["curl", "gd", "imagick", "mbstring", "openssl", "zip"],
+        "disable_functions": [],
+        "max_execution_time": "300",
+        "max_input_vars": "1000",
+        "post_max_size": "64M",
+        "upload_max_filesize": "64M",
+        "memory_limit": "256M",
+        "upload_max_size": "64M"
+    },
+    "database_type": "mysql",
+    "database_version": "8.0.36",
+    "db_table_prefix": "wp_",
+    "database": {
+        "total_bytes": 52428800,
+        "tables": [
+            { "name": "wp_posts", "size_bytes": 10485760, "row_count": 1200, "overhead_bytes": 0 },
+            { "name": "wp_options", "size_bytes": 5242880, "row_count": 450, "overhead_bytes": 16384 }
+        ],
+        "transients": { "total": 120, "expired": 14 }
+    },
+    "constants": {
+        "WP_DEBUG": false,
+        "WP_DEBUG_LOG": false,
+        "WP_DEBUG_DISPLAY": false,
+        "DISALLOW_FILE_EDIT": true,
+        "FORCE_SSL_ADMIN": true
+    },
+    "cron": {
+        "disabled": false,
+        "scheduled_events": 18,
+        "overdue_events": 0,
+        "distinct_hooks": 12,
+        "next_event_gmt": "2026-07-22 15:00:00"
+    },
+    "object_cache": { "external": false, "dropin": false, "page_cache": false },
+    "filesystem": {
+        "disk_free_bytes": 21474836480,
+        "disk_total_bytes": 107374182400,
+        "core_writable": true,
+        "uploads_writable": true
+    },
+    "mail": {
+        "sendmail_path": "/usr/sbin/sendmail -t -i",
+        "smtp": null,
+        "smtp_port": null,
+        "validation_hash": "a1b2c3d4e5f60718"
+    },
+    "core_update": {
+        "available_version": null,
+        "status": "latest",
+        "minor_update_version": null,
+        "auto_update_core": "minor"
+    },
+    "plugins": [
+        {
+            "name": "WooCommerce",
+            "slug": "woocommerce/woocommerce.php",
+            "version": "9.9.5",
+            "new_version": "10.0.2",
+            "requires_wp": "6.6",
+            "requires_php": "7.4",
+            "network_activated": false,
+            "active": true
+        }
+    ],
+    "active_plugins": ["woocommerce/woocommerce.php"],
+    "active_theme": "storefront",
+    "themes": [
+        {
+            "name": "Storefront",
+            "slug": "storefront",
+            "version": "4.6.0",
+            "new_version": null,
+            "template": "storefront",
+            "requires_wp": "6.0",
+            "requires_php": "7.4",
+            "active": true
+        }
+    ],
+    "users_count": 42,
+    "administrators": [{ "id": 1, "login": "maxadmin" }],
+    "posts_count": 1200,
+    "page_count": 14,
+    "comments_count": 350,
+    "media_count": 890,
+    "autoload": {
+        "total_bytes": 512000,
+        "count": 320,
+        "top": [{ "name": "some_big_option", "bytes": 128000 }]
+    },
+    "connectors": {
+        "woocommerce": { "version": "9.9.5", "db_version": "9.9.5" }
+    }
+}
