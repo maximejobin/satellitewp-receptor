@@ -1,0 +1,24 @@
+<?php
+/**
+ * Local overrides — copy to config.local.php (gitignored) and adjust.
+ * Only include the keys you want to change; arrays merge recursively.
+ */
+
+declare(strict_types=1);
+
+return [
+    // Dev only: accept payloads without signature.
+    // 'allow_unsigned' => true,
+
+    // Web UI Basic auth. Generate the hash with:
+    //   php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
+    // 'web' => [
+    //     'user'      => 'satellitewp',
+    //     'pass_hash' => '$2y$10$…',
+    // ],
+
+    // 'probes' => [
+    //     'enabled' => ['http', 'dns', 'tls', 'rdap'],
+    //     'timeout' => 15,
+    // ],
+];
