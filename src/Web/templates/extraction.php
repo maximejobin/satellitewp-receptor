@@ -59,6 +59,36 @@
             </dl>
         </div>
     </div>
+
+    <?php if (!empty($summary['pagespeed_scores'])): ?>
+        <h2>Performance (PageSpeed)</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Stratégie</th>
+                <?php foreach (array_keys(reset($summary['pagespeed_scores']) ?: []) as $category): ?>
+                    <th><?= e(ucfirst(str_replace('-', ' ', $category))) ?></th>
+                <?php endforeach; ?>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($summary['pagespeed_scores'] as $strategy => $scores): ?>
+                <tr>
+                    <td><strong><?= e($strategy) ?></strong></td>
+                    <?php foreach ($scores as $score): ?>
+                        <td><?= $score === null ? '—' : badge_score((int) $score) ?></td>
+                    <?php endforeach; ?>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <p class="muted">
+            LCP <?= isset($summary['lcp_ms']) ? e(round((float) $summary['lcp_ms'])) . ' ms' : '—' ?>
+            · CLS <?= e($summary['cls'] ?? '—') ?>
+            · données terrain (CrUX) : <?= e($summary['field_data'] ?? 'indisponibles') ?>
+            <?= isset($summary['pagespeed_strategy']) ? '· chiffres de tête : ' . e($summary['pagespeed_strategy']) : '' ?>
+        </p>
+    <?php endif; ?>
 <?php endif; ?>
 
 <h2>Probes</h2>

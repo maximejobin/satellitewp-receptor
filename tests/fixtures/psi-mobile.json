@@ -17,9 +17,12 @@
     "lighthouseResult": {
         "lighthouseVersion": "11.0.0",
         "fetchTime": "2026-07-23T13:00:00.000Z",
-        "configSettings": { "formFactor": "mobile" },
+        "configSettings": { "formFactor": "mobile", "locale": "fr" },
         "categories": {
-            "performance": { "score": 0.74 }
+            "performance":    { "title": "Performances",   "score": 0.74 },
+            "accessibility":  { "title": "Accessibilité",  "score": 0.96 },
+            "best-practices": { "title": "Bonnes pratiques", "score": 0.92 },
+            "seo":            { "title": "SEO",            "score": 0.80 }
         },
         "audits": {
             "first-contentful-paint":   { "numericValue": 1834.5, "displayValue": "1.8 s" },

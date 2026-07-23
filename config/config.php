@@ -35,8 +35,12 @@ return [
     // Get a key: https://developers.google.com/speed/docs/insights/v5/get-started
     'pagespeed' => [
         'api_key'  => null,
-        'strategy' => 'mobile', // 'mobile' | 'desktop' | 'both'
+        'strategy' => 'both',   // 'mobile' | 'desktop' | 'both'
         'timeout'  => 60,       // PSI can legitimately take 30 s+
+        // Lighthouse categories to request. Each adds to the response size.
+        'categories' => ['performance', 'accessibility', 'best-practices', 'seo'],
+        // BCP-47 locale for localized audit titles and displayValue strings.
+        'locale' => 'fr',
         // Minimum performance score (0-100) below which the probe reports "warn".
         'min_score' => 90,
     ],

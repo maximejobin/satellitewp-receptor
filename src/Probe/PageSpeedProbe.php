@@ -18,6 +18,9 @@ final class PageSpeedProbe extends AbstractProbe
 {
     private const string ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
+    /** Attempts per strategy when PSI returns a transient error. */
+    private const int MAX_ATTEMPTS = 3;
+
     /** Lab audits we keep, mapped to short names. Values are ms except CLS (unitless). */
     private const array LAB_AUDITS = [
         'first-contentful-paint'   => 'fcp',
@@ -40,10 +43,13 @@ final class PageSpeedProbe extends AbstractProbe
 
     /**
      * @param list<string> $strategies one or two of 'mobile'/'desktop'
+     * @param list<string> $categories Lighthouse categories to request
      */
     public function __construct(
         private readonly ?string $apiKey,
         private readonly array $strategies,
+        private readonly array $categories,
+        private readonly string $locale,
         private readonly int $timeout,
         private readonly int $minScore,
         private readonly string $userAgent,
@@ -78,7 +84,7 @@ final class PageSpeedProbe extends AbstractProbe
         $scores = [];
 
         foreach ($this->strategies as $strategy) {
-            [$result, $error] = $this->runStrategy($client, $url, $strategy);
+            [$result, $error] = $this->runStrategyWithRetries($client, $url, $strategy);
 
             if ($error !== null) {
                 $errors[] = $error;
@@ -97,12 +103,50 @@ final class PageSpeedProbe extends AbstractProbe
 
         $worst  = $scores !== [] ? min($scores) : null;
         $status = match (true) {
-            $worst === null              => ProbeResult::STATUS_WARN,
-            $worst < $this->minScore     => ProbeResult::STATUS_WARN,
-            default                      => ProbeResult::STATUS_OK,
+            // A partial run (one strategy failed) is never "ok" — data is missing.
+            $errors !== []           => ProbeResult::STATUS_WARN,
+            $worst === null          => ProbeResult::STATUS_WARN,
+            $worst < $this->minScore => ProbeResult::STATUS_WARN,
+            default                  => ProbeResult::STATUS_OK,
         };
 
         return ['target' => $url, 'data' => $data, 'status' => $status, 'errors' => $errors];
+    }
+
+    /**
+     * PSI regularly returns transient 500s ("Lighthouse returned error") and
+     * 429s. Retry those a couple of times before giving up on the strategy.
+     *
+     * @return array{0: array<string, mixed>|null, 1: string|null}
+     */
+    private function runStrategyWithRetries(Client $client, string $url, string $strategy): array
+    {
+        $lastError = null;
+
+        for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
+            [$result, $error] = $this->runStrategy($client, $url, $strategy);
+
+            if ($error === null) {
+                return [$result, null];
+            }
+
+            $lastError = $error;
+
+            if (!$this->isTransient($error) || $attempt === self::MAX_ATTEMPTS) {
+                break;
+            }
+
+            sleep($attempt * 2); // 2 s, then 4 s
+        }
+
+        return [null, $lastError];
+    }
+
+    private function isTransient(string $error): bool
+    {
+        return (bool) preg_match('/HTTP (429|500|502|503|504)\b/', $error)
+            || str_contains($error, 'cURL error')
+            || str_contains($error, 'timed out');
     }
 
     /**
@@ -110,17 +154,22 @@ final class PageSpeedProbe extends AbstractProbe
      */
     private function runStrategy(Client $client, string $url, string $strategy): array
     {
-        $query = [
-            'url'      => $url,
-            'strategy' => $strategy,
-            'category' => 'performance',
+        // PSI expects the category parameter repeated, not category[]= — so the
+        // query string is built by hand rather than through Guzzle's array form.
+        $parts = [
+            'url=' . rawurlencode($url),
+            'strategy=' . rawurlencode($strategy),
+            'locale=' . rawurlencode($this->locale),
         ];
+        foreach ($this->categories as $category) {
+            $parts[] = 'category=' . rawurlencode($category);
+        }
         if ($this->apiKey !== null && $this->apiKey !== '') {
-            $query['key'] = $this->apiKey;
+            $parts[] = 'key=' . rawurlencode($this->apiKey);
         }
 
         try {
-            $response = $client->get(self::ENDPOINT, ['query' => $query]);
+            $response = $client->get(self::ENDPOINT, ['query' => implode('&', $parts)]);
         } catch (GuzzleException $e) {
             return [null, "PSI {$strategy}: {$e->getMessage()}"];
         }
@@ -151,7 +200,18 @@ final class PageSpeedProbe extends AbstractProbe
         $lighthouse = (array) ($response['lighthouseResult'] ?? []);
         $audits     = (array) ($lighthouse['audits'] ?? []);
 
-        $score = $lighthouse['categories']['performance']['score'] ?? null;
+        // Every returned category (performance, accessibility, best-practices,
+        // seo, …) as a 0-100 score, plus its localized title.
+        $scores     = [];
+        $categories = [];
+        foreach ((array) ($lighthouse['categories'] ?? []) as $id => $category) {
+            $raw = $category['score'] ?? null;
+            $scores[$id] = $raw !== null ? (int) round((float) $raw * 100) : null;
+            $categories[$id] = [
+                'title' => $category['title'] ?? null,
+                'score' => $scores[$id],
+            ];
+        }
 
         $lab = [];
         foreach (self::LAB_AUDITS as $auditId => $short) {
@@ -164,7 +224,10 @@ final class PageSpeedProbe extends AbstractProbe
 
         return [
             'strategy'          => $lighthouse['configSettings']['formFactor'] ?? null,
-            'performance_score' => $score !== null ? (int) round((float) $score * 100) : null,
+            'locale'            => $lighthouse['configSettings']['locale'] ?? null,
+            'scores'            => $scores,
+            'categories'        => $categories,
+            'performance_score' => $scores['performance'] ?? null,
             'lab'               => $lab,
             'field'             => self::parseField((array) ($response['loadingExperience'] ?? [])),
             'origin_field'      => self::parseField((array) ($response['originLoadingExperience'] ?? [])),

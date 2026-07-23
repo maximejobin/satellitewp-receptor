@@ -101,6 +101,8 @@ final class App
             $registry->register(new PageSpeedProbe(
                 $this->config->get('pagespeed.api_key'),
                 $strategies,
+                (array) $this->config->get('pagespeed.categories', ['performance']),
+                (string) $this->config->get('pagespeed.locale', 'fr'),
                 (int) $this->config->get('pagespeed.timeout', 60),
                 (int) $this->config->get('pagespeed.min_score', 90),
                 $userAgent

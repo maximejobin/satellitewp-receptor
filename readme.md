@@ -52,6 +52,24 @@ Crontab (traitement des extractions en attente + relance des runs plantés) :
 * * * * * php /var/www/xtractor/bin/xtractor ingest:process --requeue-stale=30 >> /var/www/xtractor/data/xtractor.log 2>&1
 ```
 
+### PageSpeed Insights
+
+La probe `pagespeed` interroge l'API PSI v5 (pas de Chrome headless à installer).
+**Une clé API est nécessaire en pratique** — sans elle, le quota anonyme renvoie
+un HTTP 429 immédiatement. Créez-en une (gratuite, ~25 000 requêtes/jour) dans la
+console Google Cloud en activant « PageSpeed Insights API », puis :
+
+```php
+// config/config.local.php
+'pagespeed' => ['api_key' => '…'],
+```
+
+Par défaut : **un appel mobile + un appel desktop**, les catégories
+`performance`, `accessibility`, `best-practices`, `seo`, en **français**
+(`locale`, BCP-47 — localise les titres et les valeurs affichées). Chaque appel
+prend 10-30 s et PSI renvoie régulièrement des 500 transitoires : la probe
+réessaie 3 fois avec backoff, et un run partiel est signalé `warn` (jamais `ok`).
+
 ## Enregistrer un site
 
 ```bash

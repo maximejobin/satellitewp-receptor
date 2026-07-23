@@ -18,7 +18,18 @@ return [
     // ],
 
     // 'probes' => [
-    //     'enabled' => ['http', 'dns', 'tls', 'rdap'],
+    //     'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed'],
     //     'timeout' => 15,
     // ],
+
+    // PageSpeed Insights. A key is effectively required — the anonymous quota
+    // returns HTTP 429 immediately. Create one (free, ~25k req/day) at:
+    // https://console.cloud.google.com/apis/credentials (enable "PageSpeed Insights API")
+    'pagespeed' => [
+        'api_key' => 'YOUR_PSI_API_KEY',
+        // 'strategy'   => 'both',      // 'mobile' | 'desktop' | 'both'
+        // 'locale'     => 'fr',        // BCP-47: localizes titles and displayValue
+        // 'categories' => ['performance', 'accessibility', 'best-practices', 'seo'],
+        // 'min_score'  => 90,          // performance score below which status = warn
+    ],
 ];

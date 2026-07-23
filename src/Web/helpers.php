@@ -44,6 +44,18 @@ function badge(?string $status): string
     return '<span class="badge ' . $class . '">' . e($status) . '</span>';
 }
 
+/** Lighthouse-style score badge: green >= 90, orange >= 50, red below. */
+function badge_score(int $score): string
+{
+    $class = match (true) {
+        $score >= 90 => 'badge-ok',
+        $score >= 50 => 'badge-warn',
+        default      => 'badge-error',
+    };
+
+    return '<span class="badge ' . $class . '">' . $score . '</span>';
+}
+
 /** Pretty-printed JSON inside a collapsible block. */
 function json_details(string $label, mixed $data, bool $open = false): string
 {

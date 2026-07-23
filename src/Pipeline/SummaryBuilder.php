@@ -112,14 +112,23 @@ final class SummaryBuilder
 
         $pagespeed = $probes['pagespeed']['data'] ?? [];
         if ($pagespeed !== []) {
-            // Prefer mobile, fall back to whichever strategy ran.
-            $strategy = $pagespeed['mobile'] ?? reset($pagespeed);
-            if (is_array($strategy)) {
-                $highlights['pagespeed_score']    = $strategy['performance_score'] ?? null;
-                $highlights['pagespeed_strategy'] = $strategy['strategy'] ?? null;
-                $highlights['field_data']         = $strategy['field']['overall_category'] ?? null;
-                $highlights['lcp_ms']             = $strategy['lab']['lcp']['value'] ?? null;
-                $highlights['cls']                = $strategy['lab']['cls']['value'] ?? null;
+            // All category scores, per strategy: {mobile: {performance: 74, seo: 80, …}, desktop: {…}}
+            $byStrategy = [];
+            foreach ($pagespeed as $name => $result) {
+                if (is_array($result)) {
+                    $byStrategy[$name] = $result['scores'] ?? [];
+                }
+            }
+            $highlights['pagespeed_scores'] = $byStrategy;
+
+            // Headline figures come from mobile when available (what Google ranks on).
+            $headline = $pagespeed['mobile'] ?? reset($pagespeed);
+            if (is_array($headline)) {
+                $highlights['pagespeed_score']    = $headline['performance_score'] ?? null;
+                $highlights['pagespeed_strategy'] = $headline['strategy'] ?? null;
+                $highlights['field_data']         = $headline['field']['overall_category'] ?? null;
+                $highlights['lcp_ms']             = $headline['lab']['lcp']['value'] ?? null;
+                $highlights['cls']                = $headline['lab']['cls']['value'] ?? null;
             }
         }
 

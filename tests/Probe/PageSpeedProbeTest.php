@@ -14,8 +14,17 @@ final class PageSpeedProbeTest extends TestCase
         $data = PageSpeedProbe::parseResponse($this->fixtureArray('psi-mobile.json'));
 
         $this->assertSame('mobile', $data['strategy']);
+        $this->assertSame('fr', $data['locale']);
         $this->assertSame(74, $data['performance_score']);
         $this->assertSame('11.0.0', $data['lighthouse_version']);
+
+        // Every requested category is kept, with its localized title.
+        $this->assertSame(
+            ['performance' => 74, 'accessibility' => 96, 'best-practices' => 92, 'seo' => 80],
+            $data['scores']
+        );
+        $this->assertSame('Bonnes pratiques', $data['categories']['best-practices']['title']);
+        $this->assertSame(80, $data['categories']['seo']['score']);
 
         // Lab metrics kept with value + display.
         $this->assertSame(3120.0, $data['lab']['lcp']['value']);
@@ -46,6 +55,7 @@ final class PageSpeedProbeTest extends TestCase
 
         $this->assertSame('desktop', $data['strategy']);
         $this->assertSame(98, $data['performance_score']);
+        $this->assertSame(['performance' => 98], $data['scores']);
         $this->assertFalse($data['field']['available']);
         $this->assertFalse($data['origin_field']['available']);
         $this->assertNull($data['lab']['lcp']['value']);
