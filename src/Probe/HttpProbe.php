@@ -79,10 +79,15 @@ final class HttpProbe extends AbstractProbe
         // 3. Soft-404 detection.
         $soft404 = $this->soft404Check($client, $finalUrl, $errors);
 
+        // 4. Compression + cache of a first-party CSS/JS asset. Servers often
+        //    compress the HTML document but not their static assets (or vice versa).
+        $asset = $this->assetCheck($client, $finalUrl);
+
         $data = [
             'redirects'        => $redirects,
             'final_url'        => $finalUrl,
             'soft_404'         => $soft404,
+            'asset'            => $asset,
         ] + $main;
 
         return [
@@ -270,11 +275,101 @@ final class HttpProbe extends AbstractProbe
         ];
     }
 
+    /**
+     * Fetch the HTML (decoded), find the first same-origin CSS/JS asset, then
+     * measure its compression and cacheability.
+     *
+     * @return array<string, mixed>
+     */
+    private function assetCheck(Client $client, string $pageUrl): array
+    {
+        try {
+            $html = (string) $client->get($pageUrl, [
+                'headers'        => ['Accept-Encoding' => 'gzip'], // gzip is auto-decoded; keeps HTML readable
+                'decode_content' => true,
+            ])->getBody();
+        } catch (GuzzleException $e) {
+            return ['checked' => false, 'error' => $e->getMessage()];
+        }
+
+        $assetUrl = self::extractFirstAsset($html, $pageUrl);
+        if ($assetUrl === null) {
+            return ['checked' => false, 'reason' => 'no first-party CSS/JS asset found'];
+        }
+
+        try {
+            $response = $client->get($assetUrl, [
+                'headers'        => ['Accept-Encoding' => 'gzip, br'],
+                'decode_content' => false,
+            ]);
+        } catch (GuzzleException $e) {
+            return ['checked' => false, 'url' => $assetUrl, 'error' => $e->getMessage()];
+        }
+
+        $encoding     = strtolower($response->getHeaderLine('Content-Encoding'));
+        $cacheControl = $response->getHeaderLine('Cache-Control');
+
+        return [
+            'checked'          => true,
+            'url'              => $assetUrl,
+            'content_encoding' => $encoding !== '' ? $encoding : null,
+            'gzip'             => $encoding === 'gzip',
+            'brotli'           => $encoding === 'br',
+            'cache_control'    => $cacheControl !== '' ? $cacheControl : null,
+            'max_age'          => self::cacheMaxAge($cacheControl),
+        ];
+    }
+
+    /**
+     * First same-origin stylesheet or script URL in the HTML — pure, testable.
+     */
+    public static function extractFirstAsset(string $html, string $pageUrl): ?string
+    {
+        $host = parse_url($pageUrl, PHP_URL_HOST);
+        if ($host === null || $host === false) {
+            return null;
+        }
+
+        $candidates = [];
+        if (preg_match_all('/<link\b[^>]*\brel=["\']?stylesheet[^>]*>/i', $html, $links)) {
+            foreach ($links[0] as $tag) {
+                if (preg_match('/\bhref=["\']([^"\']+)["\']/i', $tag, $m)) {
+                    $candidates[] = $m[1];
+                }
+            }
+        }
+        if (preg_match_all('/<script\b[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>/i', $html, $scripts)) {
+            foreach ($scripts[1] as $src) {
+                $candidates[] = $src;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $resolved = (new self(0, 0, ''))->resolveUrl($pageUrl, $candidate);
+            if (parse_url($resolved, PHP_URL_HOST) === $host) {
+                return strtok($resolved, '#'); // drop any fragment
+            }
+        }
+
+        return null;
+    }
+
+    private static function cacheMaxAge(string $cacheControl): ?int
+    {
+        return preg_match('/max-age=(\d+)/i', $cacheControl, $m) ? (int) $m[1] : null;
+    }
+
     /** Assess collected data into ok/warn. */
     private function assess(array $data): string
     {
+        $asset = $data['asset'] ?? [];
+        $assetUncompressed = ($asset['checked'] ?? false) === true
+            && ($asset['gzip'] ?? false) === false
+            && ($asset['brotli'] ?? false) === false;
+
         $warn =
             ($data['gzip'] ?? false) === false && ($data['brotli'] ?? false) === false
+            || $assetUncompressed
             || ($data['redirects']['forces_https'] ?? true) === false
             || (($data['security_headers']['x-content-type-options'] ?? null) === null)
             || (($data['ttfb_ms'] ?? 0) > 600)

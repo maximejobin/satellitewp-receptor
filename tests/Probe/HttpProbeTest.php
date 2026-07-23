@@ -53,4 +53,38 @@ final class HttpProbeTest extends TestCase
         $this->assertNull($data['cookies']);
         $this->assertNull($data['security_headers']['content-security-policy']);
     }
+
+    public function testExtractFirstAssetPrefersSameOriginStylesheet(): void
+    {
+        $html = <<<HTML
+            <html><head>
+            <link rel="preconnect" href="https://fonts.gstatic.com">
+            <link rel='stylesheet' href='/wp-content/themes/x/style.css?ver=1.2'>
+            <script src="https://cdn.example.net/third-party.js"></script>
+            </head></html>
+            HTML;
+
+        $this->assertSame(
+            'https://www.example.com/wp-content/themes/x/style.css?ver=1.2',
+            HttpProbe::extractFirstAsset($html, 'https://www.example.com/')
+        );
+    }
+
+    public function testExtractFirstAssetFallsBackToScriptAndSkipsThirdParty(): void
+    {
+        $html = '<script src="https://cdn.other.com/a.js"></script>'
+            . '<script src="//www.example.com/app.js"></script>';
+
+        $this->assertSame(
+            'https://www.example.com/app.js',
+            HttpProbe::extractFirstAsset($html, 'https://www.example.com/page/')
+        );
+    }
+
+    public function testExtractFirstAssetReturnsNullWhenNoFirstPartyAsset(): void
+    {
+        $html = '<link rel="stylesheet" href="https://cdn.other.com/x.css">';
+
+        $this->assertNull(HttpProbe::extractFirstAsset($html, 'https://www.example.com/'));
+    }
 }

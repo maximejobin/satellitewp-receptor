@@ -11,6 +11,7 @@ use SatelliteWP\Xtractor\Pipeline\Pipeline;
 use SatelliteWP\Xtractor\Pipeline\SummaryBuilder;
 use SatelliteWP\Xtractor\Probe\DnsProbe;
 use SatelliteWP\Xtractor\Probe\HttpProbe;
+use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Probe\RdapProbe;
 use SatelliteWP\Xtractor\Probe\TlsProbe;
@@ -92,6 +93,16 @@ final class App
                 (string) $this->config->get('rdap_base_url', 'https://rdap.org'),
                 $connectTimeout,
                 $timeout,
+                $userAgent
+            ));
+
+            $strategy   = (string) $this->config->get('pagespeed.strategy', 'mobile');
+            $strategies = $strategy === 'both' ? ['mobile', 'desktop'] : [$strategy];
+            $registry->register(new PageSpeedProbe(
+                $this->config->get('pagespeed.api_key'),
+                $strategies,
+                (int) $this->config->get('pagespeed.timeout', 60),
+                (int) $this->config->get('pagespeed.min_score', 90),
                 $userAgent
             ));
 

@@ -21,7 +21,7 @@ return [
 
     // Probes executed by the pipeline, in order.
     'probes' => [
-        'enabled' => ['http', 'dns', 'tls', 'rdap'],
+        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed'],
         'connect_timeout' => 5,
         'timeout' => 15,
         'user_agent' => 'SatelliteWP-Xtractor/1.0',
@@ -29,6 +29,17 @@ return [
 
     // Base URL of the RDAP bootstrap service.
     'rdap_base_url' => 'https://rdap.org',
+
+    // PageSpeed Insights (Lighthouse). Without an API key the anonymous quota is
+    // exhausted almost immediately (HTTP 429) — set one in config.local.php.
+    // Get a key: https://developers.google.com/speed/docs/insights/v5/get-started
+    'pagespeed' => [
+        'api_key'  => null,
+        'strategy' => 'mobile', // 'mobile' | 'desktop' | 'both'
+        'timeout'  => 60,       // PSI can legitimately take 30 s+
+        // Minimum performance score (0-100) below which the probe reports "warn".
+        'min_score' => 90,
+    ],
 
     // Web UI protection. Set both in config.local.php to enable Basic auth.
     // 'web_pass_hash' is a password_hash() value.

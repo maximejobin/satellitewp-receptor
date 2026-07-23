@@ -107,6 +107,20 @@ final class SummaryBuilder
             $highlights['content_encoding'] = $http['content_encoding'] ?? null;
             $highlights['forces_https']     = $http['redirects']['forces_https'] ?? null;
             $highlights['ttfb_ms']          = $http['ttfb_ms'] ?? null;
+            $highlights['asset_encoding']   = $http['asset']['content_encoding'] ?? null;
+        }
+
+        $pagespeed = $probes['pagespeed']['data'] ?? [];
+        if ($pagespeed !== []) {
+            // Prefer mobile, fall back to whichever strategy ran.
+            $strategy = $pagespeed['mobile'] ?? reset($pagespeed);
+            if (is_array($strategy)) {
+                $highlights['pagespeed_score']    = $strategy['performance_score'] ?? null;
+                $highlights['pagespeed_strategy'] = $strategy['strategy'] ?? null;
+                $highlights['field_data']         = $strategy['field']['overall_category'] ?? null;
+                $highlights['lcp_ms']             = $strategy['lab']['lcp']['value'] ?? null;
+                $highlights['cls']                = $strategy['lab']['cls']['value'] ?? null;
+            }
         }
 
         return $highlights;

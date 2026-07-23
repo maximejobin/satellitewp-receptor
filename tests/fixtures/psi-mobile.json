@@ -1,0 +1,34 @@
+{
+    "loadingExperience": {
+        "overall_category": "AVERAGE",
+        "metrics": {
+            "LARGEST_CONTENTFUL_PAINT_MS": { "percentile": 2890, "category": "AVERAGE" },
+            "CUMULATIVE_LAYOUT_SHIFT_SCORE": { "percentile": 5, "category": "FAST" },
+            "FIRST_CONTENTFUL_PAINT_MS": { "percentile": 1620, "category": "AVERAGE" },
+            "INTERACTION_TO_NEXT_PAINT": { "percentile": 180, "category": "FAST" }
+        }
+    },
+    "originLoadingExperience": {
+        "overall_category": "SLOW",
+        "metrics": {
+            "LARGEST_CONTENTFUL_PAINT_MS": { "percentile": 4200, "category": "SLOW" }
+        }
+    },
+    "lighthouseResult": {
+        "lighthouseVersion": "11.0.0",
+        "fetchTime": "2026-07-23T13:00:00.000Z",
+        "configSettings": { "formFactor": "mobile" },
+        "categories": {
+            "performance": { "score": 0.74 }
+        },
+        "audits": {
+            "first-contentful-paint":   { "numericValue": 1834.5, "displayValue": "1.8 s" },
+            "largest-contentful-paint": { "numericValue": 3120.0, "displayValue": "3.1 s" },
+            "total-blocking-time":      { "numericValue": 240.0,  "displayValue": "240 ms" },
+            "cumulative-layout-shift":  { "numericValue": 0.043,  "displayValue": "0.043" },
+            "speed-index":              { "numericValue": 4100.0, "displayValue": "4.1 s" },
+            "interactive":              { "numericValue": 5200.0, "displayValue": "5.2 s" },
+            "server-response-time":     { "numericValue": 320.0,  "displayValue": "Root document took 320 ms" }
+        }
+    }
+}
