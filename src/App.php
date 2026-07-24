@@ -15,6 +15,7 @@ use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Probe\RdapProbe;
 use SatelliteWP\Xtractor\Probe\TlsProbe;
+use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Storage\DataStore;
@@ -126,6 +127,23 @@ final class App
         );
     }
 
+    public function endOfLife(): EndOfLife
+    {
+        return $this->services[EndOfLife::class] ??= new EndOfLife(
+            (string) $this->config->get('data_dir') . '/reference'
+        );
+    }
+
+    /**
+     * Server-side reference data injected into every rule Context.
+     *
+     * @return array<string, mixed>
+     */
+    public function referenceData(): array
+    {
+        return ['eol' => $this->endOfLife()];
+    }
+
     public function pipeline(): Pipeline
     {
         return $this->services[Pipeline::class] ??= new Pipeline(
@@ -133,7 +151,8 @@ final class App
             $this->dataStore(),
             $this->index(),
             new SummaryBuilder(),
-            $this->ruleEngine()
+            $this->ruleEngine(),
+            $this->referenceData()
         );
     }
 }

@@ -55,7 +55,11 @@ final class RulesEvaluateCommand extends Command
         }
 
         $findings = $this->app->ruleEngine()->evaluate(
-            new Context($payload, $store->readAllProbeResults($siteId, $extractionId))
+            new Context(
+                $payload,
+                $store->readAllProbeResults($siteId, $extractionId),
+                $this->app->referenceData()
+            )
         );
         $findings['site_id']       = $siteId;
         $findings['extraction_id'] = $extractionId;

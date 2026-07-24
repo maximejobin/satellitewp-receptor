@@ -87,4 +87,46 @@ final class HttpProbeTest extends TestCase
 
         $this->assertNull(HttpProbe::extractFirstAsset($html, 'https://www.example.com/'));
     }
+
+    public function testParseRobotsExtractsSitemapsAndRules(): void
+    {
+        $body = <<<TXT
+            # comment line
+            User-agent: *
+            Disallow: /wp-admin/
+            Allow: /wp-admin/admin-ajax.php
+
+            User-agent: BadBot
+            Disallow: /
+
+            Sitemap: https://example.com/sitemap.xml
+            Sitemap: https://example.com/news-sitemap.xml
+            TXT;
+
+        $parsed = HttpProbe::parseRobots($body);
+
+        $this->assertFalse($parsed['disallow_all'], 'Disallow: / applies to BadBot, not *');
+        $this->assertSame(
+            ['https://example.com/sitemap.xml', 'https://example.com/news-sitemap.xml'],
+            $parsed['sitemaps']
+        );
+        $this->assertSame(2, $parsed['rule_count']);
+    }
+
+    public function testParseRobotsDetectsGlobalBlock(): void
+    {
+        $parsed = HttpProbe::parseRobots("User-agent: *\nDisallow: /");
+
+        $this->assertTrue($parsed['disallow_all']);
+        $this->assertSame([], $parsed['sitemaps']);
+    }
+
+    public function testParseRobotsEmpty(): void
+    {
+        $parsed = HttpProbe::parseRobots('');
+
+        $this->assertFalse($parsed['disallow_all']);
+        $this->assertSame([], $parsed['sitemaps']);
+        $this->assertSame(0, $parsed['rule_count']);
+    }
 }

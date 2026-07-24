@@ -28,6 +28,7 @@ final class Pipeline
         private readonly Index $index,
         private readonly SummaryBuilder $summaryBuilder,
         private readonly ?RuleEngine $ruleEngine = null,
+        private readonly array $referenceData = [],
     ) {
     }
 
@@ -93,7 +94,7 @@ final class Pipeline
             return;
         }
 
-        $findings = $this->ruleEngine->evaluate(new RuleContext($payload, $probes));
+        $findings = $this->ruleEngine->evaluate(new RuleContext($payload, $probes, $this->referenceData));
         $findings['site_id']       = $siteId;
         $findings['extraction_id'] = $extractionId;
 

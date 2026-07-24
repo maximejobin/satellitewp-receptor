@@ -18,10 +18,12 @@ final readonly class Context
     /**
      * @param array<string, mixed> $payload extraction payload
      * @param array<string, array<string, mixed>> $probes probe name => envelope
+     * @param array<string, mixed> $reference server-side reference data (EOL tables, …)
      */
     public function __construct(
         private array $payload,
         private array $probes = [],
+        private array $reference = [],
     ) {
     }
 
@@ -129,5 +131,11 @@ final readonly class Context
     public function payload(): array
     {
         return $this->payload;
+    }
+
+    /** A named bag of server-side reference data (e.g. an EndOfLife instance). */
+    public function reference(string $name): mixed
+    {
+        return $this->reference[$name] ?? null;
     }
 }

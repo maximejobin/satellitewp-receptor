@@ -83,11 +83,15 @@ final class HttpProbe extends AbstractProbe
         //    compress the HTML document but not their static assets (or vice versa).
         $asset = $this->assetCheck($client, $finalUrl);
 
+        // 5. robots.txt (+ the sitemap it declares).
+        $robots = $this->robotsCheck($client, $finalUrl);
+
         $data = [
             'redirects'        => $redirects,
             'final_url'        => $finalUrl,
             'soft_404'         => $soft404,
             'asset'            => $asset,
+            'robots'           => $robots,
         ] + $main;
 
         return [
@@ -357,6 +361,107 @@ final class HttpProbe extends AbstractProbe
     private static function cacheMaxAge(string $cacheControl): ?int
     {
         return preg_match('/max-age=(\d+)/i', $cacheControl, $m) ? (int) $m[1] : null;
+    }
+
+    /**
+     * Fetch and analyse /robots.txt, then confirm the sitemap it declares
+     * (the sitemap URL comes from robots.txt, per the spec).
+     *
+     * @return array<string, mixed>
+     */
+    private function robotsCheck(Client $client, string $pageUrl): array
+    {
+        $origin    = $this->origin($pageUrl);
+        $robotsUrl = $origin . '/robots.txt';
+
+        try {
+            $response = $client->get($robotsUrl, ['decode_content' => true]);
+        } catch (GuzzleException $e) {
+            return ['present' => false, 'error' => $e->getMessage()];
+        }
+
+        if ($response->getStatusCode() !== 200) {
+            return ['present' => false, 'status_code' => $response->getStatusCode()];
+        }
+
+        $contentType = strtolower($response->getHeaderLine('Content-Type'));
+        // A "robots.txt" that is actually an HTML page (SPA/soft-404) is not one.
+        if ($contentType !== '' && !str_contains($contentType, 'text/plain') && !str_contains($contentType, 'text/')) {
+            return ['present' => false, 'status_code' => 200, 'reason' => 'Content-Type ' . $contentType];
+        }
+
+        $parsed = self::parseRobots((string) $response->getBody());
+        $parsed['present']     = true;
+        $parsed['url']         = $robotsUrl;
+
+        // Verify the first declared sitemap actually resolves.
+        $parsed['sitemap_reachable'] = null;
+        if ($parsed['sitemaps'] !== []) {
+            try {
+                $sitemap = $client->head($parsed['sitemaps'][0]);
+                $parsed['sitemap_reachable'] = $sitemap->getStatusCode() >= 200
+                    && $sitemap->getStatusCode() < 400;
+            } catch (GuzzleException) {
+                $parsed['sitemap_reachable'] = false;
+            }
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * Pure robots.txt parsing — unit-testable.
+     *
+     * @return array{disallow_all: bool, sitemaps: list<string>, rule_count: int}
+     */
+    public static function parseRobots(string $body): array
+    {
+        $sitemaps    = [];
+        $disallowAll = false;
+        $ruleCount   = 0;
+        $appliesToAll = false; // are we inside a "User-agent: *" block?
+
+        foreach (preg_split('/\r\n|\r|\n/', $body) ?: [] as $line) {
+            $line = trim(preg_replace('/#.*$/', '', $line) ?? '');
+            if ($line === '' || !str_contains($line, ':')) {
+                continue;
+            }
+
+            [$field, $value] = array_map('trim', explode(':', $line, 2));
+            $field = strtolower($field);
+
+            switch ($field) {
+                case 'sitemap':
+                    if ($value !== '') {
+                        $sitemaps[] = $value;
+                    }
+                    break;
+                case 'user-agent':
+                    $appliesToAll = $value === '*';
+                    break;
+                case 'disallow':
+                    $ruleCount++;
+                    // A bare "Disallow: /" for "*" blocks the whole site.
+                    if ($appliesToAll && $value === '/') {
+                        $disallowAll = true;
+                    }
+                    break;
+            }
+        }
+
+        return [
+            'disallow_all' => $disallowAll,
+            'sitemaps'     => array_values(array_unique($sitemaps)),
+            'rule_count'   => $ruleCount,
+        ];
+    }
+
+    private function origin(string $url): string
+    {
+        $parts = parse_url($url);
+
+        return ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? '')
+            . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
     /** Assess collected data into ok/warn. */

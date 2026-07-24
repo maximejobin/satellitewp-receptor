@@ -20,6 +20,7 @@
 
 declare(strict_types=1);
 
+use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Rules\Check;
 use SatelliteWP\Xtractor\Rules\Context;
 use SatelliteWP\Xtractor\Rules\Rule;
@@ -352,6 +353,45 @@ return [
         },
     ],
 
+    [
+        'id' => 'C9', 'category' => 'DNS', 'source' => 'EXT', 'severity' => Severity::Moyenne,
+        'title'   => 'robots.txt présent et non bloquant',
+        'message' => 'robots.txt {observed}.',
+        'check'   => static function (Context $c) {
+            $robots = $c->get('probe.http.robots');
+            if (!is_array($robots)) {
+                return Check::unknown('Sonde HTTP indisponible');
+            }
+            if (($robots['present'] ?? false) !== true) {
+                return Check::fail('est absent');
+            }
+
+            return ($robots['disallow_all'] ?? false) === true
+                ? Check::fail('bloque tout le site (Disallow: /)', null, Severity::Elevee)
+                : Check::pass('présent');
+        },
+    ],
+    [
+        'id' => 'C10', 'category' => 'DNS', 'source' => 'EXT', 'severity' => Severity::Info,
+        'title'   => 'sitemap.xml référencé dans robots.txt',
+        'message' => 'Aucun sitemap n\'est référencé dans robots.txt.',
+        'check'   => static function (Context $c) {
+            $robots = $c->get('probe.http.robots');
+            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+                return Check::unknown('robots.txt non récupéré');
+            }
+            $sitemaps = $robots['sitemaps'] ?? [];
+            if ($sitemaps === []) {
+                return Check::fail(0);
+            }
+            if (($robots['sitemap_reachable'] ?? null) === false) {
+                return Check::fail(count($sitemaps), 'Le sitemap déclaré est injoignable', Severity::Moyenne);
+            }
+
+            return Check::pass(count($sitemaps));
+        },
+    ],
+
     // ===================================================================
     //  D. DÉLIVRABILITÉ E-MAIL (volet DNS seulement)               [EXT]
     // ===================================================================
@@ -480,31 +520,57 @@ return [
         },
     ],
     [
+        'id' => 'F2', 'category' => 'Versions', 'source' => 'DATA', 'severity' => Severity::Elevee,
+        'title'   => 'Branche WordPress encore supportée',
+        'message' => 'WordPress {observed} est en fin de vie. Migrer vers une branche supportée.',
+        'check'   => static function (Context $c) {
+            $eol     = $c->reference('eol');
+            $version = $c->string('payload.wp_version');
+            if (!$eol instanceof EndOfLife) {
+                return Check::unknown('Données EOL absentes — lancer reference:refresh');
+            }
+            if ($version === null) {
+                return Check::unknown('Version WP absente du payload');
+            }
+
+            $status = $eol->eolStatus('wordpress', $version);
+            if ($status === null) {
+                return Check::unknown("Branche WP " . EndOfLife::branch($version) . " inconnue de endoflife.date");
+            }
+
+            [$isEol, $date] = $status;
+
+            return $isEol
+                ? Check::fail($version, $date !== null ? "Fin de vie : {$date}" : null)
+                : Check::pass($version);
+        },
+    ],
+    [
         'id' => 'F3', 'category' => 'Versions', 'source' => 'DATA', 'severity' => Severity::Elevee,
         'title'   => 'Version PHP encore supportée',
-        'message' => 'PHP {observed} n\'est plus supporté (fin de vie {detail}). Planifier une montée de version.',
+        'message' => 'PHP {observed} n\'est plus supporté. Planifier une montée de version.',
         'check'   => static function (Context $c) {
+            // EOL dates come from endoflife.date, cached server-side (SOURCE 14).
+            $eol     = $c->reference('eol');
             $version = $c->string('payload.php.version');
+            if (!$eol instanceof EndOfLife) {
+                return Check::unknown('Données EOL absentes — lancer reference:refresh');
+            }
             if ($version === null) {
                 return Check::unknown('Version PHP absente du payload');
             }
 
-            // Security-support end dates (php.net). Maintained server-side, as
-            // the catalogue's architecture notes require.
-            $eol = [
-                '7.4' => '2022-11-28', '8.0' => '2023-11-26', '8.1' => '2025-12-31',
-                '8.2' => '2026-12-31', '8.3' => '2027-12-31', '8.4' => '2028-12-31',
-                '8.5' => '2029-12-31',
-            ];
-
-            $branch = implode('.', array_slice(explode('.', $version), 0, 2));
-            if (!isset($eol[$branch])) {
-                return Check::unknown("Branche PHP {$branch} inconnue de la table de référence");
+            // php uses "eol" for security support end.
+            $status = $eol->eolStatus('php', $version, 'eol');
+            if ($status === null) {
+                return Check::unknown("Branche PHP " . EndOfLife::branch($version) . " inconnue de endoflife.date");
             }
 
-            return strtotime($eol[$branch]) < time()
-                ? Check::fail($version, "Fin de support : {$eol[$branch]}")
-                : Check::pass($version, "Supporté jusqu'au {$eol[$branch]}");
+            [$isEol, $date] = $status;
+
+            return $isEol
+                ? Check::fail($version, $date !== null ? "Fin de support : {$date}" : null)
+                : Check::pass($version, $date !== null ? "Supporté jusqu'au {$date}" : null);
         },
     ],
     [

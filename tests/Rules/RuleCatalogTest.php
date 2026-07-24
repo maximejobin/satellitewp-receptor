@@ -110,6 +110,31 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(100_000, $findings['I1']['threshold']);
     }
 
+    public function testEolRulesUseInjectedReferenceData(): void
+    {
+        $eol = new \SatelliteWP\Xtractor\Reference\EndOfLife($this->tmpDir . '/reference');
+        mkdir($this->tmpDir . '/reference', 0775, true);
+        file_put_contents($this->tmpDir . '/reference/php.json', (string) json_encode([
+            ['cycle' => '8.3', 'eol' => '2027-12-31'],
+            ['cycle' => '7.4', 'eol' => '2022-11-28'],
+        ]));
+        file_put_contents($this->tmpDir . '/reference/wordpress.json', (string) json_encode([
+            ['cycle' => '6.8', 'eol' => '2025-12-02'],
+        ]));
+
+        $payload = $this->fixtureArray('extraction-valid.json'); // PHP 8.3.11, WP 6.8.1
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload, [], ['eol' => $eol]))['findings'],
+            null,
+            'id'
+        );
+
+        $this->assertSame(Status::Pass->value, $findings['F3']['status'], 'PHP 8.3 still supported');
+        $this->assertSame(Status::Fail->value, $findings['F2']['status'], 'WordPress 6.8 is EOL');
+        $this->assertStringContainsString('fin de vie', strtolower((string) $findings['F2']['message']));
+    }
+
     public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void
     {
         $findings = array_column(
