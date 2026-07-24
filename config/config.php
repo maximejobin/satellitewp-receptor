@@ -45,6 +45,21 @@ return [
         'min_score' => 90,
     ],
 
+    // BlogVault API v6 — the decided source for vulnerabilities/malware/backup.
+    // The client is generic: set base_url, auth scheme and any always-present
+    // params here (fill them from BlogVault's v6 docs), then call any endpoint
+    // by path. api_key belongs in config.local.php.
+    'blogvault' => [
+        'base_url' => '', // e.g. https://api.blogvault.net/v6  (from their docs)
+        'api_key'  => null,
+        'timeout'  => 20,
+        // How the key is sent: 'bearer' | 'header' | 'query' | 'basic' | 'none'.
+        'auth' => ['type' => 'bearer', 'name' => 'Authorization'],
+        // Params/headers sent on every request (e.g. a partner or account id).
+        'default_query'   => [],
+        'default_headers' => [],
+    ],
+
     // Rule engine. The catalogue itself lives in config/rules.php; thresholds
     // can be overridden per rule id without touching it, e.g.:
     //   'thresholds' => ['I1' => 1048576, 'M1' => 3],

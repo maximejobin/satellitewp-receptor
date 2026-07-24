@@ -96,6 +96,13 @@ define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
 | `sites:list [--search=…]` / `extractions:list <site_id>` | Listes |
 | `keys:add/list/revoke` | Gestion des clés API par site |
 | `index:rebuild` | Régénère SQLite depuis `data/` |
+| `reference:refresh [--product=php,wordpress]` | Rafraîchit les tables EOL depuis endoflife.date |
+
+Crontab suggéré pour les données de référence (elles changent rarement) :
+
+```cron
+0 4 * * 1 php /var/www/xtractor/bin/xtractor reference:refresh >> /var/www/xtractor/data/xtractor.log 2>&1
+```
 
 ## Layout data/
 
@@ -157,6 +164,36 @@ Ajouter une règle = un tableau dans `config/rules.php` avec une closure `check`
 recevant un `Context` (`$c->number('payload.autoload.total_bytes')`,
 `$c->bool('probe.http.redirects.forces_https')`). Une règle qui lève une
 exception devient `unknown` et n'interrompt jamais l'évaluation.
+
+## BlogVault (API v6)
+
+`BlogVaultClient` est un client **générique et paramétrable** — pas une méthode
+par endpoint. Les paramètres font le travail :
+
+```php
+$bv    = $app->blogVault();
+$vulns = $bv->get('sites/vulnerabilities', ['site_url' => $url]);
+$bv->post('sites/scan', ['site_url' => $url]);
+$bv->request('GET', 'n/importe/quel/endpoint', ['query' => [...]]);
+```
+
+Tout ce qui est spécifique à v6 vit en config (à renseigner depuis leur doc) —
+aucun code à changer :
+
+```php
+// config/config.php (base_url) + config/config.local.php (api_key)
+'blogvault' => [
+    'base_url' => 'https://api.blogvault.net/v6',
+    'api_key'  => '…',
+    'auth'     => ['type' => 'bearer'],   // bearer | header | query | basic | none
+    'default_query' => ['account' => '…'], // params envoyés à chaque appel
+],
+```
+
+Chaque appel renvoie le JSON décodé ; un échec lève une `BlogVaultException`
+portant le code HTTP et le corps d'erreur de l'API. **Non encore câblé au moteur
+de règles** (F10 vulnérabilités) : en attente de l'URL de base et du schéma
+d'auth v6.
 
 ## Ajouter une probe
 

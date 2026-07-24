@@ -7,6 +7,7 @@ namespace SatelliteWP\Xtractor;
 use SatelliteWP\Xtractor\Http\PayloadValidator;
 use SatelliteWP\Xtractor\Http\Receptor;
 use SatelliteWP\Xtractor\Http\SignatureVerifier;
+use SatelliteWP\Xtractor\Integration\BlogVaultClient;
 use SatelliteWP\Xtractor\Pipeline\Pipeline;
 use SatelliteWP\Xtractor\Pipeline\SummaryBuilder;
 use SatelliteWP\Xtractor\Probe\DnsProbe;
@@ -124,6 +125,13 @@ final class App
                 (string) $this->config->get('rules.catalog', dirname(__DIR__) . '/config/rules.php'),
                 (array) $this->config->get('rules.thresholds', [])
             )
+        );
+    }
+
+    public function blogVault(): BlogVaultClient
+    {
+        return $this->services[BlogVaultClient::class] ??= BlogVaultClient::fromConfig(
+            (array) $this->config->get('blogvault', [])
         );
     }
 
