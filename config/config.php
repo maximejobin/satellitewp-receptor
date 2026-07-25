@@ -60,6 +60,12 @@ return [
         'default_headers' => [],
     ],
 
+    // Server-side reference data (SOURCE 14). endoflife.date products cached
+    // under data/reference/ by `reference:refresh` and read offline by rules.
+    'reference' => [
+        'products' => ['php', 'wordpress', 'mysql', 'mariadb'],
+    ],
+
     // Rule engine. The catalogue itself lives in config/rules.php; thresholds
     // can be overridden per rule id without touching it, e.g.:
     //   'thresholds' => ['I1' => 1048576, 'M1' => 3],

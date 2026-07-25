@@ -721,6 +721,42 @@ return [
     //  H. BASE DE DONNÉES                                         [DATA]
     // ===================================================================
     [
+        'id' => 'H1', 'category' => 'Base de données', 'source' => 'DATA', 'severity' => Severity::Moyenne,
+        'title'   => 'Version de base de données supportée',
+        'message' => '{observed} n\'est plus supporté. Planifier une montée de version.',
+        'check'   => static function (Context $c) {
+            $eol     = $c->reference('eol');
+            $type    = strtolower((string) $c->string('payload.database_type'));
+            $version = $c->string('payload.database_version');
+            if (!$eol instanceof EndOfLife) {
+                return Check::unknown('Données EOL absentes — lancer reference:refresh');
+            }
+            if ($version === null || $type === '') {
+                return Check::unknown('Version/type de base absents du payload');
+            }
+
+            $product = match (true) {
+                str_contains($type, 'maria') => 'mariadb',
+                str_contains($type, 'mysql') => 'mysql',
+                default                      => null,
+            };
+            if ($product === null) {
+                return Check::unknown("Type de base « {$type} » non mapp\u{00e9} \u{00e0} endoflife.date");
+            }
+
+            $status = $eol->eolStatus($product, $version);
+            if ($status === null) {
+                return Check::unknown("Branche {$product} " . EndOfLife::branch($version) . ' inconnue de endoflife.date');
+            }
+
+            [$isEol, $date] = $status;
+
+            return $isEol
+                ? Check::fail("{$product} " . EndOfLife::branch($version), $date !== null ? "Fin de vie : {$date}" : null)
+                : Check::pass($version, $date !== null ? "Supporté jusqu'au {$date}" : null);
+        },
+    ],
+    [
         'id' => 'H4', 'category' => 'Base de données', 'source' => 'DATA', 'severity' => Severity::Moyenne,
         'title'     => 'Fragmentation (overhead) des tables maîtrisée',
         'message'   => 'Les tables cumulent {observed} octets d\'overhead (seuil : {threshold}).',

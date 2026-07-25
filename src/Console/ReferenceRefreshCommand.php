@@ -20,8 +20,6 @@ use Throwable;
 #[AsCommand(name: 'reference:refresh', description: 'Refresh EOL reference data from endoflife.date')]
 final class ReferenceRefreshCommand extends Command
 {
-    private const array DEFAULT_PRODUCTS = ['php', 'wordpress'];
-
     public function __construct(private readonly App $app)
     {
         parent::__construct();
@@ -29,12 +27,14 @@ final class ReferenceRefreshCommand extends Command
 
     protected function configure(): void
     {
+        $default = (array) $this->app->config->get('reference.products', ['php', 'wordpress']);
+
         $this->addOption(
             'product',
             null,
             InputOption::VALUE_REQUIRED,
             'Comma-separated endoflife.date products',
-            implode(',', self::DEFAULT_PRODUCTS)
+            implode(',', $default)
         );
     }
 

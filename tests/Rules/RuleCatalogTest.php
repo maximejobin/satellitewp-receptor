@@ -121,8 +121,11 @@ final class RuleCatalogTest extends TestCase
         file_put_contents($this->tmpDir . '/reference/wordpress.json', (string) json_encode([
             ['cycle' => '6.8', 'eol' => '2025-12-02'],
         ]));
+        file_put_contents($this->tmpDir . '/reference/mysql.json', (string) json_encode([
+            ['cycle' => '8.0', 'eol' => '2026-04-30'],
+        ]));
 
-        $payload = $this->fixtureArray('extraction-valid.json'); // PHP 8.3.11, WP 6.8.1
+        $payload = $this->fixtureArray('extraction-valid.json'); // PHP 8.3.11, WP 6.8.1, mysql 8.0.36
 
         $findings = array_column(
             $this->engine()->evaluate(new Context($payload, [], ['eol' => $eol]))['findings'],
@@ -133,6 +136,7 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(Status::Pass->value, $findings['F3']['status'], 'PHP 8.3 still supported');
         $this->assertSame(Status::Fail->value, $findings['F2']['status'], 'WordPress 6.8 is EOL');
         $this->assertStringContainsString('fin de vie', strtolower((string) $findings['F2']['message']));
+        $this->assertSame(Status::Fail->value, $findings['H1']['status'], 'MySQL 8.0 is EOL');
     }
 
     public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void
