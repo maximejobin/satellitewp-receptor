@@ -92,10 +92,13 @@ final class RuleEngineTest extends TestCase
             $this->rule('G', static fn () => Check::fail(3, [], Severity::Critique)),
         ]);
 
-        $finding = $engine->evaluate(new Context([]))['findings'][0];
+        $result  = $engine->evaluate(new Context([]));
+        $finding = $result['findings'][0];
 
         $this->assertSame('C', $finding['severity']);
-        $this->assertSame('red', $finding['badge']);
+        // fail + critical -> red pastille (the analyst signal, derived).
+        $this->assertSame('red', $finding['pastille']);
+        $this->assertSame(1, $result['counts']['by_pastille']['red']);
     }
 
     public function testGradedThresholdsPickTheFirstMatchingLevel(): void

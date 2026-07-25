@@ -31,6 +31,12 @@ final readonly class Finding
         return $this->status === Status::Fail;
     }
 
+    /** The analyst-facing coloured pastille, derived from status + severity. */
+    public function pastille(): Pastille
+    {
+        return Pastille::for($this->status, $this->severity);
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
@@ -39,7 +45,7 @@ final readonly class Finding
             'category'  => $this->category,
             'source'    => $this->source,
             'severity'  => $this->severity->value,
-            'badge'     => $this->severity->badge(),
+            'pastille'  => $this->pastille()->value,
             'status'    => $this->status->value,
             'observed'  => $this->observed,
             'threshold' => $this->threshold,

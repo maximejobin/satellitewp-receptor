@@ -41,6 +41,13 @@ return [
         'M' => 'Moyenne',
         'I' => 'Info',
     ],
+    'pastille' => [
+        'green'  => 'Conforme',
+        'orange' => 'Attention',
+        'red'    => 'Critique',
+        'blue'   => 'Info',
+        'grey'   => 'N/A',
+    ],
     'categories' => [
         'DOMAIN'      => 'Domaine',
         'SSL'         => 'SSL / TLS',

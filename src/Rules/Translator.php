@@ -50,6 +50,12 @@ final class Translator
         return (string) ($this->catalog['severity'][$code] ?? $code);
     }
 
+    /** Label for a pastille colour (green/orange/red/blue/grey). */
+    public function pastille(string $color): string
+    {
+        return (string) ($this->catalog['pastille'][$color] ?? $color);
+    }
+
     public function category(string $code): string
     {
         return (string) ($this->catalog['categories'][$code] ?? $code);

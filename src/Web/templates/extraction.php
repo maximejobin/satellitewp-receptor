@@ -319,9 +319,9 @@ if ($findings !== null):
     </h2>
 
     <p class="severity-tally">
-        <?php foreach (['C', 'E', 'M', 'I'] as $sevKey): ?>
-            <span class="badge <?= $counts['by_severity'][$sevKey] > 0 ? 'badge-error' : 'badge-muted' ?>">
-                <?= e($t->severity($sevKey)) ?>: <?= e($counts['by_severity'][$sevKey]) ?>
+        <?php foreach (['red', 'orange', 'blue', 'green'] as $color): ?>
+            <span class="pastille pastille-<?= $color ?>">
+                <span class="dot"></span><?= e($t->pastille($color)) ?>: <?= e($counts['by_pastille'][$color]) ?>
             </span>
         <?php endforeach; ?>
         <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
@@ -330,12 +330,12 @@ if ($findings !== null):
     <?php foreach ($usedCategories as $category): ?>
         <h3 class="finding-cat"><?= e($t->category($category)) ?></h3>
         <table>
-            <thead><tr><th>Id</th><th><?= e($t->ui('severity')) ?></th><th><?= e($t->ui('rule')) ?></th><th><?= e($t->ui('observation')) ?></th></tr></thead>
+            <thead><tr><th>Id</th><th></th><th><?= e($t->ui('rule')) ?></th><th><?= e($t->ui('observation')) ?></th></tr></thead>
             <tbody>
             <?php foreach ($byCategory[$category] as $finding): ?>
                 <tr>
                     <td class="mono"><?= e($finding['id']) ?></td>
-                    <td><?= badge_severity($finding['severity'], $t->severity($finding['severity'])) ?></td>
+                    <td><?= pastille($finding['pastille'], $t->pastille($finding['pastille'])) ?></td>
                     <td><?= e($t->title($finding['id'])) ?></td>
                     <td><?= e($t->message($finding) ?? '') ?></td>
                 </tr>
@@ -352,7 +352,7 @@ if ($findings !== null):
                 <?php if ($finding['status'] === 'fail') { continue; } ?>
                 <tr>
                     <td class="mono"><?= e($finding['id']) ?></td>
-                    <td><?= badge($finding['status'] === 'pass' ? 'ok' : ($finding['status'] === 'na' ? 'n/a' : 'unknown')) ?></td>
+                    <td><?= pastille($finding['pastille'], $t->pastille($finding['pastille'])) ?></td>
                     <td><?= e($t->title($finding['id'])) ?></td>
                     <td class="muted"><?= e($t->message($finding) ?? '') ?></td>
                 </tr>

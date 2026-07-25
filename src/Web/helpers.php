@@ -56,17 +56,11 @@ function badge_score(int $score): string
     return '<span class="badge ' . $class . '">' . $score . '</span>';
 }
 
-/** Severity badge (C/E/M/I) using the report's red/yellow/blue scheme. */
-function badge_severity(string $severity, string $label): string
+/** Coloured pastille (green/orange/red/blue/grey) + label — the analyst signal. */
+function pastille(string $color, string $label): string
 {
-    $class = match ($severity) {
-        'C'     => 'badge-error badge-critical',
-        'E'     => 'badge-error',
-        'M'     => 'badge-warn',
-        default => 'badge-muted',
-    };
-
-    return '<span class="badge ' . $class . '">' . e($label) . '</span>';
+    return '<span class="pastille pastille-' . e($color) . '" title="' . e($label) . '">'
+        . '<span class="dot"></span>' . e($label) . '</span>';
 }
 
 /**

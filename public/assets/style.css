@@ -94,9 +94,16 @@ tr:last-child td { border-bottom: none; }
 
 .probe-chip { margin-right: 0.5rem; white-space: nowrap; }
 
-.badge-critical { outline: 2px solid var(--error); outline-offset: 1px; }
+.severity-tally { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
 
-.severity-tally { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+/* Analyst pastilles: coloured dot + label. */
+.pastille { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; font-size: 0.85rem; }
+.pastille .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; flex: none; }
+.pastille-green  .dot { background: #1e9e4a; }
+.pastille-orange .dot { background: #e08a1e; }
+.pastille-red    .dot { background: #d93636; }
+.pastille-blue   .dot { background: #2d7ff0; }
+.pastille-grey   .dot { background: #9aa4b0; }
 
 .cards {
     display: grid;

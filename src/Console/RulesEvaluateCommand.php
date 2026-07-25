@@ -96,17 +96,19 @@ final class RulesEvaluateCommand extends Command
                 continue;
             }
 
-            $status = match ($finding['status']) {
-                'fail'    => '<error>' . $t->severity($finding['severity']) . '</error>',
-                'pass'    => '<info>' . $t->status('pass') . '</info>',
-                'na'      => '<comment>' . $t->status('na') . '</comment>',
-                default   => $t->status('unknown'),
+            $color   = $finding['pastille'];
+            $tag     = match ($color) {
+                'red'    => '<error>● ' . $t->pastille('red') . '</error>',
+                'orange' => '<comment>● ' . $t->pastille('orange') . '</comment>',
+                'green'  => '<info>● ' . $t->pastille('green') . '</info>',
+                'blue'   => '● ' . $t->pastille('blue'),
+                default  => '○ ' . $t->pastille('grey'),
             };
 
             $rows[] = [
                 $finding['id'],
                 $t->category($finding['category']),
-                $status,
+                $tag,
                 $t->title($finding['id']),
                 $t->message($finding) ?? '',
             ];
@@ -114,25 +116,21 @@ final class RulesEvaluateCommand extends Command
 
         if ($rows !== []) {
             (new Table($output))
-                ->setHeaders(['id', $t->ui('category'), $t->ui('status'), $t->ui('rule'), $t->ui('observation')])
+                ->setHeaders(['id', $t->ui('category'), 'pastille', $t->ui('rule'), $t->ui('observation')])
                 ->setRows($rows)
                 ->render();
         }
 
-        $counts   = $findings['counts'];
-        $severity = $counts['by_severity'];
+        $p = $findings['counts']['by_pastille'];
 
         $output->writeln(sprintf(
-            "\n%d rules — <error>%d failing</error> (C:%d E:%d M:%d I:%d), %d pass, %d n/a, %d unknown",
-            $counts['total'],
-            $counts['fail'],
-            $severity['C'],
-            $severity['E'],
-            $severity['M'],
-            $severity['I'],
-            $counts['pass'],
-            $counts['na'],
-            $counts['unknown']
+            "\n%d rules — <error>● %d red</error>, <comment>● %d orange</comment>, ● %d blue, <info>● %d green</info>, ○ %d n/a",
+            $findings['counts']['total'],
+            $p['red'],
+            $p['orange'],
+            $p['blue'],
+            $p['green'],
+            $p['grey']
         ));
     }
 }

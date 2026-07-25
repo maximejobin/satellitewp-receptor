@@ -83,10 +83,12 @@ final class RuleEngine
             'na'      => 0,
             'unknown' => 0,
             'by_severity' => ['C' => 0, 'E' => 0, 'M' => 0, 'I' => 0],
+            'by_pastille' => ['green' => 0, 'orange' => 0, 'red' => 0, 'blue' => 0, 'grey' => 0],
         ];
 
         foreach ($findings as $finding) {
             $counts[$finding->status->value]++;
+            $counts['by_pastille'][$finding->pastille()->value]++;
 
             if ($finding->isFailure()) {
                 $counts['by_severity'][$finding->severity->value]++;
