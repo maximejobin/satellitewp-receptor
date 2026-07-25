@@ -17,6 +17,7 @@ use SatelliteWP\Xtractor\Tests\TestCase;
 final class RuleCatalogTest extends TestCase
 {
     private const string CATALOG = __DIR__ . '/../../config/rules.php';
+    private const string LANG    = __DIR__ . '/../../config/lang';
 
     private function engine(array $thresholds = []): RuleEngine
     {
@@ -33,9 +34,25 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame($ids, array_unique($ids), 'rule ids must be unique');
 
         foreach ($rules as $rule) {
-            $this->assertNotSame('', $rule->title, "{$rule->id} needs a title");
-            $this->assertNotSame('', $rule->message, "{$rule->id} needs an action message");
+            $this->assertTrue(
+                \SatelliteWP\Xtractor\Rules\Category::isValid($rule->category),
+                "{$rule->id} has a valid category"
+            );
             $this->assertContains($rule->source, ['DATA', 'EXT', 'EMAIL'], "{$rule->id} source");
+        }
+    }
+
+    public function testEveryRuleHasBilingualStrings(): void
+    {
+        $en = (array) require self::LANG . '/en.php';
+        $fr = (array) require self::LANG . '/fr.php';
+
+        foreach (RuleCatalog::load(self::CATALOG) as $rule) {
+            $this->assertArrayHasKey($rule->id, $en['rules'], "{$rule->id} missing EN strings");
+            $this->assertArrayHasKey($rule->id, $fr['rules'], "{$rule->id} missing FR strings");
+            $this->assertNotSame('', (string) ($en['rules'][$rule->id]['title'] ?? ''), "{$rule->id} EN title");
+            $this->assertNotSame('', (string) ($en['rules'][$rule->id]['fail'] ?? ''), "{$rule->id} EN fail");
+            $this->assertNotSame('', (string) ($fr['rules'][$rule->id]['fail'] ?? ''), "{$rule->id} FR fail");
         }
     }
 
@@ -73,7 +90,7 @@ final class RuleCatalogTest extends TestCase
             $this->assertSame(
                 Status::Pass->value,
                 $findings[$id]['status'],
-                "{$id} should pass on a healthy site, got: " . ($findings[$id]['detail'] ?? $findings[$id]['message'] ?? '')
+                "{$id} should pass on a healthy site, observed: " . var_export($findings[$id]['observed'] ?? null, true)
             );
         }
     }
@@ -95,7 +112,8 @@ final class RuleCatalogTest extends TestCase
 
         foreach (['K1', 'I1', 'J2', 'M2', 'L1'] as $id) {
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
-            $this->assertNotNull($findings[$id]['message'], "{$id} must carry an action message");
+            // Findings are neutral: they carry the raw observed value, not prose.
+            $this->assertArrayHasKey('observed', $findings[$id]);
         }
     }
 
@@ -135,7 +153,8 @@ final class RuleCatalogTest extends TestCase
 
         $this->assertSame(Status::Pass->value, $findings['F3']['status'], 'PHP 8.3 still supported');
         $this->assertSame(Status::Fail->value, $findings['F2']['status'], 'WordPress 6.8 is EOL');
-        $this->assertStringContainsString('fin de vie', strtolower((string) $findings['F2']['message']));
+        // The EOL date rides along as neutral data (for later interpolation).
+        $this->assertSame('2025-12-02', $findings['F2']['data']['eol_date']);
         $this->assertSame(Status::Fail->value, $findings['H1']['status'], 'MySQL 8.0 is EOL');
     }
 

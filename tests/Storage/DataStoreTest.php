@@ -37,19 +37,19 @@ final class DataStoreTest extends TestCase
         $this->assertCount(2, $store->listExtractionIds(self::SITE_ID));
     }
 
-    public function testProbeResultsAndSummary(): void
+    public function testProbeResultsAndFindings(): void
     {
         $store = new DataStore($this->tmpDir);
         $id    = $store->storeExtraction(self::SITE_ID, '{}', []);
 
         $store->writeProbeResult(self::SITE_ID, $id, 'dns', ['probe' => 'dns', 'status' => 'ok']);
         $store->writeProbeResult(self::SITE_ID, $id, 'tls', ['probe' => 'tls', 'status' => 'warn']);
-        $store->writeSummary(self::SITE_ID, $id, ['wp_version' => '6.8.1']);
+        $store->writeFindings(self::SITE_ID, $id, ['findings' => [['id' => 'A1', 'status' => 'pass']]]);
 
         $all = $store->readAllProbeResults(self::SITE_ID, $id);
         $this->assertSame(['dns', 'tls'], array_keys($all));
         $this->assertSame('warn', $all['tls']['status']);
-        $this->assertSame('6.8.1', $store->readSummary(self::SITE_ID, $id)['wp_version']);
+        $this->assertSame('A1', $store->readFindings(self::SITE_ID, $id)['findings'][0]['id']);
     }
 
     public function testSiteInfoPreservesFirstSeen(): void

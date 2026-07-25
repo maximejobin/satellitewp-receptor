@@ -8,7 +8,6 @@ use RuntimeException;
 use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Pipeline\Pipeline;
-use SatelliteWP\Xtractor\Pipeline\SummaryBuilder;
 use SatelliteWP\Xtractor\Probe\AbstractProbe;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Storage\DataStore;
@@ -44,7 +43,7 @@ final class PipelineTest extends TestCase
 
     private function pipeline(ProbeRegistry $registry): Pipeline
     {
-        return new Pipeline($registry, $this->store, $this->index, new SummaryBuilder());
+        return new Pipeline($registry, $this->store, $this->index);
     }
 
     public function testFailingProbeDoesNotStopTheRun(): void
@@ -71,20 +70,37 @@ final class PipelineTest extends TestCase
         $this->assertCount(2, $runs);
     }
 
-    public function testSummaryIsBuiltFromPayloadAndProbes(): void
+    public function testWritesNeutralFindingsWhenRuleEnginePresent(): void
     {
+        $rules  = \SatelliteWP\Xtractor\Rules\RuleCatalog::load(dirname(__DIR__, 2) . '/config/rules.php');
+        $engine = new \SatelliteWP\Xtractor\Rules\RuleEngine($rules);
+
         $registry = new ProbeRegistry(['fine']);
         $registry->register(new StubProbe('fine', ProbeResult::STATUS_WARN));
 
+        $pipeline = new Pipeline($registry, $this->store, $this->index, $engine);
+        $pipeline->run(self::SITE_ID, $this->extractionId);
+
+        $findings = $this->store->readFindings(self::SITE_ID, $this->extractionId);
+        $this->assertNotNull($findings);
+        $this->assertArrayHasKey('counts', $findings);
+
+        // findings.json is language-neutral: no rendered sentences on disk.
+        $first = $findings['findings'][0];
+        $this->assertArrayHasKey('id', $first);
+        $this->assertArrayHasKey('status', $first);
+        $this->assertArrayNotHasKey('message', $first);
+        $this->assertArrayNotHasKey('title', $first);
+    }
+
+    public function testNoFindingsFileWithoutRuleEngine(): void
+    {
+        $registry = new ProbeRegistry(['fine']);
+        $registry->register(new StubProbe('fine', ProbeResult::STATUS_OK));
+
         $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId);
 
-        $summary = $this->store->readSummary(self::SITE_ID, $this->extractionId);
-
-        $this->assertSame('6.8.1', $summary['wp_version']);
-        $this->assertSame('8.3.11', $summary['php_version']);
-        $this->assertSame(1, $summary['plugins_with_update']);
-        $this->assertSame('warn', $summary['probes']['fine']['status']);
-        $this->assertSame('2026-07-22T14:30:00Z', $summary['received_at']);
+        $this->assertNull($this->store->readFindings(self::SITE_ID, $this->extractionId));
     }
 
     public function testOnlyProbesFilterRunsSubset(): void

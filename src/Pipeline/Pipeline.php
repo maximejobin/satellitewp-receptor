@@ -26,7 +26,6 @@ final class Pipeline
         private readonly ProbeRegistry $registry,
         private readonly DataStore $store,
         private readonly Index $index,
-        private readonly SummaryBuilder $summaryBuilder,
         private readonly ?RuleEngine $ruleEngine = null,
         private readonly array $referenceData = [],
     ) {
@@ -66,17 +65,9 @@ final class Pipeline
             $results[$probe->name()] = $result;
         }
 
-        // Summary and findings always reflect every probe file on disk
-        // (including probes run in a previous pass), not just this run.
+        // Findings always reflect every probe file on disk (including probes
+        // run in a previous pass), not just this run.
         $allProbes = $this->store->readAllProbeResults($siteId, $extractionId);
-
-        $summary = $this->summaryBuilder->build(
-            $payload,
-            $allProbes,
-            $this->store->readMeta($siteId, $extractionId) ?? []
-        );
-        $this->store->writeSummary($siteId, $extractionId, $summary);
-
         $this->evaluateRules($siteId, $extractionId, $payload, $allProbes);
 
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_DONE);

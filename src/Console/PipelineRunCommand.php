@@ -59,7 +59,7 @@ final class PipelineRunCommand extends Command
             }
         }
 
-        $output->writeln("Summary written for {$siteId}/{$extractionId}.");
+        $output->writeln("Findings written for {$siteId}/{$extractionId}.");
 
         return Command::SUCCESS;
     }

@@ -8,9 +8,10 @@ use Closure;
 use InvalidArgumentException;
 
 /**
- * One validation from the catalogue. Carries exactly what
- * .github/validations-techniques.txt asks for: id, category, source,
- * configurable threshold, severity, action message.
+ * One validation from the catalogue. Language-neutral: it holds the id,
+ * category, source, default severity, configurable threshold and the check
+ * closure. Titles and messages (per language) live in the translation
+ * catalogue keyed by this id — never here.
  */
 final readonly class Rule
 {
@@ -19,8 +20,6 @@ final readonly class Rule
         public string $category,
         public string $source,
         public Severity $severity,
-        public string $title,
-        public string $message,
         public Closure $check,
         public mixed $threshold = null,
     ) {
@@ -32,12 +31,18 @@ final readonly class Rule
      */
     public static function fromArray(array $definition, mixed $thresholdOverride = null): self
     {
-        foreach (['id', 'category', 'source', 'severity', 'title', 'message', 'check'] as $key) {
+        foreach (['id', 'category', 'source', 'severity', 'check'] as $key) {
             if (!isset($definition[$key])) {
                 $id = $definition['id'] ?? '?';
 
                 throw new InvalidArgumentException("Rule {$id} is missing \"{$key}\"");
             }
+        }
+
+        if (!Category::isValid((string) $definition['category'])) {
+            throw new InvalidArgumentException(
+                "Rule {$definition['id']} has unknown category \"{$definition['category']}\""
+            );
         }
 
         return new self(
@@ -47,8 +52,6 @@ final readonly class Rule
             severity: $definition['severity'] instanceof Severity
                 ? $definition['severity']
                 : Severity::from((string) $definition['severity']),
-            title: (string) $definition['title'],
-            message: (string) $definition['message'],
             check: $definition['check'],
             threshold: $thresholdOverride ?? ($definition['threshold'] ?? null),
         );

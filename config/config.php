@@ -66,6 +66,14 @@ return [
         'products' => ['php', 'wordpress', 'mysql', 'mariadb'],
     ],
 
+    // Display language. Findings and raw data stay language-neutral; sentences
+    // are rendered from config/lang/<locale>.php. UI default is English; the
+    // web UI accepts ?lang=fr to switch.
+    'lang' => [
+        'dir'     => __DIR__ . '/lang',
+        'default' => 'en',
+    ],
+
     // Rule engine. The catalogue itself lives in config/rules.php; thresholds
     // can be overridden per rule id without touching it, e.g.:
     //   'thresholds' => ['I1' => 1048576, 'M1' => 3],

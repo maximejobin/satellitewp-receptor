@@ -81,8 +81,8 @@ final class RouterTest extends TestCase
         return [
             ['payload', 'payload.json'],
             ['meta', 'meta.json'],
-            ['summary', 'summary.json'],
             ['findings', 'findings.json'],
+            ['summary', null], // no longer a stored file
             ['tls', 'probes/tls.json'],
             ['http', 'probes/http.json'],
             ['pagespeed', 'probes/pagespeed.json'],

@@ -5,22 +5,24 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Rules;
 
 /**
- * The result of one rule against one extraction — the unit the health report
- * and the analyst console consume.
+ * The result of one rule against one extraction — language-neutral. It carries
+ * the id, category, severity, status and the raw values only. The human
+ * sentence (title + message, FR or EN) is produced at display time by the
+ * Translator; nothing here is localized, which is what lets findings.json be
+ * used to render a report in any language.
  */
 final readonly class Finding
 {
+    /** @param array<string, scalar|null> $data named interpolation values */
     public function __construct(
         public string $id,
         public string $category,
         public string $source,
         public Severity $severity,
         public Status $status,
-        public string $title,
-        public ?string $message,
         public mixed $observed = null,
         public mixed $threshold = null,
-        public ?string $detail = null,
+        public array $data = [],
     ) {
     }
 
@@ -37,14 +39,11 @@ final readonly class Finding
             'category'  => $this->category,
             'source'    => $this->source,
             'severity'  => $this->severity->value,
-            'severity_label' => $this->severity->label(),
             'badge'     => $this->severity->badge(),
             'status'    => $this->status->value,
-            'title'     => $this->title,
-            'message'   => $this->message,
             'observed'  => $this->observed,
             'threshold' => $this->threshold,
-            'detail'    => $this->detail,
+            'data'      => $this->data,
         ];
     }
 }

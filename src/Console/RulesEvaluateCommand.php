@@ -6,6 +6,7 @@ namespace SatelliteWP\Xtractor\Console;
 
 use SatelliteWP\Xtractor\App;
 use SatelliteWP\Xtractor\Rules\Context;
+use SatelliteWP\Xtractor\Rules\Translator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;
@@ -32,6 +33,7 @@ final class RulesEvaluateCommand extends Command
             ->addArgument('site_id', InputArgument::REQUIRED, 'Site UUID')
             ->addArgument('extraction_id', InputArgument::OPTIONAL, 'Extraction id (default: latest)')
             ->addOption('all', null, InputOption::VALUE_NONE, 'Show passing and non-applicable rules too')
+            ->addOption('lang', null, InputOption::VALUE_REQUIRED, 'Display language (en, fr)', 'en')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Print findings.json instead of a table');
     }
 
@@ -75,13 +77,18 @@ final class RulesEvaluateCommand extends Command
             return Command::SUCCESS;
         }
 
-        $this->renderTable($output, $findings, (bool) $input->getOption('all'));
+        $this->renderTable(
+            $output,
+            $findings,
+            $this->app->translator((string) $input->getOption('lang')),
+            (bool) $input->getOption('all')
+        );
 
         return Command::SUCCESS;
     }
 
     /** @param array<string, mixed> $findings */
-    private function renderTable(OutputInterface $output, array $findings, bool $showAll): void
+    private function renderTable(OutputInterface $output, array $findings, Translator $t, bool $showAll): void
     {
         $rows = [];
         foreach ($findings['findings'] as $finding) {
@@ -90,35 +97,33 @@ final class RulesEvaluateCommand extends Command
             }
 
             $status = match ($finding['status']) {
-                'fail'    => '<error>' . $finding['severity_label'] . '</error>',
-                'pass'    => '<info>conforme</info>',
-                'na'      => '<comment>n/a</comment>',
-                default   => 'indéterminé',
+                'fail'    => '<error>' . $t->severity($finding['severity']) . '</error>',
+                'pass'    => '<info>' . $t->status('pass') . '</info>',
+                'na'      => '<comment>' . $t->status('na') . '</comment>',
+                default   => $t->status('unknown'),
             };
 
             $rows[] = [
                 $finding['id'],
-                $finding['category'],
+                $t->category($finding['category']),
                 $status,
-                $finding['title'],
-                $finding['message'] ?? $finding['detail'] ?? '',
+                $t->title($finding['id']),
+                $t->message($finding) ?? '',
             ];
         }
 
         if ($rows !== []) {
             (new Table($output))
-                ->setHeaders(['id', 'catégorie', 'verdict', 'règle', 'message'])
+                ->setHeaders(['id', $t->ui('category'), $t->ui('status'), $t->ui('rule'), $t->ui('observation')])
                 ->setRows($rows)
                 ->render();
-        } elseif (!$showAll) {
-            $output->writeln('<info>Aucun constat en échec.</info>');
         }
 
         $counts   = $findings['counts'];
         $severity = $counts['by_severity'];
 
         $output->writeln(sprintf(
-            "\n%d règles évaluées — <error>%d en échec</error> (C:%d É:%d M:%d I:%d), %d conformes, %d n/a, %d indéterminées",
+            "\n%d rules — <error>%d failing</error> (C:%d E:%d M:%d I:%d), %d pass, %d n/a, %d unknown",
             $counts['total'],
             $counts['fail'],
             $severity['C'],

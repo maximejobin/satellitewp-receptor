@@ -11,7 +11,7 @@ use RuntimeException;
  *
  * Layout:
  *   data/sites/<site_id>/site.json
- *   data/sites/<site_id>/extractions/<id>/{payload,meta,summary}.json
+ *   data/sites/<site_id>/extractions/<id>/{payload,meta,findings}.json
  *   data/sites/<site_id>/extractions/<id>/probes/<probe>.json
  *   data/sites/<site_id>/extractions/latest        (symlink)
  *   data/sites/<site_id>/events/<YYYY-MM>.jsonl
@@ -144,18 +144,6 @@ final class DataStore
         }
 
         return $results;
-    }
-
-    /** @param array<string, mixed> $summary */
-    public function writeSummary(string $siteId, string $extractionId, array $summary): void
-    {
-        $this->writeJson($this->extractionDir($siteId, $extractionId) . '/summary.json', $summary);
-    }
-
-    /** @return array<string, mixed>|null */
-    public function readSummary(string $siteId, string $extractionId): ?array
-    {
-        return $this->readJson($this->extractionDir($siteId, $extractionId) . '/summary.json');
     }
 
     /** @param array<string, mixed> $findings */

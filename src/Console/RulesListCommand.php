@@ -22,12 +22,15 @@ final class RulesListCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('category', null, InputOption::VALUE_REQUIRED, 'Filter by category');
+        $this
+            ->addOption('category', null, InputOption::VALUE_REQUIRED, 'Filter by category')
+            ->addOption('lang', null, InputOption::VALUE_REQUIRED, 'Display language (en, fr)', 'en');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $filter = $input->getOption('category');
+        $t      = $this->app->translator((string) $input->getOption('lang'));
 
         $rows = [];
         foreach ($this->app->ruleEngine()->rules() as $rule) {
@@ -37,20 +40,20 @@ final class RulesListCommand extends Command
 
             $rows[] = [
                 $rule->id,
-                $rule->category,
+                $t->category($rule->category),
                 $rule->source,
-                $rule->severity->label(),
+                $t->severity($rule->severity->value),
                 $rule->threshold === null ? '' : (string) $rule->threshold,
-                $rule->title,
+                $t->title($rule->id),
             ];
         }
 
         (new Table($output))
-            ->setHeaders(['id', 'catégorie', 'source', 'sévérité', 'seuil', 'règle'])
+            ->setHeaders(['id', $t->ui('category'), 'source', $t->ui('severity'), 'threshold', $t->ui('rule')])
             ->setRows($rows)
             ->render();
 
-        $output->writeln(sprintf('%d règles au catalogue.', count($rows)));
+        $output->writeln(sprintf('%d rules in the catalogue.', count($rows)));
 
         return Command::SUCCESS;
     }

@@ -9,7 +9,6 @@ use SatelliteWP\Xtractor\Http\Receptor;
 use SatelliteWP\Xtractor\Http\SignatureVerifier;
 use SatelliteWP\Xtractor\Integration\BlogVaultClient;
 use SatelliteWP\Xtractor\Pipeline\Pipeline;
-use SatelliteWP\Xtractor\Pipeline\SummaryBuilder;
 use SatelliteWP\Xtractor\Probe\DnsProbe;
 use SatelliteWP\Xtractor\Probe\HttpProbe;
 use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
@@ -19,6 +18,7 @@ use SatelliteWP\Xtractor\Probe\TlsProbe;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
+use SatelliteWP\Xtractor\Rules\Translator;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
@@ -128,6 +128,18 @@ final class App
         );
     }
 
+    /** Renders neutral findings into a given language. Cached per locale. */
+    public function translator(?string $locale = null): Translator
+    {
+        $locale ??= (string) $this->config->get('lang.default', 'en');
+
+        return $this->services['translator.' . $locale] ??= new Translator(
+            $locale,
+            (string) $this->config->get('lang.dir', dirname(__DIR__) . '/config/lang'),
+            (string) $this->config->get('lang.default', 'en')
+        );
+    }
+
     public function blogVault(): BlogVaultClient
     {
         return $this->services[BlogVaultClient::class] ??= BlogVaultClient::fromConfig(
@@ -158,7 +170,6 @@ final class App
             $this->probeRegistry(),
             $this->dataStore(),
             $this->index(),
-            new SummaryBuilder(),
             $this->ruleEngine(),
             $this->referenceData()
         );

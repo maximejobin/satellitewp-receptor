@@ -7,8 +7,8 @@ namespace SatelliteWP\Xtractor\Rules;
 use Throwable;
 
 /**
- * Evaluates the rule catalogue against one extraction. Makes no network calls:
- * everything it needs is already in the payload and the probe results.
+ * Evaluates the rule catalogue against one extraction. Makes no network calls
+ * and produces language-neutral findings — no sentences are rendered here.
  *
  * A rule that throws never breaks the run — it becomes an "unknown" finding,
  * the same isolation principle the probe pipeline uses.
@@ -27,7 +27,7 @@ final class RuleEngine
     }
 
     /**
-     * @return array<string, mixed> the findings.json payload
+     * @return array<string, mixed> the findings.json payload (language-neutral)
      */
     public function evaluate(Context $context): array
     {
@@ -54,7 +54,8 @@ final class RuleEngine
         try {
             $result = ($rule->check)($context, $rule);
         } catch (Throwable $e) {
-            $result = Check::unknown('Erreur d\'évaluation : ' . $e->getMessage());
+            // The failure detail is neutral data, not prose.
+            $result = new CheckResult(Status::Unknown, null, ['error' => $e->getMessage()]);
         }
 
         return new Finding(
@@ -63,34 +64,10 @@ final class RuleEngine
             source: $rule->source,
             severity: $result->severity ?? $rule->severity,
             status: $result->status,
-            title: $rule->title,
-            message: $result->status === Status::Fail
-                ? $this->renderMessage($rule, $result)
-                : null,
             observed: $result->observed,
             threshold: $rule->threshold,
-            detail: $result->detail,
+            data: $result->data,
         );
-    }
-
-    /** Substitutes {observed} and {threshold} in the rule's action message. */
-    private function renderMessage(Rule $rule, CheckResult $result): string
-    {
-        return strtr($rule->message, [
-            '{observed}'  => $this->scalar($result->observed),
-            '{threshold}' => $this->scalar($rule->threshold),
-        ]);
-    }
-
-    private function scalar(mixed $value): string
-    {
-        return match (true) {
-            $value === null  => '?',
-            is_bool($value)  => $value ? 'oui' : 'non',
-            is_array($value) => (string) count($value),
-            is_float($value) => rtrim(rtrim(number_format($value, 2, ',', ' '), '0'), ','),
-            default          => (string) $value,
-        };
     }
 
     /**
@@ -100,11 +77,11 @@ final class RuleEngine
     private function counts(array $findings): array
     {
         $counts = [
-            'total'     => count($findings),
-            'pass'      => 0,
-            'fail'      => 0,
-            'na'        => 0,
-            'unknown'   => 0,
+            'total'   => count($findings),
+            'pass'    => 0,
+            'fail'    => 0,
+            'na'      => 0,
+            'unknown' => 0,
             'by_severity' => ['C' => 0, 'E' => 0, 'M' => 0, 'I' => 0],
         ];
 

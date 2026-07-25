@@ -19,7 +19,7 @@ final class Router
 {
     /** Files servable through /raw/ — never anything else. */
     private const array RAW_FILES = [
-        'payload', 'meta', 'summary', 'findings',
+        'payload', 'meta', 'findings',
         'dns', 'rdap', 'tls', 'http', 'pagespeed',
     ];
 
@@ -105,18 +105,19 @@ final class Router
 
         $extractions = $this->app->index()->listExtractions($siteId);
 
-        // Trends: headline values from the last summaries.
+        // Trends: headline values read straight from each payload (no derived file).
         $trends = [];
         foreach (array_slice($extractions, 0, 12) as $extraction) {
-            $summary = $store->readSummary($siteId, (string) $extraction['id']);
-            if ($summary !== null) {
+            $payload = $store->readExtractionPayload($siteId, (string) $extraction['id']);
+            if ($payload !== null) {
+                $plugins = is_array($payload['plugins'] ?? null) ? $payload['plugins'] : [];
                 $trends[] = [
                     'id'              => $extraction['id'],
                     'received_at'     => $extraction['received_at'],
-                    'db_total_bytes'  => $summary['db_total_bytes'] ?? null,
-                    'autoload_bytes'  => $summary['autoload_bytes'] ?? null,
-                    'plugins_with_update' => $summary['plugins_with_update'] ?? null,
-                    'admins_count'    => $summary['admins_count'] ?? null,
+                    'db_total_bytes'  => $payload['database']['total_bytes'] ?? null,
+                    'autoload_bytes'  => $payload['autoload']['total_bytes'] ?? null,
+                    'plugins_with_update' => count(array_filter($plugins, static fn ($p) => !empty($p['new_version']))),
+                    'admins_count'    => is_array($payload['administrators'] ?? null) ? count($payload['administrators']) : null,
                 ];
             }
         }
@@ -150,7 +151,6 @@ final class Router
             'site'         => $store->readSiteInfo($siteId) ?? [],
             'payload'      => $payload,
             'meta'         => $store->readMeta($siteId, $extractionId) ?? [],
-            'summary'      => $store->readSummary($siteId, $extractionId),
             'findings'     => $store->readFindings($siteId, $extractionId),
             'probes'       => $store->readAllProbeResults($siteId, $extractionId),
             'row'          => $this->app->index()->getExtraction($siteId, $extractionId),
@@ -267,12 +267,24 @@ final class Router
         return (bool) preg_match('/^\d{8}T\d{6}Z(-\d+)?$/', $value);
     }
 
+    /** Locale for this request: ?lang=fr|en, else the configured default. */
+    private function locale(): string
+    {
+        $requested = strtolower((string) ($_GET['lang'] ?? ''));
+
+        return in_array($requested, ['en', 'fr'], true)
+            ? $requested
+            : (string) $this->app->config->get('lang.default', 'en');
+    }
+
     /** @param array<string, mixed> $vars */
     private function render(string $template, array $vars): void
     {
         header('Content-Type: text/html; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
 
+        $vars['t']    = $this->app->translator($this->locale());
+        $vars['lang'] = $vars['t']->locale;
         extract($vars, EXTR_SKIP);
         $templateFile = dirname(__DIR__) . '/Web/templates/' . $template . '.php';
 

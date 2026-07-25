@@ -6,6 +6,7 @@ namespace SatelliteWP\Xtractor\Tests\Rules;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use SatelliteWP\Xtractor\Rules\Category;
 use SatelliteWP\Xtractor\Rules\Check;
 use SatelliteWP\Xtractor\Rules\Context;
 use SatelliteWP\Xtractor\Rules\Rule;
@@ -22,22 +23,20 @@ final class RuleEngineTest extends TestCase
         // the overrides would be silently ignored.
         return Rule::fromArray(array_replace([
             'id'       => $id,
-            'category' => 'Test',
+            'category' => Category::PHP,
             'source'   => 'DATA',
             'severity' => Severity::Moyenne,
-            'title'    => "Règle {$id}",
-            'message'  => "Observé {observed}, seuil {threshold}.",
             'check'    => $check,
         ], $overrides));
     }
 
-    public function testEvaluateProducesCountsAndMessages(): void
+    public function testEvaluateProducesNeutralFindingsAndCounts(): void
     {
         $engine = new RuleEngine([
-            $this->rule('R1', static fn () => Check::fail(42), ['threshold' => 10]),
+            $this->rule('R1', static fn () => Check::fail(42, ['extra' => 'x']), ['threshold' => 10]),
             $this->rule('R2', static fn () => Check::pass(1)),
-            $this->rule('R3', static fn () => Check::na('rien à vérifier')),
-            $this->rule('R4', static fn () => Check::unknown('donnée absente')),
+            $this->rule('R3', static fn () => Check::na()),
+            $this->rule('R4', static fn () => Check::unknown()),
         ]);
 
         $result = $engine->evaluate(new Context([]));
@@ -49,11 +48,13 @@ final class RuleEngineTest extends TestCase
         $this->assertSame(1, $result['counts']['unknown']);
         $this->assertSame(1, $result['counts']['by_severity']['M']);
 
-        // Only failures carry a rendered action message.
+        // Findings are language-neutral: raw values only, no rendered prose.
         $byId = array_column($result['findings'], null, 'id');
-        $this->assertSame('Observé 42, seuil 10.', $byId['R1']['message']);
-        $this->assertNull($byId['R2']['message']);
-        $this->assertSame('rien à vérifier', $byId['R3']['detail']);
+        $this->assertSame(42, $byId['R1']['observed']);
+        $this->assertSame(10, $byId['R1']['threshold']);
+        $this->assertSame(['extra' => 'x'], $byId['R1']['data']);
+        $this->assertArrayNotHasKey('message', $byId['R1']);
+        $this->assertArrayNotHasKey('title', $byId['R1']);
     }
 
     public function testFailuresSortFirstThenBySeverity(): void
@@ -81,14 +82,14 @@ final class RuleEngineTest extends TestCase
         $byId   = array_column($result['findings'], null, 'id');
 
         $this->assertSame(Status::Unknown->value, $byId['BOOM']['status']);
-        $this->assertStringContainsString('kaboom', $byId['BOOM']['detail']);
+        $this->assertStringContainsString('kaboom', (string) $byId['BOOM']['data']['error']);
         $this->assertSame(Status::Pass->value, $byId['OK']['status']);
     }
 
     public function testCheckSeverityOverrideWins(): void
     {
         $engine = new RuleEngine([
-            $this->rule('G', static fn () => Check::fail(3, null, Severity::Critique)),
+            $this->rule('G', static fn () => Check::fail(3, [], Severity::Critique)),
         ]);
 
         $finding = $engine->evaluate(new Context([]))['findings'][0];
