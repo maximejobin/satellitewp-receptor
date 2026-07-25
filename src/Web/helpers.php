@@ -112,12 +112,13 @@ function field_raw(string $label, string $html, ?string $status = null): string
 }
 
 /**
- * Inline EOL annotation from EndOfLife::eolStatus() — "(fin de vie : DATE)" in
- * red when past, "(supporté jusqu'au DATE)" muted otherwise.
+ * Inline EOL annotation from EndOfLife::eolStatus(): "(end of life: DATE)" in
+ * red when past, "(supported until: DATE)" muted otherwise. Localized via the
+ * Translator so it follows the page language.
  *
  * @param array{0: bool, 1: string|null}|null $status
  */
-function eol_annotation(?array $status): string
+function eol_annotation(?array $status, \SatelliteWP\Xtractor\Rules\Translator $t): string
 {
     if ($status === null || $status[1] === null) {
         return '';
@@ -125,9 +126,9 @@ function eol_annotation(?array $status): string
 
     [$isEol, $date] = $status;
     $cls   = $isEol ? 'val-error' : 'val-muted';
-    $label = $isEol ? 'fin de vie' : 'supporté jusqu\'au';
+    $label = $isEol ? $t->ui('eol', 'end of life') : $t->ui('supported_until', 'supported until');
 
-    return ' <span class="' . $cls . '">(' . $label . ' : ' . e($date) . ')</span>';
+    return ' <span class="' . $cls . '">(' . e($label) . ': ' . e($date) . ')</span>';
 }
 
 /** Compact comma list with a "+N" overflow. */

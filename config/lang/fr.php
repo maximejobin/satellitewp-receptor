@@ -22,6 +22,8 @@ return [
         'severity'       => 'Sévérité',
         'observation'    => 'Observation',
         'legend'         => 'Légende des catégories',
+        'eol'            => 'fin de vie',
+        'supported_until' => 'supporté jusqu\'au',
         'passed'         => 'conforme',
         'not_applicable' => 'non applicable',
         'unknown'        => 'indéterminé',

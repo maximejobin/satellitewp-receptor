@@ -1,18 +1,19 @@
-<nav class="breadcrumb"><a href="/">Sites</a> › <?= e($site['name'] ?? $siteId) ?></nav>
+<?php /** @var \SatelliteWP\Xtractor\Rules\Translator $t */ ?>
+<nav class="breadcrumb"><a href="/"><?= e($t->ui('sites')) ?></a> › <?= e($site['name'] ?? $siteId) ?></nav>
 
 <h1><?= e($site['name'] ?? $siteId) ?></h1>
 <p>
     <a href="<?= e($site['site_url'] ?? '#') ?>" rel="noopener noreferrer"><?= e($site['site_url'] ?? '') ?></a>
-    <span class="muted">· premier contact <?= e($site['first_seen'] ?? '?') ?> · dernier <?= e($site['last_seen'] ?? '?') ?></span>
+    <span class="muted">· first seen <?= e($site['first_seen'] ?? '?') ?> · last <?= e($site['last_seen'] ?? '?') ?></span>
 </p>
 
 <h2>Extractions</h2>
 <?php if ($extractions === []): ?>
-    <p class="empty">Aucune extraction.</p>
+    <p class="empty">No extraction.</p>
 <?php else: ?>
     <table>
         <thead>
-        <tr><th>Extraction</th><th>Reçue</th><th>WP</th><th>PHP</th><th>Statut</th><th>Probes</th></tr>
+        <tr><th>Extraction</th><th>Received</th><th>WP</th><th>PHP</th><th><?= e($t->ui('status')) ?></th><th>Probes</th></tr>
         </thead>
         <tbody>
         <?php foreach ($extractions as $extraction): ?>
@@ -34,10 +35,10 @@
 <?php endif; ?>
 
 <?php if ($trends !== []): ?>
-    <h2>Tendances</h2>
+    <h2>Trends</h2>
     <table>
         <thead>
-        <tr><th>Extraction</th><th>BD</th><th>Autoload</th><th>Extensions à jour ?</th><th>Admins</th></tr>
+        <tr><th>Extraction</th><th>Database</th><th>Autoload</th><th>Plugins with update</th><th>Admins</th></tr>
         </thead>
         <tbody>
         <?php foreach ($trends as $trend): ?>
@@ -45,7 +46,7 @@
                 <td class="mono"><?= e($trend['id']) ?></td>
                 <td><?= fmt_bytes($trend['db_total_bytes']) ?></td>
                 <td><?= fmt_bytes($trend['autoload_bytes']) ?></td>
-                <td><?= $trend['plugins_with_update'] === null ? '—' : e($trend['plugins_with_update']) . ' mise(s) à jour en attente' ?></td>
+                <td><?= $trend['plugins_with_update'] === null ? '—' : e($trend['plugins_with_update']) ?></td>
                 <td><?= e($trend['admins_count'] ?? '—') ?></td>
             </tr>
         <?php endforeach; ?>
@@ -53,13 +54,13 @@
     </table>
 <?php endif; ?>
 
-<h2>Événements récents</h2>
+<h2>Recent events</h2>
 <?php if ($events === []): ?>
-    <p class="empty">Aucun événement reçu.</p>
+    <p class="empty">No event received.</p>
 <?php else: ?>
     <table>
         <thead>
-        <tr><th>Horodatage (GMT)</th><th>Événement</th><th>Acteur</th><th>Détails</th></tr>
+        <tr><th>Timestamp (GMT)</th><th>Event</th><th>Actor</th><th>Details</th></tr>
         </thead>
         <tbody>
         <?php foreach ($events as $event): ?>

@@ -1,20 +1,21 @@
-<h1>Sites</h1>
+<?php /** @var \SatelliteWP\Xtractor\Rules\Translator $t */ ?>
+<h1><?= e($t->ui('sites')) ?></h1>
 
 <form method="get" class="search">
-    <input type="search" name="q" value="<?= e($search) ?>" placeholder="URL, nom ou site_id…">
-    <button type="submit">Filtrer</button>
+    <input type="search" name="q" value="<?= e($search) ?>" placeholder="URL, name or site_id…">
+    <button type="submit"><?= e($t->ui('search')) ?></button>
 </form>
 
 <?php if ($sites === []): ?>
-    <p class="empty">Aucun site pour l’instant. Les sites apparaissent dès la première extraction reçue.</p>
+    <p class="empty">No site yet. A site appears as soon as its first extraction is received.</p>
 <?php else: ?>
     <table>
         <thead>
         <tr>
             <th>Site</th>
             <th>URL</th>
-            <th>Dernière extraction</th>
-            <th>Statut</th>
+            <th>Last extraction</th>
+            <th><?= e($t->ui('status')) ?></th>
             <th>Extractions</th>
         </tr>
         </thead>

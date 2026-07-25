@@ -1,6 +1,6 @@
 <?php require_once dirname(__DIR__) . '/helpers.php'; ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= e($lang ?? 'en') ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

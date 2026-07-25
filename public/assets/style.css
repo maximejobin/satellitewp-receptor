@@ -100,16 +100,30 @@ tr:last-child td { border-bottom: none; }
 
 .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 0.9rem;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1.25rem;
 }
 
 .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.9rem 1rem;
+    border-radius: 10px;
+    padding: 1.25rem 1.4rem;
 }
+
+.info-card h3 { font-size: 1.05rem; }
+
+.lang-switch { float: right; }
+.lang-switch a { text-decoration: none; }
+
+.finding-cat {
+    margin: 1.4rem 0 0.4rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+}
+details.legend { margin-top: 1rem; }
 
 .card dl { margin: 0; }
 .card dt { font-size: 0.78rem; text-transform: uppercase; color: var(--muted); margin-top: 0.5rem; }
@@ -122,7 +136,7 @@ tr:last-child td { border-bottom: none; }
 .info-card h3 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; margin-bottom: 0.3rem; }
 
 table.kv { width: 100%; border-collapse: collapse; background: none; border: none; border-radius: 0; }
-table.kv th, table.kv td { border: none; border-bottom: 1px solid var(--border); padding: 0.3rem 0; background: none; text-transform: none; letter-spacing: normal; }
+table.kv th, table.kv td { border: none; border-bottom: 1px solid var(--border); padding: 0.5rem 0; background: none; text-transform: none; letter-spacing: normal; line-height: 1.45; }
 table.kv tr:last-child th, table.kv tr:last-child td { border-bottom: none; }
 table.kv th { width: 42%; text-align: left; font-weight: 500; color: var(--muted); font-size: 0.85rem; vertical-align: top; }
 table.kv td { text-align: right; word-break: break-word; }
