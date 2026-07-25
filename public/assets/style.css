@@ -117,6 +117,21 @@ tr:last-child td { border-bottom: none; }
 
 .card .raw-link { float: right; font-weight: 400; }
 
+/* Section-per-topic label/value cards (extraction detail). */
+.info-cards { align-items: start; }
+.info-card h3 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; margin-bottom: 0.3rem; }
+
+table.kv { width: 100%; border-collapse: collapse; background: none; border: none; border-radius: 0; }
+table.kv th, table.kv td { border: none; border-bottom: 1px solid var(--border); padding: 0.3rem 0; background: none; text-transform: none; letter-spacing: normal; }
+table.kv tr:last-child th, table.kv tr:last-child td { border-bottom: none; }
+table.kv th { width: 42%; text-align: left; font-weight: 500; color: var(--muted); font-size: 0.85rem; vertical-align: top; }
+table.kv td { text-align: right; word-break: break-word; }
+
+.val-ok    { color: var(--ok); font-weight: 600; }
+.val-warn  { color: var(--warn); font-weight: 600; }
+.val-error { color: var(--error); font-weight: 600; }
+.val-muted { color: var(--muted); font-weight: 400; }
+
 .error-line {
     color: var(--error);
     background: var(--error-bg);

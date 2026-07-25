@@ -154,6 +154,7 @@ final class Router
             'findings'     => $store->readFindings($siteId, $extractionId),
             'probes'       => $store->readAllProbeResults($siteId, $extractionId),
             'row'          => $this->app->index()->getExtraction($siteId, $extractionId),
+            'eol'          => $this->app->endOfLife(),
         ]);
     }
 
