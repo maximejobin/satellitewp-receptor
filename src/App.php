@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor;
 
+use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 use SatelliteWP\Xtractor\Http\PayloadValidator;
 use SatelliteWP\Xtractor\Http\Receptor;
 use SatelliteWP\Xtractor\Http\SignatureVerifier;
@@ -147,6 +148,13 @@ final class App
         );
     }
 
+    public function softwareCatalog(): SoftwareCatalog
+    {
+        return $this->services[SoftwareCatalog::class] ??= new SoftwareCatalog(
+            (string) $this->config->get('data_dir') . '/catalog/software.json'
+        );
+    }
+
     public function endOfLife(): EndOfLife
     {
         return $this->services[EndOfLife::class] ??= new EndOfLife(
@@ -171,7 +179,8 @@ final class App
             $this->dataStore(),
             $this->index(),
             $this->ruleEngine(),
-            $this->referenceData()
+            $this->referenceData(),
+            $this->softwareCatalog()
         );
     }
 }

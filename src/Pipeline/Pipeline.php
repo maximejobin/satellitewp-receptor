@@ -9,6 +9,7 @@ use SatelliteWP\Xtractor\Domain\ExtractionContext;
 use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Probe\ProbeInterface;
+use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Rules\Context as RuleContext;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
@@ -28,6 +29,7 @@ final class Pipeline
         private readonly Index $index,
         private readonly ?RuleEngine $ruleEngine = null,
         private readonly array $referenceData = [],
+        private readonly ?SoftwareCatalog $catalog = null,
     ) {
     }
 
@@ -47,6 +49,9 @@ final class Pipeline
         );
 
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_RUNNING);
+
+        // Feed the cross-site plugin/theme catalogue with any newly seen slugs.
+        $this->catalog?->recordExtraction($payload);
 
         $results = [];
         foreach ($this->selectProbes($onlyProbes) as $probe) {

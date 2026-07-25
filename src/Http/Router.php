@@ -38,6 +38,7 @@ final class Router
 
         match ($match['route']) {
             'sites'      => $this->sitesPage(),
+            'catalog'    => $this->catalogPage(),
             'site'       => $this->sitePage($params['site_id']),
             'extraction' => $this->extractionPage($params['site_id'], $params['extraction_id']),
             'raw'        => $this->rawFile($params['site_id'], $params['extraction_id'], $params['file']),
@@ -64,6 +65,9 @@ final class Router
             $segments === []
                 => ['route' => 'sites', 'params' => []],
 
+            $segments === ['catalog']
+                => ['route' => 'catalog', 'params' => []],
+
             count($segments) === 2 && $segments[0] === 'site' && $isSite(1)
                 => ['route' => 'site', 'params' => ['site_id' => $segments[1]]],
 
@@ -89,6 +93,17 @@ final class Router
             'title' => 'Sites',
             'sites' => $this->app->index()->listSites($_GET['q'] ?? null),
             'search' => (string) ($_GET['q'] ?? ''),
+        ]);
+    }
+
+    private function catalogPage(): void
+    {
+        $needsOnly = !empty($_GET['needs']);
+
+        $this->render('catalog', [
+            'title'     => 'Software catalogue',
+            'entries'   => $this->app->softwareCatalog()->all($_GET['type'] ?? null, $needsOnly),
+            'needsOnly' => $needsOnly,
         ]);
     }
 
@@ -155,6 +170,7 @@ final class Router
             'probes'       => $store->readAllProbeResults($siteId, $extractionId),
             'row'          => $this->app->index()->getExtraction($siteId, $extractionId),
             'eol'          => $this->app->endOfLife(),
+            'catalog'      => $this->app->softwareCatalog(),
         ]);
     }
 

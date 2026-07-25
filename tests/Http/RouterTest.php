@@ -23,6 +23,12 @@ final class RouterTest extends TestCase
         $this->assertSame('sites', Router::matchRoute('')['route']);
     }
 
+    public function testCatalogRoute(): void
+    {
+        $this->assertSame('catalog', Router::matchRoute('/catalog')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/catalog/extra')['route']);
+    }
+
     public function testSiteRoute(): void
     {
         $match = Router::matchRoute('/site/' . self::UUID);

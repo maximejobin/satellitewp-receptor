@@ -27,12 +27,19 @@ body {
     padding: 0.7rem 1.2rem;
 }
 
+.topbar { display: flex; align-items: baseline; gap: 1.5rem; }
 .topbar .brand {
     color: #fff;
     text-decoration: none;
     font-size: 1.05rem;
     letter-spacing: 0.02em;
 }
+.topnav a { color: #b9c6da; text-decoration: none; margin-right: 1rem; font-size: 0.92rem; }
+.topnav a:hover { color: #fff; }
+
+.filters a { text-decoration: none; }
+.filters a.active { font-weight: 700; }
+tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
 main {
     max-width: 1100px;

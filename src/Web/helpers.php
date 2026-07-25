@@ -56,6 +56,19 @@ function badge_score(int $score): string
     return '<span class="badge ' . $class . '">' . $score . '</span>';
 }
 
+/** Licence badge for a plugin/theme: free (green), premium/mixed (orange), unknown (grey). */
+function license_badge(string $license, bool $suggested = false): string
+{
+    $class = match ($license) {
+        'free'            => 'badge-ok',
+        'premium', 'mixed' => 'badge-warn',
+        default           => 'badge-muted',
+    };
+    $label = $license . ($suggested ? '?' : '');
+
+    return '<span class="badge ' . $class . '">' . e($label) . '</span>';
+}
+
 /** Coloured pastille (green/orange/red/blue/grey) + label — the analyst signal. */
 function pastille(string $color, string $label): string
 {

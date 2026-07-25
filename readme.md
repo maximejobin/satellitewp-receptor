@@ -195,6 +195,24 @@ portant le code HTTP et le corps d'erreur de l'API. **Non encore câblé au mote
 de règles** (F10 vulnérabilités) : en attente de l'URL de base et du schéma
 d'auth v6.
 
+## Catalogue plugins/thèmes (licences)
+
+Référentiel transversal (tous sites) de chaque plugin/thème vu, pour repérer
+ceux qui risquent une **licence payante**. Chaque extraction enregistre les
+slugs vus ; un analyste classe ensuite chacun : `free` / `premium` / `mixed`
+(gratuit mais connectable à une licence, ex. MailPoet) / `unknown`.
+
+```bash
+./bin/xtractor catalog:suggest              # présence wp.org -> suggère free/premium
+./bin/xtractor catalog:list --needs-license # premium + mixed = licence probable
+./bin/xtractor catalog:set plugin mailpoet mixed
+```
+
+Stocké dans `data/catalog/software.json`. Vu aussi dans l'UI web (`/catalog`,
++ colonne Licence sur la page d'extraction). La suggestion (`catalog:suggest`)
+interroge api.wordpress.org : présent → `free` (l'analyste affine en `mixed` au
+besoin), absent → `premium`.
+
 ## Ajouter une probe
 
 1. Créer `src/Probe/MaProbe.php` étendant `AbstractProbe` (implémenter

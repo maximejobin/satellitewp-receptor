@@ -259,9 +259,10 @@ if ($plugins !== []):
 ?>
     <h2>Plugins <span class="muted">— <?= count($plugins) ?> installed, <?= $active ?> active, <?= $withUpdate ?> with update</span></h2>
     <table>
-        <thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Status</th></tr></thead>
+        <thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Status</th><th>Licence</th></tr></thead>
         <tbody>
         <?php foreach ($plugins as $pl): ?>
+            <?php $entry = $catalog->get('plugin', (string) ($pl['slug'] ?? '')); ?>
             <tr>
                 <td><?= e($pl['name'] ?? $pl['slug'] ?? '?') ?></td>
                 <td class="mono"><?= e($pl['version'] ?? '?') ?></td>
@@ -269,6 +270,10 @@ if ($plugins !== []):
                 <td><?= !empty($pl['active'])
                     ? '<span class="badge badge-ok">Active</span>'
                     : '<span class="badge badge-muted">Inactive</span>' ?></td>
+                <td><?php if ($entry !== null) {
+                    $eff = \SatelliteWP\Xtractor\Catalog\SoftwareCatalog::effectiveLicense($entry);
+                    echo license_badge($eff, ($entry['license'] ?? 'unknown') === 'unknown' && $eff !== 'unknown');
+                } else { echo '—'; } ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

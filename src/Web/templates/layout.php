@@ -11,6 +11,10 @@
 <body>
 <header class="topbar">
     <a class="brand" href="/">SatelliteWP <strong>Xtractor</strong></a>
+    <nav class="topnav">
+        <a href="/">Sites</a>
+        <a href="/catalog">Catalogue</a>
+    </nav>
 </header>
 <main>
     <?php require $templateFile; ?>
