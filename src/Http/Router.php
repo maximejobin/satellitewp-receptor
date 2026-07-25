@@ -33,25 +33,53 @@ final class Router
             return;
         }
 
+        $match  = self::matchRoute($path);
+        $params = $match['params'];
+
+        match ($match['route']) {
+            'sites'      => $this->sitesPage(),
+            'site'       => $this->sitePage($params['site_id']),
+            'extraction' => $this->extractionPage($params['site_id'], $params['extraction_id']),
+            'raw'        => $this->rawFile($params['site_id'], $params['extraction_id'], $params['file']),
+            default      => $this->notFound(),
+        };
+    }
+
+    /**
+     * Pure route resolution — no side effects, so it is unit-testable. Returns
+     * the matched route name and its validated params, or 'not_found'. All
+     * identifiers are validated here (UUID, extraction id), which is the first
+     * line of defence for the read-only web surface.
+     *
+     * @return array{route: string, params: array<string, string>}
+     */
+    public static function matchRoute(string $path): array
+    {
         $segments = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
 
-        match (true) {
-            $segments === []
-                => $this->sitesPage(),
+        $isSite       = static fn (int $i): bool => PayloadValidator::isUuid($segments[$i] ?? '');
+        $isExtraction = static fn (int $i): bool => self::isExtractionId($segments[$i] ?? '');
 
-            count($segments) === 2 && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])
-                => $this->sitePage($segments[1]),
+        return match (true) {
+            $segments === []
+                => ['route' => 'sites', 'params' => []],
+
+            count($segments) === 2 && $segments[0] === 'site' && $isSite(1)
+                => ['route' => 'site', 'params' => ['site_id' => $segments[1]]],
 
             count($segments) === 4 && $segments[0] === 'site' && $segments[2] === 'extraction'
-                && PayloadValidator::isUuid($segments[1]) && $this->isExtractionId($segments[3])
-                => $this->extractionPage($segments[1], $segments[3]),
+                && $isSite(1) && $isExtraction(3)
+                => ['route' => 'extraction', 'params' => ['site_id' => $segments[1], 'extraction_id' => $segments[3]]],
 
             count($segments) === 6 && $segments[0] === 'site' && $segments[2] === 'extraction'
-                && $segments[4] === 'raw' && PayloadValidator::isUuid($segments[1])
-                && $this->isExtractionId($segments[3])
-                => $this->rawFile($segments[1], $segments[3], $segments[5]),
+                && $segments[4] === 'raw' && $isSite(1) && $isExtraction(3)
+                => ['route' => 'raw', 'params' => [
+                    'site_id'       => $segments[1],
+                    'extraction_id' => $segments[3],
+                    'file'          => $segments[5],
+                ]],
 
-            default => $this->notFound(),
+            default => ['route' => 'not_found', 'params' => []],
         };
     }
 
@@ -131,18 +159,14 @@ final class Router
 
     private function rawFile(string $siteId, string $extractionId, string $name): void
     {
-        $name = basename($name, '.json');
-
-        if (!in_array($name, self::RAW_FILES, true)) {
+        $relative = self::resolveRawFile($name);
+        if ($relative === null) {
             $this->notFound();
 
             return;
         }
 
-        $dir  = $this->app->dataStore()->extractionDir($siteId, $extractionId);
-        $file = in_array($name, ['payload', 'meta', 'summary', 'findings'], true)
-            ? "{$dir}/{$name}.json"
-            : "{$dir}/probes/{$name}.json";
+        $file = $this->app->dataStore()->extractionDir($siteId, $extractionId) . '/' . $relative;
 
         if (!is_file($file)) {
             $this->notFound();
@@ -153,6 +177,25 @@ final class Router
         header('Content-Type: application/json; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
         readfile($file);
+    }
+
+    /**
+     * Map a requested raw-file name to its path relative to the extraction dir,
+     * or null when the name is not allowlisted. Pure and path-traversal-safe:
+     * the name is basename-stripped and matched against a fixed allowlist, so a
+     * request like "../../keys" or "payload/../meta" can never escape.
+     */
+    public static function resolveRawFile(string $name): ?string
+    {
+        $name = basename($name, '.json');
+
+        if (!in_array($name, self::RAW_FILES, true)) {
+            return null;
+        }
+
+        return in_array($name, ['payload', 'meta', 'summary', 'findings'], true)
+            ? "{$name}.json"
+            : "probes/{$name}.json";
     }
 
     /**
@@ -218,7 +261,7 @@ final class Router
         return false;
     }
 
-    private function isExtractionId(string $value): bool
+    public static function isExtractionId(string $value): bool
     {
         return (bool) preg_match('/^\d{8}T\d{6}Z(-\d+)?$/', $value);
     }

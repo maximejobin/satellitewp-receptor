@@ -124,10 +124,12 @@ final class Index
 
     public function setExtractionStatus(string $siteId, string $extractionId, string $status): void
     {
+        // Stamp the transition time on running/done/error so requeueStale
+        // measures staleness from when the run STARTED, not from receipt.
         $this->pdo()->prepare(<<<'SQL'
             UPDATE extractions
             SET status = :status,
-                processed_at = CASE WHEN :status IN ('done', 'error') THEN :now ELSE processed_at END
+                processed_at = CASE WHEN :status IN ('running', 'done', 'error') THEN :now ELSE processed_at END
             WHERE site_id = :site_id AND id = :id
             SQL)->execute([
             'status'  => $status,
