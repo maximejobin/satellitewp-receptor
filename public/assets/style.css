@@ -41,6 +41,23 @@ body {
 .filters a.active { font-weight: 700; }
 tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
+/* Inline licence editor. */
+.lic-form { margin: 0; }
+.lic-form select {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--fg);
+    cursor: pointer;
+}
+.lic-form select.lic-free    { border-color: var(--ok);    color: var(--ok); }
+.lic-form select.lic-premium,
+.lic-form select.lic-mixed   { border-color: var(--warn);  color: var(--warn); font-weight: 600; }
+.lic-form select.lic-unknown { border-color: var(--border); color: var(--muted); }
+
 main {
     max-width: 1100px;
     margin: 0 auto;

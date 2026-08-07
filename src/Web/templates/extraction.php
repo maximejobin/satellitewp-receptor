@@ -271,8 +271,14 @@ if ($plugins !== []):
                     ? '<span class="badge badge-ok">Active</span>'
                     : '<span class="badge badge-muted">Inactive</span>' ?></td>
                 <td><?php if ($entry !== null) {
-                    $eff = \SatelliteWP\Xtractor\Catalog\SoftwareCatalog::effectiveLicense($entry);
-                    echo license_badge($eff, ($entry['license'] ?? 'unknown') === 'unknown' && $eff !== 'unknown');
+                    echo license_select(
+                        'plugin',
+                        (string) $entry['slug'],
+                        (string) ($entry['license'] ?? 'unknown'),
+                        $csrf,
+                        '/site/' . e($siteId) . '/extraction/' . e($extractionId),
+                        $entry['suggested'] ?? null
+                    );
                 } else { echo '—'; } ?></td>
             </tr>
         <?php endforeach; ?>

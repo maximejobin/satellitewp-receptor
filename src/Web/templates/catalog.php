@@ -30,7 +30,14 @@ use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
                 <td><?= e($e['type']) ?></td>
                 <td class="mono"><?= e($e['slug']) ?></td>
                 <td><?= e($e['name']) ?></td>
-                <td><?= license_badge($effective, $isSuggested) ?></td>
+                <td><?= license_select(
+                    (string) $e['type'],
+                    (string) $e['slug'],
+                    (string) ($e['license'] ?? 'unknown'),
+                    $csrf,
+                    '/catalog' . ($needsOnly ? '?needs=1' : ''),
+                    $e['suggested'] ?? null
+                ) ?></td>
                 <td class="muted"><?= e($e['source'] ?? 'unknown') ?></td>
                 <td><?= e($e['seen_count'] ?? 0) ?> · <span class="muted"><?= e($e['last_seen'] ?? '') ?></span></td>
             </tr>

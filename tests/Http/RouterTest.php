@@ -29,6 +29,19 @@ final class RouterTest extends TestCase
         $this->assertSame('not_found', Router::matchRoute('/catalog/extra')['route']);
     }
 
+    public function testSafeReturnRejectsOffsiteRedirects(): void
+    {
+        // Same-site relative paths pass through.
+        $this->assertSame('/catalog?needs=1', Router::safeReturn('/catalog?needs=1'));
+        $this->assertSame('/site/x/extraction/y', Router::safeReturn('/site/x/extraction/y'));
+
+        // Anything that could leave the site falls back to /catalog.
+        $this->assertSame('/catalog', Router::safeReturn('//evil.com'));
+        $this->assertSame('/catalog', Router::safeReturn('https://evil.com'));
+        $this->assertSame('/catalog', Router::safeReturn('javascript:alert(1)'));
+        $this->assertSame('/catalog', Router::safeReturn(null));
+    }
+
     public function testSiteRoute(): void
     {
         $match = Router::matchRoute('/site/' . self::UUID);

@@ -56,17 +56,34 @@ function badge_score(int $score): string
     return '<span class="badge ' . $class . '">' . $score . '</span>';
 }
 
-/** Licence badge for a plugin/theme: free (green), premium/mixed (orange), unknown (grey). */
-function license_badge(string $license, bool $suggested = false): string
-{
-    $class = match ($license) {
-        'free'            => 'badge-ok',
-        'premium', 'mixed' => 'badge-warn',
-        default           => 'badge-muted',
-    };
-    $label = $license . ($suggested ? '?' : '');
+/**
+ * Inline licence editor: a select that auto-submits to /catalog. $current is the
+ * analyst-set licence ('unknown' by default); $suggested is shown as a hint.
+ */
+function license_select(
+    string $type,
+    string $slug,
+    string $current,
+    string $csrf,
+    string $return,
+    ?string $suggested = null
+): string {
+    $options = '';
+    foreach (['unknown', 'free', 'premium', 'mixed'] as $licence) {
+        $label    = $licence === 'unknown' && $suggested ? "unknown ({$suggested}?)" : $licence;
+        $selected = $licence === $current ? ' selected' : '';
+        $options .= '<option value="' . $licence . '"' . $selected . '>' . e($label) . '</option>';
+    }
 
-    return '<span class="badge ' . $class . '">' . e($label) . '</span>';
+    $cls = 'lic-' . e(($current === 'unknown' && $suggested) ? $suggested : $current);
+
+    return '<form method="post" action="/catalog" class="lic-form">'
+        . '<input type="hidden" name="_csrf" value="' . e($csrf) . '">'
+        . '<input type="hidden" name="type" value="' . e($type) . '">'
+        . '<input type="hidden" name="slug" value="' . e($slug) . '">'
+        . '<input type="hidden" name="return" value="' . e($return) . '">'
+        . '<select name="license" class="' . $cls . '" onchange="this.form.submit()">' . $options . '</select>'
+        . '</form>';
 }
 
 /** Coloured pastille (green/orange/red/blue/grey) + label — the analyst signal. */

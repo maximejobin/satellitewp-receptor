@@ -283,6 +283,70 @@ final class Router
         return (bool) preg_match('/^\d{8}T\d{6}Z(-\d+)?$/', $value);
     }
 
+    /**
+     * Handle a web form POST (the only mutation the UI allows: setting a
+     * plugin/theme licence). Protected by Basic auth + a double-submit CSRF
+     * token, then follows the POST/redirect/GET pattern.
+     */
+    public function handlePost(string $path): void
+    {
+        if (!$this->authenticate()) {
+            return;
+        }
+
+        if (!hash_equals((string) ($_COOKIE['swp_csrf'] ?? ''), (string) ($_POST['_csrf'] ?? '_'))) {
+            http_response_code(400);
+            echo 'Invalid CSRF token';
+
+            return;
+        }
+
+        $segments = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
+
+        if ($segments === ['catalog']) {
+            $type = (string) ($_POST['type'] ?? '');
+            if (in_array($type, ['plugin', 'theme'], true)) {
+                $this->app->softwareCatalog()->setLicense(
+                    $type,
+                    (string) ($_POST['slug'] ?? ''),
+                    (string) ($_POST['license'] ?? '')
+                );
+            }
+            $this->redirect(self::safeReturn($_POST['return'] ?? '/catalog'));
+
+            return;
+        }
+
+        $this->notFound();
+    }
+
+    /** Only same-site relative paths are allowed as a redirect target. */
+    public static function safeReturn(mixed $target): string
+    {
+        $target = is_string($target) ? $target : '';
+
+        return (str_starts_with($target, '/') && !str_starts_with($target, '//'))
+            ? $target
+            : '/catalog';
+    }
+
+    private function redirect(string $to): void
+    {
+        header('Location: ' . $to, true, 303);
+    }
+
+    /** Double-submit CSRF token, stored in a cookie and echoed into forms. */
+    private function csrfToken(): string
+    {
+        $token = (string) ($_COOKIE['swp_csrf'] ?? '');
+        if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+            $token = bin2hex(random_bytes(16));
+            setcookie('swp_csrf', $token, ['httponly' => true, 'samesite' => 'Strict', 'path' => '/']);
+        }
+
+        return $token;
+    }
+
     /** Locale for this request: ?lang=fr|en, else the configured default. */
     private function locale(): string
     {
@@ -301,6 +365,7 @@ final class Router
 
         $vars['t']    = $this->app->translator($this->locale());
         $vars['lang'] = $vars['t']->locale;
+        $vars['csrf'] = $this->csrfToken();
         extract($vars, EXTR_SKIP);
         $templateFile = dirname(__DIR__) . '/Web/templates/' . $template . '.php';
 

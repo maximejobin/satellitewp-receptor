@@ -9,8 +9,11 @@ use SatelliteWP\Xtractor\Http\Router;
 
 $app = Bootstrap::app();
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    // Receptor: the plugin POSTs to any path — route on X-SWP-Type, not the URL.
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$path   = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+
+// Receptor: the plugin POSTs with an X-SWP-Type header, to any path.
+if ($method === 'POST' && isset($_SERVER['HTTP_X_SWP_TYPE'])) {
     $result = $app->receptor()->handle(
         [
             'site'      => $_SERVER['HTTP_X_SWP_SITE'] ?? null,
@@ -28,7 +31,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     exit;
 }
 
-// Web UI (read-only).
-(new Router($app))->dispatch(
-    (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/')
-);
+// Web UI: GET reads, POST is the catalogue licence editor.
+$router = new Router($app);
+$method === 'POST' ? $router->handlePost($path) : $router->dispatch($path);
