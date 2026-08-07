@@ -86,6 +86,20 @@ function license_select(
         . '</form>';
 }
 
+/** Health score: 100 − (red×8 + orange×3), floored at 0. */
+function health_score(array $counts): int
+{
+    $p = $counts['by_pastille'] ?? [];
+
+    return (int) max(0, 100 - ((int) ($p['red'] ?? 0)) * 8 - ((int) ($p['orange'] ?? 0)) * 3);
+}
+
+/** Semantic colour for a health score: green ≥80, orange ≥50, red below. */
+function health_color(int $score): string
+{
+    return $score >= 80 ? 'var(--ok)' : ($score >= 50 ? 'var(--warn)' : 'var(--error)');
+}
+
 /** Coloured pastille (green/orange/red/blue/grey) + label — the analyst signal. */
 function pastille(string $color, string $label): string
 {

@@ -90,9 +90,11 @@ final class Router
     private function sitesPage(): void
     {
         $this->render('sites', [
-            'title' => 'Sites',
-            'sites' => $this->app->index()->listSites($_GET['q'] ?? null),
-            'search' => (string) ($_GET['q'] ?? ''),
+            'title'      => 'Sites',
+            'nav'        => 'sites',
+            'breadcrumb' => '<b>Sites</b>',
+            'sites'      => $this->app->index()->listSites($_GET['q'] ?? null),
+            'search'     => (string) ($_GET['q'] ?? ''),
         ]);
     }
 
@@ -101,9 +103,11 @@ final class Router
         $needsOnly = !empty($_GET['needs']);
 
         $this->render('catalog', [
-            'title'     => 'Software catalogue',
-            'entries'   => $this->app->softwareCatalog()->all($_GET['type'] ?? null, $needsOnly),
-            'needsOnly' => $needsOnly,
+            'title'      => 'Software catalogue',
+            'nav'        => 'catalog',
+            'breadcrumb' => '<a href="/">Sites</a> › <b>Software catalogue</b>',
+            'entries'    => $this->app->softwareCatalog()->all($_GET['type'] ?? null, $needsOnly),
+            'needsOnly'  => $needsOnly,
         ]);
     }
 
@@ -139,6 +143,8 @@ final class Router
 
         $this->render('site', [
             'title'       => $site['name'] ?? $site['site_url'] ?? $siteId,
+            'nav'         => 'sites',
+            'breadcrumb'  => '<a href="/">Sites</a> › <b>' . htmlspecialchars((string) ($site['name'] ?? $siteId), ENT_QUOTES) . '</b>',
             'site'        => $site,
             'siteId'      => $siteId,
             'extractions' => $extractions,
@@ -159,11 +165,18 @@ final class Router
             return;
         }
 
+        $site = $store->readSiteInfo($siteId) ?? [];
+        $bc   = '<a href="/">Sites</a> › <a href="/site/' . htmlspecialchars($siteId, ENT_QUOTES) . '">'
+            . htmlspecialchars((string) ($site['name'] ?? $siteId), ENT_QUOTES)
+            . '</a> › <span class="mono">' . htmlspecialchars($extractionId, ENT_QUOTES) . '</span>';
+
         $this->render('extraction', [
             'title'        => 'Extraction ' . $extractionId,
+            'nav'          => 'sites',
+            'breadcrumb'   => $bc,
             'siteId'       => $siteId,
             'extractionId' => $extractionId,
-            'site'         => $store->readSiteInfo($siteId) ?? [],
+            'site'         => $site,
             'payload'      => $payload,
             'meta'         => $store->readMeta($siteId, $extractionId) ?? [],
             'findings'     => $store->readFindings($siteId, $extractionId),

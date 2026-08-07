@@ -1,416 +1,398 @@
 <?php
 /** @var \SatelliteWP\Xtractor\Rules\Translator $t */
-$qs = static fn (): string => $lang === 'en' ? '' : '?lang=' . e($lang);
-?>
-<nav class="breadcrumb">
-    <a href="/<?= $qs() ?>"><?= e($t->ui('sites')) ?></a> ›
-    <a href="/site/<?= e($siteId) . $qs() ?>"><?= e($site['name'] ?? $siteId) ?></a> ›
-    <span class="mono"><?= e($extractionId) ?></span>
-</nav>
+use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
+use SatelliteWP\Xtractor\Rules\Category;
 
-<h1><?= e($t->ui('extraction')) ?> <span class="mono"><?= e($extractionId) ?></span></h1>
-<p class="muted">
-    <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
-    · signature <?= !empty($meta['signature_valid']) ? 'valid' : 'absent/unverified' ?>
-    · schema <?= e($meta['schema_version'] ?? '?') ?>
-    · <?= fmt_bytes($meta['body_bytes'] ?? null) ?>
-    · <?= badge($row['status'] ?? null) ?>
-    <span class="lang-switch">· <a href="?lang=en">EN</a> / <a href="?lang=fr">FR</a></span>
-</p>
-
-<?php
 $p    = $payload;
 $dns  = $probes['dns']['data'] ?? [];
 $tls  = $probes['tls']['data'] ?? [];
 $rdap = $probes['rdap']['data'] ?? [];
 $http = $probes['http']['data'] ?? [];
+$ps   = $probes['pagespeed']['data'] ?? [];
 
 $eolPhp = $eol->eolStatus('php', (string) ($p['php']['version'] ?? ''));
 $eolWp  = $eol->eolStatus('wordpress', (string) ($p['wp_version'] ?? ''));
 $dbType = str_contains(strtolower((string) ($p['database_type'] ?? '')), 'maria') ? 'mariadb'
     : (str_contains(strtolower((string) ($p['database_type'] ?? '')), 'mysql') ? 'mysql' : null);
 $eolDb  = $dbType !== null ? $eol->eolStatus($dbType, (string) ($p['database_version'] ?? '')) : null;
+
+$all      = $findings['findings'] ?? [];
+$counts   = $findings['counts'] ?? ['by_pastille' => [], 'total' => 0];
+$byPast   = $counts['by_pastille'] ?? [];
+$score    = health_score($counts);
+
+// category → observation count, for the filter bar
+$catCount = [];
+foreach ($all as $f) { $catCount[$f['category']] = ($catCount[$f['category']] ?? 0) + 1; }
+
+// pastille → severity stripe class
+$stripe = static fn (string $c): string => in_array($c, ['red', 'orange', 'blue'], true) ? "sev-{$c}" : '';
+$mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 ?>
 
-<h2><?= e($t->ui('information')) ?></h2>
-<div class="cards info-cards">
+<h1><?= e($site['name'] ?? $siteId) ?></h1>
+<p class="muted">
+    <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
+    · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
+    · signature <?= !empty($meta['signature_valid']) ? 'valid' : 'absent/unverified' ?>
+    · schema <?= e($meta['schema_version'] ?? '?') ?>
+    · <?= badge($row['status'] ?? null) ?>
+</p>
 
-    <?php
-    // --- Domain (RDAP) ---
-    if ($rdap !== []) {
-        $days = $rdap['days_to_expiry'] ?? null;
-        echo section('Domain',
-            field('Target', $probes['rdap']['target'] ?? null)
-            . field('Registrar', $rdap['registrar'] ?? null)
+<?php if ($findings !== null): ?>
+    <!-- Overview -->
+    <section class="overview">
+        <div class="ring" style="--p:<?= e($score) ?>;--c:<?= health_color($score) ?>">
+            <div class="inner"><div class="score"><?= e($score) ?></div><div class="cap">health</div></div>
+        </div>
+        <div class="tally">
+            <div class="lede"><b><?= e($counts['fail'] ?? 0) ?></b> of <?= e($counts['total'] ?? 0) ?> checks need attention.</div>
+            <div class="tally-row">
+                <?php foreach (['red', 'orange', 'blue', 'green', 'grey'] as $c): ?>
+                    <span class="chip"><span class="dot dot-<?= $c ?>"></span><?= e($t->pastille($c)) ?> <b><?= e($byPast[$c] ?? 0) ?></b></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+<?php endif; ?>
+
+<!-- KPI tiles -->
+<section class="tiles">
+    <div class="tile"><div class="k">WordPress</div><div class="v"><?= e($p['wp_version'] ?? '—') ?></div>
+        <div class="s<?= ($eolWp[0] ?? false) ? ' crit' : '' ?>"><?= ($eolWp[0] ?? false) ? 'end of life' : 'core' ?></div></div>
+    <div class="tile"><div class="k">PHP</div><div class="v"><?= e($p['php']['version'] ?? '—') ?></div>
+        <div class="s<?= ($eolPhp[0] ?? false) ? ' crit' : '' ?>"><?= isset($eolPhp[1]) ? 'until ' . e(substr((string) $eolPhp[1], 0, 4)) : '' ?></div></div>
+    <div class="tile"><div class="k">Database</div><div class="v"><?= e(($p['database_type'] ?? '') . ' ' . implode('.', array_slice(explode('.', (string) ($p['database_version'] ?? '')), 0, 2))) ?></div>
+        <div class="s<?= ($eolDb[0] ?? false) ? ' crit' : '' ?>"><?= ($eolDb[0] ?? false) ? ('EOL ' . e(substr((string) ($eolDb[1] ?? ''), 0, 7))) : '' ?></div></div>
+    <div class="tile"><div class="k">SSL expiry</div><div class="v"><?= isset($tls['days_to_expiry']) ? e($tls['days_to_expiry']) . ' d' : '—' ?></div><div class="s"><?= e($tls['issuer'] ?? '') ?></div></div>
+    <div class="tile"><div class="k">Domain expiry</div><div class="v"><?= isset($rdap['days_to_expiry']) ? e($rdap['days_to_expiry']) . ' d' : '—' ?></div>
+        <div class="s<?= (($rdap['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= (($rdap['days_to_expiry'] ?? 999) < 30) ? 'renew soon' : '' ?></div></div>
+    <div class="tile"><div class="k">TTFB</div><div class="v"><?= isset($http['ttfb_ms']) ? e($http['ttfb_ms']) . ' ms' : '—' ?></div>
+        <div class="s">HTTP/<?= e($http['http_version'] ?? '?') ?><?= isset($http['content_encoding']) ? ' · ' . e($http['content_encoding']) : '' ?></div></div>
+</section>
+
+<?php if ($findings !== null): ?>
+    <!-- Findings — full, filterable by type -->
+    <section class="findings">
+        <header>
+            <h3><?= e($t->ui('findings')) ?></h3>
+            <span class="muted"><?= e($counts['total'] ?? 0) ?> checks · <?= e($counts['fail'] ?? 0) ?> need attention</span>
+            <div class="spacer"></div>
+            <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
+        </header>
+        <div class="filt">
+            <button class="on" data-filter="all">All <b><?= e($counts['total'] ?? 0) ?></b></button>
+            <button data-filter="attn">Needs attention <b><?= e(($byPast['red'] ?? 0) + ($byPast['orange'] ?? 0)) ?></b></button>
+            <span class="filt-sep"></span>
+            <?php foreach ($catCount as $cat => $n): ?>
+                <button data-filter="<?= e($cat) ?>"><?= e($t->category($cat)) ?> <b><?= e($n) ?></b></button>
+            <?php endforeach; ?>
+        </div>
+        <table class="ftable"><tbody>
+        <?php foreach ($all as $f): ?>
+            <?php $col = $f['pastille']; ?>
+            <tr class="frow <?= $stripe($col) ?>" data-cat="<?= e($f['category']) ?>" data-attn="<?= in_array($col, ['red', 'orange'], true) ? '1' : '0' ?>">
+                <td><?= pastille($col, $t->pastille($col)) ?></td>
+                <td class="id"><?= e($f['id']) ?></td>
+                <td class="tag"><?= e($t->category($f['category'])) ?></td>
+                <td class="rule"><?= e($t->title($f['id'])) ?></td>
+                <td class="obs"><?= e($t->message($f) ?? '—') ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody></table>
+    </section>
+<?php endif; ?>
+
+<h2 class="eyebrow" style="margin-top:.8rem"><?= e($t->ui('information')) ?></h2>
+
+<!-- §1 Account & plan (pending) -->
+<section class="section"><h2>Account &amp; plan</h2>
+    <div class="pending-note">Client, care plan and next renewal — sourced from the WooCommerce platform (not collected by the extraction). Coming soon.</div>
+</section>
+
+<!-- §2 Domain & email -->
+<section class="section"><h2>Domain &amp; email</h2>
+    <div class="cards">
+        <?php echo section('Domain',
+            field('Registrar', $rdap['registrar'] ?? null)
             . field('Created', $rdap['created_at'] ?? null)
-            . field_raw('Expires', e($rdap['expires_at'] ?? '—')
-                . ($days !== null ? ' <span class="' . ($days < 30 ? 'val-warn' : 'val-muted') . '">(' . e($days) . ' d)</span>' : ''))
+            . field_raw('Expires', e($rdap['expires_at'] ?? '—') . (isset($rdap['days_to_expiry'])
+                ? ' <span class="' . ($rdap['days_to_expiry'] < 30 ? 'val-warn' : 'val-muted') . '">(' . e($rdap['days_to_expiry']) . ' d)</span>' : ''))
             . field('Statuses', is_array($rdap['statuses'] ?? null) ? implode(', ', $rdap['statuses']) : null)
+            . field_raw('Nameservers', fmt_list($rdap['nameservers'] ?? ($dns['nameservers'] ?? [])))
             . field('Source', $rdap['source'] ?? null)
-        );
-    }
+        ); ?>
+        <?php echo section('Email (DNS)',
+            field('SPF', ($dns['spf']['present'] ?? false) ? 'present' : 'absent', ($dns['spf']['present'] ?? false) ? 'ok' : 'warn')
+            . field_raw('SPF record', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>')
+            . field('DMARC', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent', ($dns['dmarc']['present'] ?? false) ? null : 'warn')
+            . field('DKIM', 'requires validation email', 'warn')
+            . field_raw('MX', fmt_list(array_map(static fn ($m) => $m['host'] ?? '', $dns['mx'] ?? [])))
+            . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])))
+            . field_raw('A / AAAA', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'))
+        ); ?>
+    </div>
+</section>
 
-    // --- SSL / TLS ---
-    if ($tls !== []) {
-        $days = $tls['days_to_expiry'] ?? null;
-        $protocols = [];
-        foreach (($tls['protocols'] ?? []) as $name => $enabled) {
-            if ($enabled) {
-                $protocols[] = strtoupper(str_replace(['tls', '_'], ['TLS ', '.'], $name));
-            }
-        }
-        $legacy = ($tls['protocols']['tls1_0'] ?? false) || ($tls['protocols']['tls1_1'] ?? false);
+<!-- §3 Hosting -->
+<section class="section"><h2>Hosting</h2>
+    <div class="cards">
+        <?php echo section('Server',
+            field('Web server', $p['web_server'] ?? null)
+            . field('IP address', $dns['a'][0] ?? null)
+            . field('Hosting provider', 'from ASN lookup — coming soon', 'muted')
+            . field('Document root', $p['document_root'] ?? null)
+            . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null)
+            . field('Post / upload max', ($p['php']['post_max_size'] ?? '?') . ' / ' . ($p['php']['upload_max_filesize'] ?? '?'))
+            . field('Max input vars', $p['php']['max_input_vars'] ?? null)
+        ); ?>
+        <?php
+        // SSL — TLS protocols shown independently, plus the cert facts.
+        $proto = $tls['protocols'] ?? [];
+        $protoRow = static function (string $label, ?bool $on, bool $legacy) {
+            if ($on === null) { return field($label, null); }
+            return field($label, $on ? 'accepted' : 'no', $on && $legacy ? 'warn' : ($on ? 'ok' : 'muted'));
+        };
         echo section('SSL / TLS',
             field('Issuer', $tls['issuer'] ?? null)
             . field('Subject (CN)', $tls['subject_cn'] ?? null)
-            . field_raw('Expires', e($tls['not_after'] ?? '—')
-                . ($days !== null ? ' <span class="' . ($days < 30 ? 'val-warn' : 'val-muted') . '">(' . e($days) . ' d)</span>' : ''))
+            . field_raw('Expires', e($tls['not_after'] ?? '—') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''))
             . field_raw('SAN', fmt_list($tls['san'] ?? []))
-            . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? null : 'error')
-            . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? null : 'error')
-            . field('Self-signed', $tls['self_signed'] ?? null, ($tls['self_signed'] ?? false) ? 'error' : null)
-            . field_raw('Protocols', $protocols === [] ? '—'
-                : '<span class="' . ($legacy ? 'val-warn' : '') . '">' . e(implode(', ', $protocols)) . '</span>')
+            . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? 'ok' : 'error')
+            . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? 'ok' : 'error')
+            . field('Self-signed', $tls['self_signed'] ?? null, ($tls['self_signed'] ?? false) ? 'error' : 'ok')
+            . $protoRow('TLS 1.0', $proto['tls1_0'] ?? null, true)
+            . $protoRow('TLS 1.1', $proto['tls1_1'] ?? null, true)
+            . $protoRow('TLS 1.2', $proto['tls1_2'] ?? null, false)
+            . $protoRow('TLS 1.3', $proto['tls1_3'] ?? null, false)
         );
-    }
-
-    // --- Server / Hosting ---
-    echo section('Server & hosting',
-        field('Web server', $p['web_server'] ?? null)
-        . field('IP address', $dns['a'][0] ?? null)
-        . field('Document root', $p['document_root'] ?? null)
-        . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null)
-        . field('Post max size', $p['php']['post_max_size'] ?? null)
-        . field('Upload max filesize', $p['php']['upload_max_filesize'] ?? null)
-        . field('Max input vars', $p['php']['max_input_vars'] ?? null)
-    );
-
-    // --- PHP ---
-    echo section('PHP',
-        field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t))
-        . field('Memory limit', $p['php']['memory_limit'] ?? null)
-        . field_raw('Extensions', is_array($p['php']['extensions'] ?? null)
-            ? count($p['php']['extensions']) . ' — ' . fmt_list($p['php']['extensions'], 10) : '—')
-        . field_raw('Disabled functions', fmt_list($p['php']['disable_functions'] ?? []))
-    );
-
-    // --- Database ---
-    echo section('Database',
-        field('Type', $p['database_type'] ?? null)
-        . field_raw('Version', e($p['database_version'] ?? '—') . eol_annotation($eolDb, $t))
-        . field('Prefix', $p['db_table_prefix'] ?? null, ($p['db_table_prefix'] ?? '') === 'wp_' ? 'warn' : null)
-        . field_raw('Size', fmt_bytes($p['database']['total_bytes'] ?? null))
-        . field_raw('Transients', e($p['database']['transients']['total'] ?? '?')
-            . ' (' . e($p['database']['transients']['expired'] ?? '?') . ' expired)')
-    );
-
-    // --- WordPress ---
-    echo section('WordPress',
-        field_raw('Version', e($p['wp_version'] ?? '—') . eol_annotation($eolWp, $t))
-        . field('Core update', $p['core_update']['available_version'] ?? ($p['core_update']['status'] ?? null),
-            !empty($p['core_update']['available_version']) ? 'warn' : null)
-        . field('Active theme', $p['active_theme'] ?? null)
-        . field('Multisite', $p['is_multisite'] ?? null)
-        . field('Language', $p['site_locale'] ?? null)
-        . field('Timezone', $p['timezone_string'] ?? null)
-        . field('Admin email', $p['website_administrator_email'] ?? null)
-        . field('Permalinks', $p['permalink_structure'] ?? null)
-    );
-
-    // --- Network / HTTP ---
-    if ($http !== []) {
-        $sec = $http['security_headers'] ?? [];
-        $present = count(array_filter($sec, static fn ($v) => $v !== null));
-        echo section('Network & HTTP',
-            field('HTTP code', $http['status_code'] ?? null)
-            . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null)
-            . field('Compression', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) === null ? 'warn' : null)
-            . field_raw('TTFB', ($http['ttfb_ms'] ?? null) !== null
-                ? '<span class="' . (($http['ttfb_ms'] > 600) ? 'val-warn' : '') . '">' . e($http['ttfb_ms']) . ' ms</span>' : '—')
-            . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? null : 'warn')
-            . field('Redirects', $http['redirects']['hops'] ?? null)
-            . field('CDN', $http['cdn'] ?? null)
-            . field_raw('Security headers', e($present) . ' / ' . e(count($sec)) . ' present')
-        );
-    }
-
-    // --- DNS ---
-    if ($dns !== []) {
-        echo section('DNS',
-            field_raw('Nameservers', fmt_list($dns['nameservers'] ?? []))
-            . field_raw('A', fmt_list($dns['a'] ?? []))
-            . field_raw('AAAA', fmt_list($dns['aaaa'] ?? [], 6))
-            . field_raw('MX', fmt_list(array_map(static fn ($m) => $m['host'] ?? '', $dns['mx'] ?? [])))
-            . field('SPF', ($dns['spf']['present'] ?? false) ? 'present' : 'absent', ($dns['spf']['present'] ?? false) ? null : 'warn')
-            . field('DMARC', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent',
-                ($dns['dmarc']['present'] ?? false) ? null : 'warn')
-            . field('CAA', is_array($dns['caa'] ?? null) ? count($dns['caa']) . ' record(s)' : null)
-        );
-    }
-
-    // --- robots / sitemap ---
-    $robots = $http['robots'] ?? null;
-    if (is_array($robots)) {
-        echo section('robots.txt / sitemap',
-            field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? null : 'warn')
-            . field('Blocks whole site', $robots['disallow_all'] ?? false, ($robots['disallow_all'] ?? false) ? 'error' : null)
-            . field_raw('Sitemaps', is_array($robots['sitemaps'] ?? null) && $robots['sitemaps'] !== []
-                ? e(count($robots['sitemaps'])) . ' declared' . (($robots['sitemap_reachable'] ?? null) === false ? ' <span class="val-warn">(unreachable)</span>' : '')
-                : '<span class="val-warn">none</span>')
-        );
-    }
-
-    // --- Configuration (constants) ---
-    if (is_array($p['constants'] ?? null) && $p['constants'] !== []) {
-        $rows = '';
-        foreach ($p['constants'] as $name => $value) {
-            $status = (in_array($name, ['WP_DEBUG', 'WP_DEBUG_DISPLAY'], true) && $value === true) ? 'error' : null;
-            $rows .= field($name, $value, $status);
-        }
-        echo section('Configuration', $rows);
-    }
-
-    // --- Users ---
-    $admins = $p['administrators'] ?? [];
-    echo section('Users',
-        field('Total', $p['users_count'] ?? null)
-        . field('Administrators', is_array($admins) ? count($admins) : null)
-        . field_raw('Admin accounts', fmt_list(array_map(static fn ($a) => $a['login'] ?? '?', is_array($admins) ? $admins : [])))
-    );
-
-    // --- Content ---
-    echo section('Content',
-        field('Posts', $p['posts_count'] ?? null)
-        . field('Pages', $p['page_count'] ?? null)
-        . field('Media', $p['media_count'] ?? null)
-        . field('Comments', $p['comments_count'] ?? null)
-    );
-
-    // --- Cron / Autoload / Filesystem / Object cache ---
-    if (is_array($p['cron'] ?? null)) {
-        echo section('Cron',
-            field('WP-Cron disabled', $p['cron']['disabled'] ?? null)
-            . field('Scheduled events', $p['cron']['scheduled_events'] ?? null)
-            . field('Overdue', $p['cron']['overdue_events'] ?? null, ($p['cron']['overdue_events'] ?? 0) > 0 ? 'warn' : null)
-            . field('Next (GMT)', $p['cron']['next_event_gmt'] ?? null)
-        );
-    }
-    if (is_array($p['autoload'] ?? null)) {
-        echo section('Autoload',
-            field_raw('Total weight', fmt_bytes($p['autoload']['total_bytes'] ?? null))
-            . field('Option count', $p['autoload']['count'] ?? null)
-        );
-    }
-    if (is_array($p['filesystem'] ?? null)) {
-        $fs = $p['filesystem'];
-        echo section('Filesystem',
-            field_raw('Free disk', fmt_bytes($fs['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($fs['disk_total_bytes'] ?? null))
-            . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : null)
-            . field('Uploads writable', $fs['uploads_writable'] ?? null)
-        );
-    }
-    if (is_array($p['object_cache'] ?? null)) {
-        echo section('Object cache',
-            field('External (Redis/Memcached)', $p['object_cache']['external'] ?? null, ($p['object_cache']['external'] ?? false) ? null : 'warn')
-            . field('Drop-in', $p['object_cache']['dropin'] ?? null)
-            . field('Page cache', $p['object_cache']['page_cache'] ?? null)
-        );
-    }
-    ?>
-</div>
-
-<?php // --- Performance (PageSpeed), read straight from the probe ---
-$ps = $probes['pagespeed']['data'] ?? [];
-if ($ps !== []):
-    $categories = array_keys(($ps['mobile'] ?? reset($ps))['scores'] ?? []);
-?>
-    <h2>Performance (PageSpeed)</h2>
-    <table>
-        <thead>
-        <tr>
-            <th>Strategy</th>
-            <?php foreach ($categories as $category): ?>
-                <th><?= e(ucfirst(str_replace('-', ' ', $category))) ?></th>
-            <?php endforeach; ?>
-            <th>LCP</th><th>CLS</th><th>Field data</th>
-        </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($ps as $strategy => $result): if (!is_array($result)) { continue; } ?>
-            <tr>
-                <td><strong><?= e($strategy) ?></strong></td>
-                <?php foreach ($categories as $category): $score = $result['scores'][$category] ?? null; ?>
-                    <td><?= $score === null ? '—' : badge_score((int) $score) ?></td>
-                <?php endforeach; ?>
-                <td><?= isset($result['lab']['lcp']['value']) ? e(round((float) $result['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
-                <td><?= e($result['lab']['cls']['display'] ?? '—') ?></td>
-                <td><?= e($result['field']['overall_category'] ?? '—') ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-<?php endif; ?>
-
-<?php // --- Plugins ---
-$plugins = is_array($p['plugins'] ?? null) ? $p['plugins'] : [];
-if ($plugins !== []):
-    $active     = count(array_filter($plugins, static fn ($pl) => !empty($pl['active'])));
-    $withUpdate = count(array_filter($plugins, static fn ($pl) => !empty($pl['new_version'])));
-?>
-    <h2>Plugins <span class="muted">— <?= count($plugins) ?> installed, <?= $active ?> active, <?= $withUpdate ?> with update</span></h2>
-    <table>
-        <thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Status</th><th>Licence</th></tr></thead>
-        <tbody>
-        <?php foreach ($plugins as $pl): ?>
-            <?php $entry = $catalog->get('plugin', (string) ($pl['slug'] ?? '')); ?>
-            <tr>
-                <td><?= e($pl['name'] ?? $pl['slug'] ?? '?') ?></td>
-                <td class="mono"><?= e($pl['version'] ?? '?') ?></td>
-                <td><?= !empty($pl['new_version']) ? '<span class="val-warn mono">' . e($pl['new_version']) . '</span>' : '—' ?></td>
-                <td><?= !empty($pl['active'])
-                    ? '<span class="badge badge-ok">Active</span>'
-                    : '<span class="badge badge-muted">Inactive</span>' ?></td>
-                <td><?php if ($entry !== null) {
-                    echo license_select(
-                        'plugin',
-                        (string) $entry['slug'],
-                        (string) ($entry['license'] ?? 'unknown'),
-                        $csrf,
-                        '/site/' . e($siteId) . '/extraction/' . e($extractionId),
-                        $entry['suggested'] ?? null
-                    );
-                } else { echo '—'; } ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-<?php endif; ?>
-
-<?php // --- Themes ---
-$themes = is_array($p['themes'] ?? null) ? $p['themes'] : [];
-if ($themes !== []): ?>
-    <h2>Themes <span class="muted">— <?= count($themes) ?> installed</span></h2>
-    <table>
-        <thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Template</th><th>Status</th></tr></thead>
-        <tbody>
-        <?php foreach ($themes as $th): ?>
-            <tr>
-                <td><?= e($th['name'] ?? $th['slug'] ?? '?') ?></td>
-                <td class="mono"><?= e($th['version'] ?? '?') ?></td>
-                <td><?= !empty($th['new_version']) ? '<span class="val-warn mono">' . e($th['new_version']) . '</span>' : '—' ?></td>
-                <td class="mono"><?= e($th['template'] ?? '') ?></td>
-                <td><?= !empty($th['active'])
-                    ? '<span class="badge badge-ok">Active</span>'
-                    : '<span class="badge badge-muted">Inactive</span>' ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-<?php endif; ?>
-
-<?php // --- Findings, grouped by category, rendered in the page language ---
-if ($findings !== null):
-    $counts = $findings['counts'];
-    // Group failing findings by category.
-    $byCategory = [];
-    foreach ($findings['findings'] as $f) {
-        if ($f['status'] === 'fail') {
-            $byCategory[$f['category']][] = $f;
-        }
-    }
-    $usedCategories = array_keys($byCategory);
-    sort($usedCategories);
-?>
-    <h2>
-        <?= e($t->ui('findings')) ?>
-        <span class="muted">— <?= e($counts['fail']) ?> failing of <?= e($counts['total']) ?>
-            (<?= e($counts['pass']) ?> <?= e($t->ui('passed')) ?>,
-             <?= e($counts['na']) ?> <?= e($t->ui('not_applicable')) ?>,
-             <?= e($counts['unknown']) ?> <?= e($t->ui('unknown')) ?>)</span>
-    </h2>
-
-    <p class="severity-tally">
-        <?php foreach (['red', 'orange', 'blue', 'green'] as $color): ?>
-            <span class="pastille pastille-<?= $color ?>">
-                <span class="dot"></span><?= e($t->pastille($color)) ?>: <?= e($counts['by_pastille'][$color]) ?>
-            </span>
-        <?php endforeach; ?>
-        <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
-    </p>
-
-    <?php foreach ($usedCategories as $category): ?>
-        <h3 class="finding-cat"><?= e($t->category($category)) ?></h3>
-        <table>
-            <thead><tr><th>Id</th><th></th><th><?= e($t->ui('rule')) ?></th><th><?= e($t->ui('observation')) ?></th></tr></thead>
-            <tbody>
-            <?php foreach ($byCategory[$category] as $finding): ?>
-                <tr>
-                    <td class="mono"><?= e($finding['id']) ?></td>
-                    <td><?= pastille($finding['pastille'], $t->pastille($finding['pastille'])) ?></td>
-                    <td><?= e($t->title($finding['id'])) ?></td>
-                    <td><?= e($t->message($finding) ?? '') ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endforeach; ?>
-
-    <details>
-        <summary><?= e($t->ui('compliant_hidden')) ?></summary>
-        <table>
-            <tbody>
-            <?php foreach ($findings['findings'] as $finding): ?>
-                <?php if ($finding['status'] === 'fail') { continue; } ?>
-                <tr>
-                    <td class="mono"><?= e($finding['id']) ?></td>
-                    <td><?= pastille($finding['pastille'], $t->pastille($finding['pastille'])) ?></td>
-                    <td><?= e($t->title($finding['id'])) ?></td>
-                    <td class="muted"><?= e($t->message($finding) ?? '') ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </details>
-
-    <details class="legend">
-        <summary><?= e($t->ui('legend')) ?></summary>
-        <table class="kv"><tbody>
-        <?php foreach (\SatelliteWP\Xtractor\Rules\Category::ALL as $code): ?>
-            <?= field_raw($code, e($t->category($code))) ?>
+        ?>
+        <?php echo section('PHP',
+            field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t))
+            . field('Memory limit', $p['php']['memory_limit'] ?? null)
+            . field_raw('Extensions (' . count($p['php']['extensions'] ?? []) . ')', fmt_list($p['php']['extensions'] ?? [], 40))
+            . field_raw('Disabled functions', fmt_list($p['php']['disable_functions'] ?? []))
+        ); ?>
+        <?php echo section('Database',
+            field('Type', $p['database_type'] ?? null)
+            . field_raw('Version', e($p['database_version'] ?? '—') . eol_annotation($eolDb, $t))
+            . field('Prefix', $p['db_table_prefix'] ?? null, ($p['db_table_prefix'] ?? '') === 'wp_' ? 'warn' : null)
+            . field_raw('Size', fmt_bytes($p['database']['total_bytes'] ?? null))
+            . field_raw('Transients', e($p['database']['transients']['total'] ?? '?') . ' (' . e($p['database']['transients']['expired'] ?? '?') . ' expired)')
+        ); ?>
+    </div>
+    <?php
+    $tables = $p['database']['tables'] ?? [];
+    if (is_array($tables) && $tables !== []): ?>
+        <h3 style="font-size:.9rem;margin:.9rem 0 .3rem" class="muted">Largest tables</h3>
+        <table><thead><tr><th>Table</th><th>Rows</th><th>Size</th><th>Overhead</th></tr></thead><tbody>
+        <?php usort($tables, static fn ($a, $b) => ($b['size_bytes'] ?? 0) <=> ($a['size_bytes'] ?? 0));
+        foreach (array_slice($tables, 0, 10) as $tb): ?>
+            <tr><td class="mono"><?= e($tb['name'] ?? '?') ?></td><td class="num"><?= e($tb['row_count'] ?? '—') ?></td>
+                <td class="num"><?= fmt_bytes($tb['size_bytes'] ?? null) ?></td><td class="num"><?= fmt_bytes($tb['overhead_bytes'] ?? 0) ?></td></tr>
         <?php endforeach; ?>
         </tbody></table>
-    </details>
-<?php endif; ?>
+    <?php endif; ?>
+</section>
 
-<h2>Probes</h2>
-<?php if ($probes === []): ?>
-    <p class="empty">No probe has run yet (pipeline pending).</p>
-<?php else: ?>
-    <div class="cards">
-        <?php foreach ($probes as $name => $envelope): ?>
-            <div class="card">
-                <h3>
-                    <?= e($name) ?> <?= badge($envelope['status'] ?? null) ?>
-                    <a class="raw-link mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/<?= e($name) ?>">raw</a>
-                </h3>
-                <p class="muted">
-                    <?= e($envelope['ran_at'] ?? '?') ?> · <?= e($envelope['duration_ms'] ?? '?') ?> ms
-                    · target <span class="mono"><?= e($envelope['target'] ?? '?') ?></span>
-                    · v<?= e($envelope['probe_version'] ?? '?') ?>
-                </p>
-                <?php foreach ((array) ($envelope['errors'] ?? []) as $error): ?>
-                    <p class="error-line"><?= e($error) ?></p>
+<!-- §4 Performance -->
+<section class="section"><h2>Performance</h2>
+    <?php if ($ps !== []): ?>
+        <table><thead><tr><th>Strategy</th>
+            <?php foreach (array_keys(($mobilePs['scores'] ?? [])) as $c): ?><th><?= e(ucfirst(str_replace('-', ' ', $c))) ?></th><?php endforeach; ?>
+            <th>LCP</th><th>CLS</th><th>Field</th></tr></thead><tbody>
+        <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
+            <tr><td><strong><?= e($strat) ?></strong></td>
+                <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
+                    <td><?= $sc === null ? '—' : badge_score((int) $sc) ?></td>
                 <?php endforeach; ?>
-                <?= json_details('Data', $envelope['data'] ?? []) ?>
-            </div>
+                <td class="num"><?= isset($r['lab']['lcp']['value']) ? e(round((float) $r['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
+                <td class="num"><?= e($r['lab']['cls']['display'] ?? '—') ?></td>
+                <td><?= e($r['field']['overall_category'] ?? '—') ?></td></tr>
         <?php endforeach; ?>
+        </tbody></table>
+    <?php endif; ?>
+    <div class="cards" style="margin-top:1.1rem">
+        <?php
+        $sec = $http['security_headers'] ?? [];
+        echo section('HTTP',
+            field('Status code', $http['status_code'] ?? null)
+            . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null)
+            . field('Compression (HTML)', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) ? 'ok' : 'warn')
+            . field('Compression (asset)', ($http['asset']['content_encoding'] ?? null) ?? (($http['asset']['checked'] ?? false) ? 'none' : 'n/a'))
+            . field_raw('TTFB', ($http['ttfb_ms'] ?? null) !== null ? '<span class="' . ($http['ttfb_ms'] > 600 ? 'val-warn' : '') . '">' . e($http['ttfb_ms']) . ' ms</span>' : '—')
+            . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn')
+            . field('Redirects', $http['redirects']['hops'] ?? null)
+            . field('CDN', $http['cdn'] ?? '—')
+        ); ?>
+        <?php echo section('Security headers',
+            field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? 'ok' : 'warn')
+            . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing')
+            . field('Content-Security-Policy', ($sec['content-security-policy'] ?? null) ? 'present' : 'missing', ($sec['content-security-policy'] ?? null) ? 'ok' : 'warn')
+            . field('Referrer-Policy', ($sec['referrer-policy'] ?? null) ? 'present' : 'missing')
+            . field('HSTS', ($sec['strict-transport-security'] ?? null) ? 'present' : 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn')
+        ); ?>
+        <?php echo section('Cache & cron',
+            field_raw('Autoload', fmt_bytes($p['autoload']['total_bytes'] ?? null) . ' <span class="val-muted">(' . e($p['autoload']['count'] ?? '?') . ' options)</span>')
+            . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn')
+            . field('Page cache', ($p['object_cache']['page_cache'] ?? false) ? 'yes' : 'no')
+            . field('WP-Cron', ($p['cron']['disabled'] ?? false) ? 'disabled' : 'enabled')
+            . field('Cron overdue', $p['cron']['overdue_events'] ?? null, ($p['cron']['overdue_events'] ?? 0) > 0 ? 'warn' : 'ok')
+            . field('Scheduled events', $p['cron']['scheduled_events'] ?? null)
+        ); ?>
     </div>
-<?php endif; ?>
+</section>
 
-<h2>Raw data</h2>
-<p>
-    <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/payload">payload.json</a> ·
-    <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/meta">meta.json</a> ·
-    <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
-</p>
-<?= json_details('Full payload (' . count($payload) . ' keys)', $payload) ?>
+<!-- §5 SEO & analytics -->
+<section class="section"><h2>SEO &amp; analytics</h2>
+    <div class="cards">
+        <?php
+        $robots = $http['robots'] ?? [];
+        echo section('SEO',
+            field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? 'ok' : 'warn')
+            . field('Blocks whole site', ($robots['disallow_all'] ?? false) ? 'yes' : 'no', ($robots['disallow_all'] ?? false) ? 'error' : 'ok')
+            . field_raw('Sitemaps', fmt_list($robots['sitemaps'] ?? []))
+            . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—')
+            . field('SEO score (mobile)', $mobilePs['scores']['seo'] ?? null)
+        );
+        ?>
+        <div class="card"><h3>Analytics &amp; tracking</h3>
+            <div style="padding:1rem 1.1rem"><div class="pending-note">Google Analytics, Ads remarketing, Facebook pixel and Google tag detection — needs a new extractor field. Coming soon.</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- §6 WordPress -->
+<section class="section"><h2>WordPress</h2>
+    <div class="cards">
+        <?php echo section('Core & settings',
+            field_raw('Version', e($p['wp_version'] ?? '—') . eol_annotation($eolWp, $t))
+            . field('Core update', $p['core_update']['available_version'] ?? ($p['core_update']['status'] ?? null), !empty($p['core_update']['available_version']) ? 'warn' : 'ok')
+            . field('Auto-update core', $p['core_update']['auto_update_core'] ?? null)
+            . field('Multisite', $p['is_multisite'] ?? null)
+            . field('Active theme', $p['active_theme'] ?? null)
+            . field('Language', $p['site_locale'] ?? null)
+            . field('Timezone', $p['timezone_string'] ?? null)
+            . field('Admin email', $p['website_administrator_email'] ?? null)
+            . field('Permalinks', $p['permalink_structure'] ?? null)
+        ); ?>
+    </div>
+</section>
+
+<!-- §7 Plugins & themes -->
+<section class="section"><h2>Plugins &amp; themes</h2>
+    <?php
+    $plugins = is_array($p['plugins'] ?? null) ? $p['plugins'] : [];
+    $themes  = is_array($p['themes'] ?? null) ? $p['themes'] : [];
+    if ($plugins !== []): ?>
+        <h3 style="font-size:.9rem;margin:0 0 .3rem" class="muted">Plugins — <?= count($plugins) ?> installed,
+            <?= count(array_filter($plugins, static fn ($x) => !empty($x['active']))) ?> active,
+            <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h3>
+        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Status</th><th>Licence</th></tr></thead><tbody>
+        <?php foreach ($plugins as $pl):
+            $entry = $catalog->get('plugin', (string) ($pl['slug'] ?? '')); ?>
+            <tr>
+                <td><?= e($pl['name'] ?? '?') ?></td>
+                <td class="mono"><?= e($pl['slug'] ?? '') ?></td>
+                <td class="mono"><?= e($pl['version'] ?? '?') ?></td>
+                <td><?= !empty($pl['new_version']) ? '<span class="b-upd">' . e($pl['new_version']) . '</span>' : '—' ?></td>
+                <td class="muted">WP <?= e($pl['requires_wp'] ?? '—') ?> · PHP <?= e($pl['requires_php'] ?? '—') ?></td>
+                <td><?= !empty($pl['active']) ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td>
+                <td><?php echo $entry ? license_select('plugin', (string) $entry['slug'], (string) ($entry['license'] ?? 'unknown'), $csrf,
+                    '/site/' . e($siteId) . '/extraction/' . e($extractionId), $entry['suggested'] ?? null) : '—'; ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody></table>
+    <?php endif; ?>
+    <?php if ($themes !== []): ?>
+        <h3 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h3>
+        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Template</th><th>Status</th></tr></thead><tbody>
+        <?php foreach ($themes as $th): ?>
+            <tr><td><?= e($th['name'] ?? '?') ?></td><td class="mono"><?= e($th['slug'] ?? '') ?></td>
+                <td class="mono"><?= e($th['version'] ?? '?') ?></td>
+                <td><?= !empty($th['new_version']) ? '<span class="b-upd">' . e($th['new_version']) . '</span>' : '—' ?></td>
+                <td class="mono"><?= e($th['template'] ?? '') ?></td>
+                <td><?= !empty($th['active']) ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td></tr>
+        <?php endforeach; ?>
+        </tbody></table>
+    <?php endif; ?>
+</section>
+
+<!-- §8 Content & languages -->
+<section class="section"><h2>Content &amp; languages</h2>
+    <div class="cards">
+        <?php echo section('Content',
+            field('Posts', $p['posts_count'] ?? null)
+            . field('Pages', $p['page_count'] ?? null)
+            . field('Media', $p['media_count'] ?? null)
+            . field('Comments', $p['comments_count'] ?? null)
+        ); ?>
+        <?php
+        $wpml = $p['connectors']['wpml'] ?? null;
+        if (is_array($wpml)) {
+            echo section('Languages (WPML)',
+                field('Default language', $wpml['default_language'] ?? null)
+                . field('Current language', $wpml['current_language'] ?? null)
+                . field_raw('Active languages', fmt_list($wpml['active_languages'] ?? []))
+                . field('WPML version', $wpml['version'] ?? null)
+            );
+        } else {
+            echo '<div class="card"><h3>Languages</h3><div style="padding:1rem 1.1rem"><div class="pending-note">No multilingual connector (WPML) detected on this site.</div></div></div>';
+        }
+        ?>
+    </div>
+</section>
+
+<!-- §9 Users -->
+<section class="section"><h2>Users</h2>
+    <div class="cards">
+        <?php
+        $admins = is_array($p['administrators'] ?? null) ? $p['administrators'] : [];
+        echo section('Accounts',
+            field('Total users', $p['users_count'] ?? null)
+            . field('Administrators', count($admins), count($admins) > 5 ? 'warn' : 'ok')
+            . field_raw('Admin logins', fmt_list(array_map(static fn ($a) => $a['login'] ?? '?', $admins)))
+        );
+        ?>
+    </div>
+</section>
+
+<!-- §10 Security & backup -->
+<section class="section"><h2>Security &amp; backup</h2>
+    <div class="cards">
+        <?php
+        $const = $p['constants'] ?? [];
+        $constRows = '';
+        foreach ($const as $name => $value) {
+            $bad = in_array($name, ['WP_DEBUG', 'WP_DEBUG_DISPLAY'], true) && $value === true;
+            $constRows .= field($name, $value, $bad ? 'error' : null);
+        }
+        echo section('Hardening (constants)', $constRows ?: field('constants', null));
+        ?>
+        <?php
+        $fs = $p['filesystem'] ?? [];
+        echo section('Filesystem',
+            field_raw('Free disk', fmt_bytes($fs['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($fs['disk_total_bytes'] ?? null))
+            . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : 'ok')
+            . field('Uploads writable', $fs['uploads_writable'] ?? null)
+        ); ?>
+        <div class="card"><h3>Integrity, malware &amp; backup</h3>
+            <div style="padding:1rem 1.1rem"><div class="pending-note">Core file integrity, malware/vulnerability scan and backup status — from BlogVault (integration pending).</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- Probes + raw -->
+<h2 class="eyebrow" style="margin-top:1rem">Raw</h2>
+<details>
+    <summary>Probe results &amp; payload</summary>
+    <p style="margin-top:.7rem">
+        <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/payload">payload.json</a> ·
+        <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/meta">meta.json</a> ·
+        <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings">findings.json</a>
+        <?php foreach ($probes as $name => $_): ?>
+            · <a class="mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/<?= e($name) ?>"><?= e($name) ?>.json</a>
+        <?php endforeach; ?>
+    </p>
+    <?= json_details('Full payload (' . count($payload) . ' keys)', $payload) ?>
+</details>

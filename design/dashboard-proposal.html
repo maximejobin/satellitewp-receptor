@@ -1,0 +1,582 @@
+<title>Xtractor — Dashboard style proposal</title>
+<style>
+  /* ============================================================
+     SatelliteWP Xtractor — dashboard style proposal
+     "Ground station / telemetry" — cool slate, teal signal accent,
+     mono readouts. Semantic pastilles stay separate from the accent.
+     ============================================================ */
+
+  :root {
+    /* cool slate neutrals, biased faintly toward the teal accent */
+    --bg:        #eef2f5;
+    --surface:   #ffffff;
+    --surface-2: #f5f8fa;
+    --border:    #dbe2e9;
+    --text:      #16212b;
+    --muted:     #64768a;
+    --faint:     #93a2b3;
+
+    /* teal "signal" accent — the one bold hue */
+    --accent:    #0e938a;
+    --accent-2:  #0b756e;
+    --accent-weak:#e0f3f0;
+
+    /* semantic pastilles — status, not accent */
+    --good:  #1f9d57;  --good-bg:  #e5f5ec;
+    --warn:  #c8820f;  --warn-bg:  #fbf0d8;
+    --crit:  #d64340;  --crit-bg:  #fbe5e4;
+    --info:  #2f7fe0;  --info-bg:  #e6f0fc;
+
+    --shadow: 0 1px 2px rgba(20,35,50,.05), 0 6px 20px -12px rgba(20,35,50,.18);
+    --radius: 12px;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0b131b;
+      --surface:   #121e28;
+      --surface-2: #16232f;
+      --border:    #243544;
+      --text:      #e4ecf3;
+      --muted:     #8a9bab;
+      --faint:     #5f7284;
+      --accent:    #24c9ba;
+      --accent-2:  #4bd8cb;
+      --accent-weak:#0e302d;
+      --good: #37b56d; --good-bg: #10281b;
+      --warn: #e0a53a; --warn-bg: #2e2410;
+      --crit: #f0655f; --crit-bg: #301715;
+      --info: #5aa0f2; --info-bg: #10233c;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -14px rgba(0,0,0,.6);
+    }
+  }
+  /* explicit toggle wins over the media query, both directions */
+  :root[data-theme="light"] {
+    --bg:#eef2f5; --surface:#fff; --surface-2:#f5f8fa; --border:#dbe2e9;
+    --text:#16212b; --muted:#64768a; --faint:#93a2b3;
+    --accent:#0e938a; --accent-2:#0b756e; --accent-weak:#e0f3f0;
+    --good:#1f9d57; --good-bg:#e5f5ec; --warn:#c8820f; --warn-bg:#fbf0d8;
+    --crit:#d64340; --crit-bg:#fbe5e4; --info:#2f7fe0; --info-bg:#e6f0fc;
+    --shadow:0 1px 2px rgba(20,35,50,.05),0 6px 20px -12px rgba(20,35,50,.18);
+  }
+  :root[data-theme="dark"] {
+    --bg:#0b131b; --surface:#121e28; --surface-2:#16232f; --border:#243544;
+    --text:#e4ecf3; --muted:#8a9bab; --faint:#5f7284;
+    --accent:#24c9ba; --accent-2:#4bd8cb; --accent-weak:#0e302d;
+    --good:#37b56d; --good-bg:#10281b; --warn:#e0a53a; --warn-bg:#2e2410;
+    --crit:#f0655f; --crit-bg:#301715; --info:#5aa0f2; --info-bg:#10233c;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  .app {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 236px 1fr;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- sidebar ---------- */
+  .side {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 1.1rem 0.85rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 0.6rem; padding: 0.3rem 0.5rem 1rem; }
+  .brand .mark { width: 30px; height: 30px; flex: none; }
+  .brand b { font-size: 0.98rem; letter-spacing: .01em; }
+  .brand span { color: var(--muted); font-weight: 500; }
+
+  .nav-label {
+    text-transform: uppercase; letter-spacing: .09em; font-size: 0.66rem;
+    color: var(--faint); padding: 0.9rem 0.6rem 0.35rem; font-weight: 700;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 0.65rem;
+    padding: 0.5rem 0.6rem; border-radius: 8px; color: var(--muted);
+    text-decoration: none; font-weight: 500; font-size: 0.9rem;
+  }
+  .nav-item svg { width: 17px; height: 17px; flex: none; opacity: .85; }
+  .nav-item:hover { background: var(--surface-2); color: var(--text); }
+  .nav-item.active { background: var(--accent-weak); color: var(--accent-2); font-weight: 600; }
+  .nav-item.active svg { opacity: 1; }
+  .side-foot { margin-top: auto; padding: 0.6rem; color: var(--faint); font-size: 0.72rem; }
+
+  /* ---------- topbar ---------- */
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.85rem 1.6rem; border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    position: sticky; top: 0; backdrop-filter: blur(8px); z-index: 5;
+  }
+  .crumbs { color: var(--muted); font-size: 0.85rem; }
+  .crumbs a { color: var(--muted); text-decoration: none; }
+  .crumbs a:hover { color: var(--text); }
+  .crumbs b { color: var(--text); }
+  .spacer { flex: 1; }
+  .seg {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .seg button {
+    font: inherit; font-size: 0.8rem; border: 0; background: var(--surface);
+    color: var(--muted); padding: 0.3rem 0.7rem; cursor: pointer;
+  }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+    color: #fff; display: grid; place-items: center; font-size: 0.75rem; font-weight: 700;
+  }
+  .theme-btn { font: inherit; font-size: 1rem; line-height: 1; border: 1px solid var(--border); background: var(--surface); color: var(--muted); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; }
+  .theme-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ---------- page ---------- */
+  .page { padding: 1.6rem; display: flex; flex-direction: column; gap: 1.5rem; max-width: 1180px; }
+  .page-head { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+  .page-head h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.01em; text-wrap: balance; }
+  .page-head .url { color: var(--accent-2); text-decoration: none; font-size: 0.9rem; }
+  .page-head .meta { color: var(--muted); font-size: 0.82rem; }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: .1em; font-size: 0.68rem;
+    font-weight: 700; color: var(--faint); margin: 0 0 0.7rem;
+  }
+
+  /* ---------- signal panel ---------- */
+  .signal {
+    display: grid; grid-template-columns: auto 1fr; gap: 1.6rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.3rem 1.5rem;
+  }
+  .ring {
+    --p: 74; width: 116px; height: 116px; border-radius: 50%;
+    background:
+      conic-gradient(var(--accent) calc(var(--p) * 1%), var(--border) 0);
+    display: grid; place-items: center; flex: none;
+  }
+  .ring .inner {
+    width: 88px; height: 88px; border-radius: 50%; background: var(--surface);
+    display: grid; place-items: center; text-align: center;
+  }
+  .ring .score { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ring .cap { font-size: 0.64rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+  .tally { display: flex; flex-direction: column; justify-content: center; gap: 0.7rem; }
+  .tally-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35rem 0.8rem 0.35rem 0.55rem; font-size: 0.85rem; background: var(--surface-2);
+  }
+  .chip .dot { width: 0.66rem; height: 0.66rem; border-radius: 50%; flex: none; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .dot-red    { background: var(--crit); } .dot-orange { background: var(--warn); }
+  .dot-blue   { background: var(--info); } .dot-green  { background: var(--good); }
+  .dot-grey   { background: var(--faint); }
+  .tally .lede { color: var(--muted); font-size: 0.85rem; }
+
+  /* ---------- KPI tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 0.9rem; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.85rem 1rem; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .tile .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .tile .v { font-size: 1.35rem; font-weight: 650; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+  .tile .s { font-size: 0.76rem; color: var(--muted); margin-top: 0.1rem; }
+  .tile .s.warn { color: var(--warn); font-weight: 600; }
+  .tile .s.crit { color: var(--crit); font-weight: 600; }
+  .tile .spark { position: absolute; right: 0; bottom: 0; opacity: .5; }
+
+  /* ---------- cards / sections ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.1rem; align-items: start; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .card > h3 {
+    margin: 0; padding: 0.85rem 1.1rem; font-size: 0.95rem;
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem;
+  }
+  .kv { padding: 0.4rem 1.1rem 0.7rem; }
+  .kv .row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.42rem 0; border-bottom: 1px solid var(--border); }
+  .kv .row:last-child { border-bottom: 0; }
+  .kv .lab { color: var(--muted); }
+  .kv .val { text-align: right; font-variant-numeric: tabular-nums; }
+  .val .mono { font-family: var(--mono); font-size: 0.86em; }
+  .eol { color: var(--crit); font-size: 0.82em; }
+  .ok  { color: var(--good); } .wv { color: var(--warn); font-weight: 600; }
+
+  /* ---------- findings ---------- */
+  .findings { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .findings header { padding: 0.9rem 1.2rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+  .findings header h3 { margin: 0; font-size: 1rem; }
+  .cat-head {
+    padding: 0.7rem 1.2rem 0.3rem; font-size: 0.66rem; text-transform: uppercase;
+    letter-spacing: .09em; font-weight: 700; color: var(--accent-2);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  .frow td { padding: 0.6rem 1.2rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .frow:hover td { background: var(--surface-2); }
+  .frow .id { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+  .frow .rule { font-weight: 600; white-space: nowrap; }
+  .frow .obs { color: var(--muted); }
+  .frow.sev-red   { box-shadow: inset 3px 0 0 var(--crit); }
+  .frow.sev-orange{ box-shadow: inset 3px 0 0 var(--warn); }
+  .frow.sev-blue  { box-shadow: inset 3px 0 0 var(--info); }
+  .past { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; white-space: nowrap; }
+  .past .dot { width: 0.62rem; height: 0.62rem; border-radius: 50%; }
+  .p-red { color: var(--crit); } .p-orange { color: var(--warn); } .p-blue { color: var(--info); } .p-green { color: var(--good); }
+
+  /* findings filter bar */
+  .filt { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; padding: 0.7rem 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .filt button {
+    font: inherit; font-size: 0.8rem; border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); padding: 0.25rem 0.7rem; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 0.35rem; align-items: center;
+  }
+  .filt button b { font-variant-numeric: tabular-nums; color: var(--faint); }
+  .filt button:hover { border-color: var(--accent); color: var(--text); }
+  .filt button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .filt button.on b { color: rgba(255,255,255,.75); }
+  .filt-sep { width: 1px; height: 20px; background: var(--border); margin: 0 0.2rem; }
+  .ftable td.tag { color: var(--faint); font-size: 0.78rem; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+
+  /* ---------- plugin table + licence pills ---------- */
+  .tbl { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .tbl h3 { margin: 0; padding: 0.85rem 1.2rem; font-size: 0.95rem; border-bottom: 1px solid var(--border); }
+  .tbl th { text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0.6rem 1.2rem; background: var(--surface-2); font-weight: 600; }
+  .tbl td { padding: 0.6rem 1.2rem; border-bottom: 1px solid var(--border); }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; }
+  .b-active { background: var(--good-bg); color: var(--good); }
+  .b-inactive { background: var(--surface-2); color: var(--muted); }
+  .b-upd { font-family: var(--mono); color: var(--warn); font-size: 0.82rem; }
+  .lic {
+    font: inherit; font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;
+  }
+  .lic.free { border-color: var(--good); color: var(--good); }
+  .lic.premium, .lic.mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+  .row-need td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+  a:focus-visible, button:focus-visible, select:focus-visible, .nav-item:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: no-preference) { .nav-item, .chip, .tile { transition: background .15s, color .15s; } }
+
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .side .nav-label, .side-foot { display: none; }
+    .signal { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <ellipse cx="16" cy="16" rx="14" ry="6.4" transform="rotate(-32 16 16)" stroke="var(--accent)" stroke-width="1.6" opacity=".55"/>
+        <circle cx="16" cy="16" r="5.4" fill="var(--accent)"/>
+        <circle cx="26.5" cy="7.5" r="2.4" fill="var(--accent-2)"/>
+      </svg>
+      <div><b>SatelliteWP</b> <span>Xtractor</span></div>
+    </div>
+
+    <div class="nav-label">Monitoring</div>
+    <a class="nav-item active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> Sites</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg> Catalogue</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 5-7"/></svg> Trends</a>
+
+    <div class="nav-label">Reference</div>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg> EOL tables</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg> Rule catalogue</a>
+
+    <div class="side-foot">v1 · 62 rules · 14 sources</div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs"><a href="#">Sites</a> › <b>Acme Boutique</b></div>
+      <div class="spacer"></div>
+      <div class="seg"><button class="on">EN</button><button>FR</button></div>
+      <button class="theme-btn" title="Toggle theme" aria-label="Toggle light/dark">◐</button>
+      <div class="avatar">JA</div>
+    </div>
+
+    <div class="page">
+      <!-- page head -->
+      <div class="page-head">
+        <div>
+          <h1>Acme Boutique</h1>
+          <a class="url" href="#">https://acme-boutique.ca</a>
+          <span class="meta"> · extraction 2026-07-25 09:14 UTC · signature valid</span>
+        </div>
+      </div>
+
+      <!-- signal / health panel -->
+      <section class="signal">
+        <div class="ring" style="--p:74">
+          <div class="inner">
+            <div class="score">74</div>
+            <div class="cap">health</div>
+          </div>
+        </div>
+        <div class="tally">
+          <div class="lede"><b>20</b> findings need attention out of 62 checks.</div>
+          <div class="tally-row">
+            <span class="chip"><span class="dot dot-red"></span>Critical <b>3</b></span>
+            <span class="chip"><span class="dot dot-orange"></span>Attention <b>13</b></span>
+            <span class="chip"><span class="dot dot-blue"></span>Info <b>8</b></span>
+            <span class="chip"><span class="dot dot-green"></span>Good <b>33</b></span>
+            <span class="chip"><span class="dot dot-grey"></span>N/A <b>5</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI tiles -->
+      <section class="tiles">
+        <div class="tile"><div class="k">WordPress</div><div class="v">6.8.1</div><div class="s crit">end of life</div></div>
+        <div class="tile"><div class="k">PHP</div><div class="v">8.3.11</div><div class="s">supported → 2027</div></div>
+        <div class="tile"><div class="k">Database</div><div class="v">MySQL 8.0</div><div class="s crit">EOL 2026-04</div></div>
+        <div class="tile"><div class="k">SSL expiry</div><div class="v">37 d</div><div class="s">Cloudflare</div></div>
+        <div class="tile"><div class="k">Domain expiry</div><div class="v">20 d</div><div class="s warn">renew soon</div></div>
+        <div class="tile"><div class="k">TTFB</div><div class="v">42 ms</div><div class="s">HTTP/2 · gzip</div></div>
+      </section>
+
+      <!-- findings — full, filterable list -->
+      <section class="findings">
+        <header>
+          <h3>Findings</h3>
+          <span class="lede" style="color:var(--muted);font-size:.85rem">62 checks · 20 need attention</span>
+          <div class="spacer"></div>
+          <a class="url" href="#">findings.json</a>
+        </header>
+
+        <div class="filt" role="tablist">
+          <button class="on" data-filter="all">All <b>62</b></button>
+          <button data-filter="attn">Needs attention <b>16</b></button>
+          <span class="filt-sep"></span>
+          <button data-filter="SSL">SSL</button>
+          <button data-filter="SECURITY">Security</button>
+          <button data-filter="UPDATES">Updates</button>
+          <button data-filter="DOMAIN">Domain</button>
+          <button data-filter="DNS">DNS · Email</button>
+          <button data-filter="DATABASE">Database</button>
+          <button data-filter="PERFORMANCE">Performance</button>
+          <button data-filter="USERS">Users</button>
+        </div>
+
+        <table class="ftable">
+          <tbody>
+          <tr class="frow sev-red" data-cat="SSL" data-attn="1">
+            <td><span class="past p-red"><span class="dot dot-red"></span>Critical</span></td>
+            <td class="id">A10</td><td class="tag">SSL</td>
+            <td class="rule">HTTP → HTTPS redirect</td>
+            <td class="obs">The site answers over HTTP without redirecting to HTTPS. Add a 301 redirect.</td>
+          </tr>
+          <tr class="frow" data-cat="SSL">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">A1</td><td class="tag">SSL</td>
+            <td class="rule">SSL certificate valid</td>
+            <td class="obs">The SSL certificate is valid.</td>
+          </tr>
+          <tr class="frow sev-orange" data-cat="SSL" data-attn="1">
+            <td><span class="past p-orange"><span class="dot dot-orange"></span>Attention</span></td>
+            <td class="id">A8</td><td class="tag">SSL</td>
+            <td class="rule">HSTS header present</td>
+            <td class="obs">The Strict-Transport-Security header is missing.</td>
+          </tr>
+          <tr class="frow sev-red" data-cat="UPDATES" data-attn="1">
+            <td><span class="past p-red"><span class="dot dot-red"></span>Critical</span></td>
+            <td class="id">F2</td><td class="tag">Updates</td>
+            <td class="rule">WordPress branch supported</td>
+            <td class="obs">WordPress 6.8.1 has reached end of life (2025-12-02). Move to a supported branch.</td>
+          </tr>
+          <tr class="frow" data-cat="UPDATES">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">F3</td><td class="tag">Updates</td>
+            <td class="rule">PHP version supported</td>
+            <td class="obs">PHP 8.3.11 is supported (until 2027-12-31).</td>
+          </tr>
+          <tr class="frow sev-orange" data-cat="UPDATES" data-attn="1">
+            <td><span class="past p-orange"><span class="dot dot-orange"></span>Attention</span></td>
+            <td class="id">F4</td><td class="tag">Updates</td>
+            <td class="rule">Plugins up to date</td>
+            <td class="obs">1 plugin has an update available: WooCommerce.</td>
+          </tr>
+          <tr class="frow sev-orange" data-cat="DOMAIN" data-attn="1">
+            <td><span class="past p-orange"><span class="dot dot-orange"></span>Attention</span></td>
+            <td class="id">W1</td><td class="tag">Domain</td>
+            <td class="rule">Domain expiry not imminent</td>
+            <td class="obs">The domain expires in 20 days. Renew it soon.</td>
+          </tr>
+          <tr class="frow sev-orange" data-cat="DATABASE" data-attn="1">
+            <td><span class="past p-orange"><span class="dot dot-orange"></span>Attention</span></td>
+            <td class="id">H1</td><td class="tag">Database</td>
+            <td class="rule">Database version supported</td>
+            <td class="obs">mysql 8.0 is no longer supported (end of life 2026-04-30).</td>
+          </tr>
+          <tr class="frow sev-blue" data-cat="DATABASE">
+            <td><span class="past p-blue"><span class="dot dot-blue"></span>Info</span></td>
+            <td class="id">H9</td><td class="tag">Database</td>
+            <td class="rule">Non-default table prefix</td>
+            <td class="obs">The table prefix is the default "wp_".</td>
+          </tr>
+          <tr class="frow" data-cat="SECURITY">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">K1</td><td class="tag">Security</td>
+            <td class="rule">WP_DEBUG off in production</td>
+            <td class="obs">WP_DEBUG is disabled.</td>
+          </tr>
+          <tr class="frow sev-orange" data-cat="SECURITY" data-attn="1">
+            <td><span class="past p-orange"><span class="dot dot-orange"></span>Attention</span></td>
+            <td class="id">B7a</td><td class="tag">Security</td>
+            <td class="rule">X-Content-Type-Options: nosniff</td>
+            <td class="obs">The X-Content-Type-Options header is missing.</td>
+          </tr>
+          <tr class="frow" data-cat="PERFORMANCE">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">PS1</td><td class="tag">Performance</td>
+            <td class="rule">Lighthouse performance (mobile)</td>
+            <td class="obs">Good mobile performance score (100/100).</td>
+          </tr>
+          <tr class="frow sev-blue" data-cat="DNS">
+            <td><span class="past p-blue"><span class="dot dot-blue"></span>Info</span></td>
+            <td class="id">C1</td><td class="tag">DNS</td>
+            <td class="rule">IPv6 (AAAA record)</td>
+            <td class="obs">No AAAA record: the site is not reachable over IPv6.</td>
+          </tr>
+          <tr class="frow" data-cat="DNS">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">D1</td><td class="tag">Email</td>
+            <td class="rule">SPF record present</td>
+            <td class="obs">An SPF record is configured.</td>
+          </tr>
+          <tr class="frow" data-cat="USERS">
+            <td><span class="past p-green"><span class="dot dot-green"></span>Good</span></td>
+            <td class="id">M1</td><td class="tag">Users</td>
+            <td class="rule">Administrator count under control</td>
+            <td class="obs">The site has 1 administrator.</td>
+          </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- info cards -->
+      <p class="eyebrow" style="margin-bottom:-0.4rem">Information</p>
+      <section class="grid">
+        <div class="card">
+          <h3>Domain</h3>
+          <div class="kv">
+            <div class="row"><span class="lab">Registrar</span><span class="val">Namecheap Inc.</span></div>
+            <div class="row"><span class="lab">Created</span><span class="val mono">2019-03-11</span></div>
+            <div class="row"><span class="lab">Expires</span><span class="val mono">2026-08-14 <span class="wv">(20 d)</span></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>SSL / TLS</h3>
+          <div class="kv">
+            <div class="row"><span class="lab">Issuer</span><span class="val">Cloudflare ECC CA</span></div>
+            <div class="row"><span class="lab">Expires</span><span class="val mono">2026-08-30 (37 d)</span></div>
+            <div class="row"><span class="lab">Protocols</span><span class="val">TLS 1.2, 1.3</span></div>
+            <div class="row"><span class="lab">Chain valid</span><span class="val ok">yes</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>PHP</h3>
+          <div class="kv">
+            <div class="row"><span class="lab">Version</span><span class="val">8.3.11 <span class="eol">(EOL 2027)</span></span></div>
+            <div class="row"><span class="lab">Memory limit</span><span class="val mono">256M</span></div>
+            <div class="row"><span class="lab">OPcache</span><span class="val ok">enabled</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Database</h3>
+          <div class="kv">
+            <div class="row"><span class="lab">Type</span><span class="val">MySQL</span></div>
+            <div class="row"><span class="lab">Version</span><span class="val">8.0.36 <span class="eol">(end of life 2026-04-30)</span></span></div>
+            <div class="row"><span class="lab">Size</span><span class="val mono">148 MB</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- plugin catalogue -->
+      <div class="tbl">
+        <h3>Plugins <span style="color:var(--muted);font-weight:400">— 31 installed, 28 active, 1 with update</span></h3>
+        <table>
+          <thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Status</th><th>Licence</th></tr></thead>
+          <tbody>
+            <tr class="row-need">
+              <td>WooCommerce</td><td class="mono">9.9.5</td><td class="b-upd">10.0.2</td>
+              <td><span class="badge b-active">Active</span></td>
+              <td><select class="lic mixed"><option>unknown</option><option selected>mixed</option><option>free</option><option>premium</option></select></td>
+            </tr>
+            <tr class="row-need">
+              <td>Advanced Custom Fields PRO</td><td class="mono">6.8.0</td><td>—</td>
+              <td><span class="badge b-active">Active</span></td>
+              <td><select class="lic premium"><option>unknown</option><option>mixed</option><option>free</option><option selected>premium</option></select></td>
+            </tr>
+            <tr>
+              <td>Akismet Anti-Spam</td><td class="mono">5.3</td><td>—</td>
+              <td><span class="badge b-active">Active</span></td>
+              <td><select class="lic free"><option>unknown</option><option>mixed</option><option selected>free</option><option>premium</option></select></td>
+            </tr>
+            <tr>
+              <td>Hello Dolly</td><td class="mono">1.7.2</td><td>—</td>
+              <td><span class="badge b-inactive">Inactive</span></td>
+              <td><select class="lic"><option selected>unknown (free?)</option><option>free</option><option>premium</option><option>mixed</option></select></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Default to the pale theme; the toggle switches (and remembers for the demo).
+  (function () {
+    const root = document.documentElement;
+    root.dataset.theme = localStorage.getItem('xt-theme') || 'light';
+    const btn = document.querySelector('.theme-btn');
+    if (btn) btn.addEventListener('click', () => {
+      const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = t;
+      localStorage.setItem('xt-theme', t);
+    });
+
+    // Findings filter by type (category) or "needs attention".
+    const bar = document.querySelector('.filt');
+    if (bar) bar.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      bar.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on');
+      const f = b.dataset.filter;
+      document.querySelectorAll('.frow').forEach((r) => {
+        const show = f === 'all'
+          || (f === 'attn' && r.dataset.attn === '1')
+          || r.dataset.cat === f;
+        r.style.display = show ? '' : 'none';
+      });
+    });
+  })();
+</script>

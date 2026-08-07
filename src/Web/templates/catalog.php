@@ -2,8 +2,6 @@
 /** @var list<array<string, mixed>> $entries */
 use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 ?>
-<nav class="breadcrumb"><a href="/"><?= e($t->ui('sites')) ?></a> › Software catalogue</nav>
-
 <h1>Software catalogue</h1>
 <p class="muted">Every plugin and theme seen across extractions, with its licensing.
     <strong>premium</strong> and <strong>mixed</strong> likely need a paid licence.</p>

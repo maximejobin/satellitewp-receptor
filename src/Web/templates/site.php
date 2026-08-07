@@ -1,6 +1,4 @@
 <?php /** @var \SatelliteWP\Xtractor\Rules\Translator $t */ ?>
-<nav class="breadcrumb"><a href="/"><?= e($t->ui('sites')) ?></a> › <?= e($site['name'] ?? $siteId) ?></nav>
-
 <h1><?= e($site['name'] ?? $siteId) ?></h1>
 <p>
     <a href="<?= e($site['site_url'] ?? '#') ?>" rel="noopener noreferrer"><?= e($site['site_url'] ?? '') ?></a>
