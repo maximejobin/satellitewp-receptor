@@ -37,6 +37,7 @@ final class RouterTest extends TestCase
 
         // Anything that could leave the site falls back to /catalog.
         $this->assertSame('/catalog', Router::safeReturn('//evil.com'));
+        $this->assertSame('/catalog', Router::safeReturn('/\\evil.com')); // backslash is normalised to '/' by browsers
         $this->assertSame('/catalog', Router::safeReturn('https://evil.com'));
         $this->assertSame('/catalog', Router::safeReturn('javascript:alert(1)'));
         $this->assertSame('/catalog', Router::safeReturn(null));

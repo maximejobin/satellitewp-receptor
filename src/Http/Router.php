@@ -333,12 +333,19 @@ final class Router
         $this->notFound();
     }
 
-    /** Only same-site relative paths are allowed as a redirect target. */
+    /**
+     * Only same-site relative paths are allowed as a redirect target. A target
+     * must start with a single '/' followed by neither '/' nor '\': browsers
+     * normalise a backslash to a slash in the Location authority, so '/\evil.com'
+     * would resolve to '//evil.com' — an off-site open redirect.
+     */
     public static function safeReturn(mixed $target): string
     {
         $target = is_string($target) ? $target : '';
 
-        return (str_starts_with($target, '/') && !str_starts_with($target, '//'))
+        return (str_starts_with($target, '/')
+            && !str_starts_with($target, '//')
+            && !str_starts_with($target, '/\\'))
             ? $target
             : '/catalog';
     }
