@@ -18,7 +18,7 @@ cp config/config.local.php.dist config/config.local.php
 ```
 
 - ✅ `vendor/` is created, no Composer errors.
-- ✅ `composer test` → **all tests green** (currently 120).
+- ✅ `composer test` → **all tests green** (currently 135).
 - Edit `config/config.local.php`: set `pagespeed.api_key`, and for a first run
   set `allow_unsigned => false` (default).
 

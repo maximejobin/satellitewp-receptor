@@ -85,7 +85,8 @@ JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
 ## Testing
 
 `composer test` — 135 tests, no network. Manual end-to-end: `docs/TESTING.md`.
-Live probe tests are `@group network` (excluded by default).
+`phpunit.xml.dist` excludes the `network` group, reserved for any future
+live-probe tests; none exist yet, so the suite runs fully offline.
 
 ## Conventions
 
