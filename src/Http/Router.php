@@ -12,7 +12,7 @@ use SatelliteWP\Xtractor\App;
  * Routes:
  *   /                                        sites list
  *   /site/{site_id}                          site detail (history, events, trends)
- *   /site/{site_id}/extraction/{id}          extraction detail (summary + probes + payload)
+ *   /site/{site_id}/extraction/{id}          extraction detail (findings + probes + payload)
  *   /site/{site_id}/extraction/{id}/raw/{f}  serve a JSON file (allowlisted)
  */
 final class Router
@@ -223,7 +223,7 @@ final class Router
             return null;
         }
 
-        return in_array($name, ['payload', 'meta', 'summary', 'findings'], true)
+        return in_array($name, ['payload', 'meta', 'findings'], true)
             ? "{$name}.json"
             : "probes/{$name}.json";
     }
