@@ -9,6 +9,28 @@ $tls  = $probes['tls']['data'] ?? [];
 $rdap = $probes['rdap']['data'] ?? [];
 $http = $probes['http']['data'] ?? [];
 $ps   = $probes['pagespeed']['data'] ?? [];
+$bv   = $probes['blogvault']['data'] ?? [];
+$wf   = $probes['wordfence']['data'] ?? [];
+
+// Plugin/theme slug -> that component's probe record, for the vulnerability
+// columns below. Both probes already key their items by normalized slug.
+$bvPluginsBySlug = array_column($bv['plugins']['items'] ?? [], null, 'slug');
+$wfPluginsBySlug = array_column($wf['plugins']['items'] ?? [], null, 'slug');
+$bvThemesBySlug  = array_column($bv['themes']['items'] ?? [], null, 'slug');
+$wfThemesBySlug  = array_column($wf['themes']['items'] ?? [], null, 'slug');
+
+// Core is merged once here and reused by both §WordPress (the count) and
+// §Plugins & themes (the detailed table), so the two can never disagree.
+$coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['core']['vulnerabilities'] ?? []);
+
+/** Compact "N CVE" / "—" cell for a table row, from an already-merged list. */
+$vulnCell = static function (array $merged): string {
+    if ($merged === []) {
+        return '<span class="badge badge-ok">—</span>';
+    }
+
+    return '<span class="badge badge-error">' . count($merged) . ' CVE</span>';
+};
 
 $eolPhp = $eol->eolStatus('php', (string) ($p['php']['version'] ?? ''));
 $eolWp  = $eol->eolStatus('wordpress', (string) ($p['wp_version'] ?? ''));
@@ -38,6 +60,52 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
     · schema <?= e($meta['schema_version'] ?? '?') ?>
     · <?= badge($row['status'] ?? null) ?>
 </p>
+
+<?php
+$status   = (string) ($row['status'] ?? '');
+$awaiting = in_array($status, ['pending', 'queued'], true);
+if ($awaiting):
+    $bvFound = ($blogVault['found'] ?? false) === true;
+?>
+    <!-- Analysis not run yet: pre-flight + the manual trigger -->
+    <section class="section">
+        <h2>Analyse</h2>
+        <div style="padding:0 1.1rem 1.1rem">
+        <?php if ($status === 'queued'): ?>
+            <p><span class="badge badge-ok">En file</span>
+               L'analyse est en attente du worker (cron <span class="mono">ingest:process</span>,
+               chaque minute). Rafraîchis la page dans un moment.</p>
+        <?php else: ?>
+            <p class="muted">Cette extraction a été reçue mais <b>pas encore analysée</b>.
+               Aucune sonde n'a tourné, aucun quota n'a été consommé.</p>
+
+            <?php if (($blogVault['configured'] ?? false) !== true): ?>
+                <p><span class="badge badge-muted">BlogVault non configuré</span>
+                   Impossible de vérifier si le site y est géré.</p>
+            <?php elseif (!empty($blogVault['error'])): ?>
+                <p><span class="badge badge-warn">BlogVault injoignable</span>
+                   <span class="mono"><?= e($blogVault['error']) ?></span></p>
+            <?php elseif ($bvFound): ?>
+                <p><span class="badge badge-ok">Sur BlogVault</span>
+                   <?= e($blogVault['name'] ?? '') ?>
+                   <span class="mono muted"><?= e($blogVault['id'] ?? '') ?></span></p>
+            <?php else: ?>
+                <p><span class="badge badge-error">Absent de BlogVault</span>
+                   <span class="mono"><?= e($blogVault['host'] ?? '') ?></span> n'est pas dans le compte —
+                   le site n'est probablement pas sous plan de maintenance.
+                   Les règles <span class="mono">BV1</span>–<span class="mono">BV6</span> resteront indéterminées.</p>
+            <?php endif; ?>
+
+            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run"
+                  <?= $bvFound ? '' : 'onsubmit="return confirm(\'Ce site n\\\'est pas sur BlogVault. Lancer l\\\'analyse quand même ?\')"' ?>>
+                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
+                <button type="submit" class="btn"><?= $bvFound ? 'Lancer l\'analyse' : 'Lancer l\'analyse quand même' ?></button>
+            </form>
+        <?php endif; ?>
+        </div>
+    </section>
+<?php endif; ?>
 
 <?php if ($findings !== null): ?>
     <!-- Overview -->
@@ -265,8 +333,12 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 <!-- §6 WordPress -->
 <section class="section"><h2>WordPress</h2>
     <div class="cards">
-        <?php echo section('Core & settings',
+        <?php
+        echo section('Core & settings',
             field_raw('Version', e($p['wp_version'] ?? '—') . eol_annotation($eolWp, $t))
+            . field_raw('Vulnérabilités connues', $coreVulns !== []
+                ? '<span class="badge badge-error">' . count($coreVulns) . ' CVE</span> — voir §Plugins &amp; thèmes'
+                : '<span class="badge badge-ok">—</span>')
             . field('Core update', $p['core_update']['available_version'] ?? ($p['core_update']['status'] ?? null), !empty($p['core_update']['available_version']) ? 'warn' : 'ok')
             . field('Auto-update core', $p['core_update']['auto_update_core'] ?? null)
             . field('Multisite', $p['is_multisite'] ?? null)
@@ -284,13 +356,26 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
     <?php
     $plugins = is_array($p['plugins'] ?? null) ? $p['plugins'] : [];
     $themes  = is_array($p['themes'] ?? null) ? $p['themes'] : [];
+    // Every merged vulnerability across core/plugins/themes, for the detailed
+    // CVE table further down. Core leads, then plugins and themes are appended
+    // as their tables render.
+    $allVulns = array_map(
+        static fn (array $v): array => $v + ['component' => 'WordPress', 'slug' => 'wordpress'],
+        $coreVulns
+    );
     if ($plugins !== []): ?>
         <h3 style="font-size:.9rem;margin:0 0 .3rem" class="muted">Plugins — <?= count($plugins) ?> installed,
             <?= count(array_filter($plugins, static fn ($x) => !empty($x['active']))) ?> active,
             <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h3>
-        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Status</th><th>Licence</th></tr></thead><tbody>
+        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Status</th><th>Vulnérabilités</th><th>Licence</th></tr></thead><tbody>
         <?php foreach ($plugins as $pl):
-            $entry = $catalog->get('plugin', (string) ($pl['slug'] ?? '')); ?>
+            $slug   = SoftwareCatalog::normalizeSlug('plugin', (string) ($pl['slug'] ?? ''));
+            $entry  = $catalog->get('plugin', (string) ($pl['slug'] ?? ''));
+            $merged = merge_vulnerabilities(
+                $bvPluginsBySlug[$slug]['vulnerabilities'] ?? [],
+                $wfPluginsBySlug[$slug]['vulnerabilities'] ?? []
+            );
+            foreach ($merged as $v) { $allVulns[] = $v + ['component' => $pl['name'] ?? $slug, 'slug' => $slug]; } ?>
             <tr>
                 <td><?= e($pl['name'] ?? '?') ?></td>
                 <td class="mono"><?= e($pl['slug'] ?? '') ?></td>
@@ -298,6 +383,7 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
                 <td><?= !empty($pl['new_version']) ? '<span class="b-upd">' . e($pl['new_version']) . '</span>' : '—' ?></td>
                 <td class="muted">WP <?= e($pl['requires_wp'] ?? '—') ?> · PHP <?= e($pl['requires_php'] ?? '—') ?></td>
                 <td><?= !empty($pl['active']) ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td>
+                <td><?= $vulnCell($merged) ?></td>
                 <td><?php echo $entry ? license_select('plugin', (string) $entry['slug'], (string) ($entry['license'] ?? 'unknown'), $csrf,
                     '/site/' . e($siteId) . '/extraction/' . e($extractionId), $entry['suggested'] ?? null) : '—'; ?></td>
             </tr>
@@ -306,13 +392,35 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
     <?php endif; ?>
     <?php if ($themes !== []): ?>
         <h3 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h3>
-        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Template</th><th>Status</th></tr></thead><tbody>
-        <?php foreach ($themes as $th): ?>
+        <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Template</th><th>Status</th><th>Vulnérabilités</th></tr></thead><tbody>
+        <?php foreach ($themes as $th):
+            $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
+            $merged = merge_vulnerabilities(
+                $bvThemesBySlug[$slug]['vulnerabilities'] ?? [],
+                $wfThemesBySlug[$slug]['vulnerabilities'] ?? []
+            );
+            foreach ($merged as $v) { $allVulns[] = $v + ['component' => $th['name'] ?? $slug, 'slug' => $slug]; } ?>
             <tr><td><?= e($th['name'] ?? '?') ?></td><td class="mono"><?= e($th['slug'] ?? '') ?></td>
                 <td class="mono"><?= e($th['version'] ?? '?') ?></td>
                 <td><?= !empty($th['new_version']) ? '<span class="b-upd">' . e($th['new_version']) . '</span>' : '—' ?></td>
                 <td class="mono"><?= e($th['template'] ?? '') ?></td>
-                <td><?= !empty($th['active']) ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td></tr>
+                <td><?= !empty($th['active']) ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td>
+                <td><?= $vulnCell($merged) ?></td></tr>
+        <?php endforeach; ?>
+        </tbody></table>
+    <?php endif; ?>
+    <?php if ($allVulns !== []): ?>
+        <h3 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Vulnérabilités détectées — <?= count($allVulns) ?></h3>
+        <table><thead><tr><th>Composant</th><th>CVE</th><th>Titre</th><th>CVSS</th><th>Version corrigée</th><th>Source</th></tr></thead><tbody>
+        <?php foreach ($allVulns as $v): ?>
+            <tr>
+                <td class="mono"><?= e($v['component']) ?></td>
+                <td class="mono"><?= $v['cve_id'] ? e($v['cve_id']) : '<span class="muted">—</span>' ?></td>
+                <td><?= e($v['title'] ?? '—') ?></td>
+                <td><?= $v['cvss_score'] !== null ? e($v['cvss_score']) . ' (' . e($v['cvss_rating'] ?? '?') . ')' : '—' ?></td>
+                <td class="mono"><?= e($v['patched_version'] ?? '—') ?></td>
+                <td><?= vulnerability_source_badge($v['sources']) ?></td>
+            </tr>
         <?php endforeach; ?>
         </tbody></table>
     <?php endif; ?>

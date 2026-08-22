@@ -97,7 +97,9 @@ final class BlogVaultClient
             'headers' => array_merge($this->defaultHeaders, $this->authHeaders(), $options['headers'] ?? []),
         ];
         if ($query !== []) {
-            $guzzleOptions['query'] = $query;
+            // A pre-built string: Guzzle forwards it untouched. Passing the array
+            // would let Guzzle's own builder mangle it — see buildQuery().
+            $guzzleOptions['query'] = self::buildQuery($query);
         }
         if (isset($options['json'])) {
             $guzzleOptions['json'] = $options['json'];
@@ -118,12 +120,60 @@ final class BlogVaultClient
         }
 
         if ($status < 200 || $status >= 300) {
-            $message = $decoded['message'] ?? $decoded['error'] ?? "HTTP {$status}";
-
-            throw new BlogVaultException("BlogVault error: {$message}", $status, $decoded);
+            throw new BlogVaultException(
+                'BlogVault error: ' . self::errorMessage($decoded, $status),
+                $status,
+                $decoded
+            );
         }
 
         return $decoded;
+    }
+
+    /**
+     * Build the query string ourselves.
+     *
+     * Guzzle's own builder (GuzzleHttp\Psr7\Query::build) flattens both nested
+     * maps and lists — 'filters' => ['site_id:eq' => 'x'] becomes "filters=x",
+     * and 'site_ids' => ['x'] becomes "site_ids=x". v6 rejects both with
+     * 400 "Must be an array". http_build_query nests maps correctly but indexes
+     * lists ("site_ids[0]=x"), which v6 also rejects, so the indices are
+     * stripped to leave the "site_ids[]=x" form v6 expects.
+     *
+     * @param array<string, mixed> $query
+     */
+    public static function buildQuery(array $query): string
+    {
+        $encoded = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+        return preg_replace('/%5B\d+%5D=/', '%5B%5D=', $encoded) ?? $encoded;
+    }
+
+    /**
+     * v6 wraps failures as {"error":{"status","code","message","details":[…]}}.
+     * Flat {"message"} / {"error"} bodies are still honoured for other shapes.
+     *
+     * @param array<string, mixed> $decoded
+     */
+    private static function errorMessage(array $decoded, int $status): string
+    {
+        $error = is_array($decoded['error'] ?? null) ? $decoded['error'] : $decoded;
+
+        $message = $error['message'] ?? $decoded['message'] ?? null;
+        if (!is_string($message) || $message === '') {
+            $message = "HTTP {$status}";
+        }
+
+        $details = [];
+        foreach ((array) ($error['details'] ?? []) as $detail) {
+            if (!is_array($detail)) {
+                continue;
+            }
+            $param = isset($detail['param']) ? "{$detail['param']}: " : '';
+            $details[] = $param . (string) ($detail['message'] ?? $detail['code'] ?? '');
+        }
+
+        return $details === [] ? $message : $message . ' (' . implode('; ', $details) . ')';
     }
 
     private function url(string $path): string

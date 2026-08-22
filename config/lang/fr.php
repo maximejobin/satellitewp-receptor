@@ -143,5 +143,12 @@ return [
         // Utilisateurs
         'M1'  => ['title' => 'Nombre d\'administrateurs maîtrisé', 'fail' => 'Le site compte {observed} administrateurs (seuil {threshold}).', 'pass' => 'Le site compte {observed} administrateur(s).'],
         'M2'  => ['title' => 'Aucun compte « admin » par défaut', 'fail' => 'Un compte administrateur utilise l\'identifiant par défaut « admin ».', 'pass' => 'Aucun compte « admin » par défaut.'],
+        'BV1' => ['title' => 'Site non signalé comme piraté', 'fail' => 'BlogVault signale ce site comme piraté : {detections} détection(s) non résolue(s).', 'pass' => 'L\'analyse antimaliciel de BlogVault ne signale rien.'],
+        'BV2' => ['title' => 'Aucune vulnérabilité connue', 'fail' => 'BlogVault recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'BlogVault ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
+        'BV3' => ['title' => 'Sauvegarde récente et réussie', 'fail' => 'Aucune sauvegarde récente exploitable : dernier instantané « {observed} » (seuil {threshold} jours).', 'pass' => 'La dernière sauvegarde réussie date de {observed} jour(s).'],
+        'BV4' => ['title' => 'Pare-feu actif en mode protection', 'fail' => 'Le pare-feu BlogVault n\'est pas en mode protection (actuellement : {observed}).', 'pass' => 'Le pare-feu est actif en mode protection.'],
+        'BV5' => ['title' => 'Analyse antimaliciel récente', 'fail' => 'La dernière analyse antimaliciel date de {observed} jour(s) (seuil {threshold}).', 'pass' => 'La dernière analyse antimaliciel date de {observed} jour(s).'],
+        'BV6' => ['title' => 'Authentification à deux facteurs des administrateurs', 'fail' => '{observed} administrateur(s) sur {administrators} n\'ont pas d\'authentification à deux facteurs.', 'pass' => 'Tous les administrateurs ont l\'authentification à deux facteurs activée.'],
+        'WF1' => ['title' => 'Aucune vulnérabilité connue (Wordfence)', 'fail' => 'Wordfence Intelligence recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'Wordfence Intelligence ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
     ],
 ];

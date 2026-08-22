@@ -1,0 +1,23 @@
+{
+    "detections": {
+        "files": {
+            "total": 1,
+            "marked_safe": 0
+        },
+        "scripts": {
+            "total": 0,
+            "marked_safe": 0
+        },
+        "plugins": {
+            "total": 0
+        },
+        "cron_jobs": {
+            "total": 0,
+            "marked_safe": 0
+        },
+        "redirections": {
+            "total": 0,
+            "marked_safe": 0
+        }
+    }
+}

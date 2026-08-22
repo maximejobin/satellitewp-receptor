@@ -18,9 +18,11 @@ cp config/config.local.php.dist config/config.local.php
 ```
 
 - ✅ `vendor/` is created, no Composer errors.
-- ✅ `composer test` → **all tests green** (currently 135).
+- ✅ `composer test` → **all tests green** (currently 219).
 - Edit `config/config.local.php`: set `pagespeed.api_key`, and for a first run
-  set `allow_unsigned => false` (default).
+  set `allow_unsigned => false` (default). `blogvault.api_key` and
+  `wordfence.api_key` are optional — their probes report a clean `error`
+  status when unset, they don't break the pipeline.
 
 Reset test data between full runs if needed:
 
@@ -38,6 +40,24 @@ rm -rf data/sites data/index.sqlite data/keys.json data/reference
 
 - ✅ Reports `php : N cycles` and `wordpress : N cycles`.
 - ✅ `data/reference/php.json` and `data/reference/wordpress.json` exist.
+
+### Wordfence Intelligence (optional — needs `wordfence.api_key`)
+
+```bash
+./bin/xtractor wordfence:refresh
+```
+
+- ✅ Reports `production : N vulnérabilités reçues` and `scanner : N vulnérabilités
+  reçues` (tens of thousands each — the feed is a full dump, not a per-site call).
+- ✅ `data/reference/wordfence.json` exists.
+- ⚠️ The API enforces a strict rate limit (observed: both feeds 429 after a
+  handful of calls in one day) — **do not** run this more than once a day.
+  A 429 on a variant that already has cached data from a previous run is
+  expected and non-fatal: that variant's old data is kept, only the failing
+  one is skipped, and the command still exits non-zero so cron notices.
+- ✅ On the **very first** run, if both variants fail, `data/reference/wordfence.json`
+  is **not** created (an empty-but-present cache would make every site look
+  falsely clean) — confirm with `test -f data/reference/wordfence.json`.
 
 ---
 
@@ -114,13 +134,18 @@ Also POST `event-valid.json` (type `event`) and `integrity-valid.json`
 ./bin/xtractor ingest:process
 ```
 
-- ✅ Prints `Processing $SITE/<id> … done [http:… dns:… tls:… rdap:… pagespeed:…]`.
-- ✅ `data/sites/$SITE/extractions/<id>/probes/` has `dns.json rdap.json tls.json http.json pagespeed.json`.
-- ✅ `summary.json` and `findings.json` exist in the extraction dir.
+- ✅ Prints `Processing $SITE/<id> … done [http:… dns:… tls:… rdap:… pagespeed:… blogvault:… wordfence:…]`.
+- ✅ `data/sites/$SITE/extractions/<id>/probes/` has `dns.json rdap.json tls.json http.json pagespeed.json blogvault.json wordfence.json`.
+- ✅ `findings.json` exists in the extraction dir (there is no summary.json).
 - ✅ `extractions:list $SITE` now shows status `done`.
 
 > Note: `pagespeed` needs a valid API key; without one it reports `warn`/`error`
 > with a 429 message, which is expected — the rest of the pipeline still completes.
+> `blogvault` reports `ok` with `"linked": false` for any site absent from the
+> BlogVault account; that is a normal outcome, not a failure. `wordfence`
+> reports `error` until `wordfence:refresh` has run at least once (§1) — that
+> is a real operational gap, not a normal outcome, so it does not get the same
+> free pass as an unlinked BlogVault site.
 
 Re-run a single probe and the rules (no re-ingest needed):
 
@@ -150,6 +175,19 @@ Open `http://127.0.0.1:8080/` in a browser.
   table, the **Constats** (findings) table, per-probe cards, raw JSON toggles.
 - ✅ Raw JSON links work: `…/raw/payload`, `…/raw/tls`, `…/raw/findings` return
   `application/json`.
+- ✅ §WordPress → Core & settings shows a "Vulnérabilités connues" row.
+  §Plugins & thèmes shows a "Vulnérabilités" column on both tables (`—` when
+  clean, `N CVE` in red otherwise). On a site with at least one match, a
+  "Vulnérabilités détectées" table appears below the theme table, each row
+  carrying a source badge — **BlogVault**, **Wordfence**, or both.
+
+  There is no live-vulnerable site handy for this check, so validate the
+  rendering path directly: point one plugin/theme's `slug`+`version` in a
+  scratch copy of a payload at a real entry from
+  `tests/fixtures/wordfence/scanner-samples.json` (e.g. `opening-hours`
+  `1.20`), run `pipeline:run` on that scratch extraction, confirm the badges
+  render, then delete the scratch extraction — never edit a real stored one
+  for this.
 
 ### Security checks
 

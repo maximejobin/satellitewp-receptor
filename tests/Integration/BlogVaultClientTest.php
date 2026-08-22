@@ -107,6 +107,57 @@ final class BlogVaultClientTest extends TestCase
         $this->assertSame(['site_url' => 'https://ex.com'], json_decode((string) $request->getBody(), true));
     }
 
+    /**
+     * v6 needs "site_ids[]=x" — Guzzle's own builder emits "site_ids=x" and
+     * http_build_query emits "site_ids[0]=x", both rejected with 400.
+     */
+    public function testListParamsUseBracketsWithoutAnIndex(): void
+    {
+        $client = $this->client([$this->json([])]);
+        $client->get('sites/wp/plugins', ['site_ids' => ['abc', 'def'], 'perPage' => 100]);
+
+        $query = $this->sent[0]->getUri()->getQuery();
+        $this->assertStringContainsString('site_ids%5B%5D=abc', $query);
+        $this->assertStringContainsString('site_ids%5B%5D=def', $query);
+        $this->assertStringNotContainsString('site_ids%5B0%5D', $query);
+        $this->assertStringContainsString('perPage=100', $query);
+    }
+
+    /** Nested maps keep their key: "filters[site_id:eq]=x". */
+    public function testNestedFilterParamsKeepTheirKey(): void
+    {
+        $client = $this->client([$this->json([])]);
+        $client->get('staging-sites', ['filters' => ['site_id:eq' => 'abc']]);
+
+        $this->assertStringContainsString(
+            'filters%5Bsite_id%3Aeq%5D=abc',
+            $this->sent[0]->getUri()->getQuery()
+        );
+    }
+
+    /** The v6 envelope is {"error":{...}} — reading it as a string used to yield "Array". */
+    public function testV6ErrorEnvelopeIsUnwrapped(): void
+    {
+        $client = $this->client([$this->json([
+            'error' => [
+                'status'  => 400,
+                'code'    => 'bad_request',
+                'message' => 'Invalid parameters.',
+                'details' => [['code' => 'invalid_type', 'param' => 'site_ids', 'message' => 'Must be an array']],
+            ],
+        ], 400)]);
+
+        try {
+            $client->get('sites/wp/plugins');
+            $this->fail('expected BlogVaultException');
+        } catch (BlogVaultException $e) {
+            $this->assertSame(400, $e->statusCode);
+            $this->assertStringContainsString('Invalid parameters.', $e->getMessage());
+            $this->assertStringContainsString('site_ids: Must be an array', $e->getMessage());
+            $this->assertStringNotContainsString('Array', str_replace('Must be an array', '', $e->getMessage()));
+        }
+    }
+
     public function testApiErrorRaisesWithStatusAndBody(): void
     {
         $client = $this->client([$this->json(['message' => 'Invalid API key'], 401)]);

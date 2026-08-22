@@ -1,0 +1,627 @@
+{
+    "sites": [
+        {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+            "last_sync_at": "2026-08-21T16:05:51Z",
+            "wp": {
+                "plugins": [
+                    {
+                        "name": "Akismet Anti-spam: Spam Protection",
+                        "slug": "akismet",
+                        "filename": "akismet/akismet.php",
+                        "current_version": "5.6",
+                        "latest_version": "5.7.2",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Complianz Helper",
+                        "slug": "complianz-helper.php",
+                        "filename": "complianz-helper.php",
+                        "current_version": "1.0.0",
+                        "latest_version": "1.0.0",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Complianz Privacy Suite (GDPR/CCPA) premium",
+                        "slug": "complianz-gdpr-premium",
+                        "filename": "complianz-gdpr-premium/complianz-gpdr-premium.php",
+                        "current_version": "7.3.2",
+                        "latest_version": "7.6.3",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Escaped terms test",
+                        "slug": "escape-terms.php",
+                        "filename": "escape-terms.php",
+                        "current_version": "1.0.0",
+                        "latest_version": "1.0.0",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Gravity SMTP",
+                        "slug": "gravitysmtp",
+                        "filename": "gravitysmtp/gravitysmtp.php",
+                        "current_version": "2.1.5",
+                        "latest_version": "2.3.2",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Meta Box",
+                        "slug": "meta-box",
+                        "filename": "meta-box/meta-box.php",
+                        "current_version": "5.11.4",
+                        "latest_version": "5.11.4",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": true,
+                            "vulnerabilities": [
+                                {
+                                    "vulnerability_id": "c39d8f45a72384e567133ffb981b02db",
+                                    "title": "Meta Box < 5.13.1 - Authenticated (Contributor+) Insecure Direct Object Reference",
+                                    "cve_id": "CVE-2026-15248",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 4.3,
+                                    "patched_version": "5.13.1",
+                                    "published_at": "2026-08-02T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "Meta Box AIO",
+                        "slug": "meta-box-aio",
+                        "filename": "meta-box-aio/meta-box-aio.php",
+                        "current_version": "1.22.0",
+                        "latest_version": "3.10.0",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": true,
+                            "vulnerabilities": [
+                                {
+                                    "vulnerability_id": "906649ef66a54fe413865b188e59be3c",
+                                    "title": "Meta Box AIO <= 3.8.0 - Missing Authorization to Unauthenticated Arbitrary Post Deletion via 'rwmb_frontend_field_object_id' Parameter",
+                                    "cve_id": "CVE-2026-14488",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "critical",
+                                    "cvss_score": 9.1,
+                                    "patched_version": "3.9.0",
+                                    "published_at": "2026-07-28T20:51:21Z",
+                                    "virtual_patch": {
+                                        "available": true,
+                                        "mode": "inherit",
+                                        "state": "live",
+                                        "live_at": "2026-08-03T12:40:06Z",
+                                        "applied": true,
+                                        "applied_at": "2026-08-21T15:39:29Z"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "PO-Merger as a plugin",
+                        "slug": "po-merger",
+                        "filename": "po-merger/plugin.php",
+                        "current_version": "",
+                        "latest_version": "",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Query Monitor",
+                        "slug": "query-monitor",
+                        "filename": "query-monitor/query-monitor.php",
+                        "current_version": "3.20.4",
+                        "latest_version": "4.0.7",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Relationships",
+                        "slug": "relationships.php",
+                        "filename": "relationships.php",
+                        "current_version": "0.1",
+                        "latest_version": "0.1",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "SherlockWP",
+                        "slug": "sherlockwp-extractor",
+                        "filename": "sherlockwp-extractor/sherlockwp.php",
+                        "current_version": "1.0.0",
+                        "latest_version": "1.0.0",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "SherlockWP",
+                        "slug": "sherlockwp-extractor",
+                        "filename": "sherlockwp-extractor/sherlockwp-extractor.php",
+                        "current_version": "1.0.0",
+                        "latest_version": "1.0.0",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Site Extractor",
+                        "slug": "satellitewp-plugin-site-extractor-master",
+                        "filename": "satellitewp-plugin-site-extractor-master/swp-extractor.php",
+                        "current_version": "1.4.0",
+                        "latest_version": "1.4.0",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "Site Kit by Google",
+                        "slug": "google-site-kit",
+                        "filename": "google-site-kit/google-site-kit.php",
+                        "current_version": "1.175.0",
+                        "latest_version": "1.185.0",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": true,
+                            "vulnerabilities": [
+                                {
+                                    "vulnerability_id": "eccc0f97fb541a84fd65632a9bf7de23",
+                                    "title": "Site Kit by Google \u2013 Analytics, Search Console, AdSense, Speed < 1.176.0 - Missing Authorization to Authenticated (Editor+) Settings Update",
+                                    "cve_id": "CVE-2026-10753",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "low",
+                                    "cvss_score": 2.7,
+                                    "patched_version": "1.176.0",
+                                    "published_at": "2026-06-25T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "Speedy for Query Monitor",
+                        "slug": "qm-speedy-main",
+                        "filename": "qm-speedy-main/qm-speedy.php",
+                        "current_version": "0.9.3",
+                        "latest_version": "0.9.3",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "User Switching",
+                        "slug": "user-switching",
+                        "filename": "user-switching/user-switching.php",
+                        "current_version": "1.11.2",
+                        "latest_version": "1.12.1",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": true,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "WP Go Maps (formerly WP Google Maps)",
+                        "slug": "wp-google-maps",
+                        "filename": "wp-google-maps/wpGoogleMaps.php",
+                        "current_version": "10.0.06",
+                        "latest_version": "10.1.08",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": true,
+                            "vulnerabilities": [
+                                {
+                                    "vulnerability_id": "2788692ef888586d83441b58dae03405",
+                                    "title": "WP Go Maps < 10.0.10 - Unauthenticated Sensitive Information Disclosure via Datatables AJAX Fallback",
+                                    "cve_id": "CVE-2026-8385",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 5.3,
+                                    "patched_version": "10.0.10",
+                                    "published_at": "2026-06-05T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                },
+                                {
+                                    "vulnerability_id": "7e42dade03752751e4daaf8a8a22bdd7",
+                                    "title": "WP Go Maps <= 10.1.01 - Unauthenticated Arbitrary Record Creation",
+                                    "cve_id": "CVE-2026-12238",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 5.3,
+                                    "patched_version": "10.1.02",
+                                    "published_at": "2026-06-19T06:01:56Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                },
+                                {
+                                    "vulnerability_id": "dcc6a6d88cc38175b9a81ac871227720",
+                                    "title": "WP Go Maps \u2013 Google Map, OpenStreetMap, Leaflet Map <= 10.1.05 - Missing Authorization",
+                                    "cve_id": "CVE-2026-25466",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 5.3,
+                                    "patched_version": "10.1.06",
+                                    "published_at": "2026-07-22T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                },
+                                {
+                                    "vulnerability_id": "8b2c797b63ea6b2d9d992915bc09750f",
+                                    "title": "WP Go Maps \u2013 Google Map, OpenStreetMap, Leaflet Map < 10.1.04 - Unauthenticated SQL Injection",
+                                    "cve_id": "CVE-2026-15381",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "high",
+                                    "cvss_score": 7.5,
+                                    "patched_version": "10.1.04",
+                                    "published_at": "2026-08-04T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": true,
+                                        "mode": "inherit",
+                                        "state": "live",
+                                        "live_at": "2026-08-19T14:07:31Z",
+                                        "applied": true,
+                                        "applied_at": "2026-08-21T15:39:29Z"
+                                    }
+                                },
+                                {
+                                    "vulnerability_id": "9f8dd25a34f4da16f413c7a05e1e0a4d",
+                                    "title": "Go Maps <= 10.0.9 - Unauthenticated Information Exposure",
+                                    "cve_id": "CVE-2026-8386",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 5.3,
+                                    "patched_version": "10.0.10",
+                                    "published_at": "2026-05-25T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": false,
+                                        "mode": "inherit",
+                                        "state": null,
+                                        "live_at": null,
+                                        "applied": false,
+                                        "applied_at": null
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "WP Rocket",
+                        "slug": "wp-rocket-3.13.3",
+                        "filename": "wp-rocket-3.13.3/wp-rocket.php",
+                        "current_version": "3.13.3",
+                        "latest_version": "3.13.3",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    },
+                    {
+                        "name": "WP Rocket",
+                        "slug": "wp-rocket",
+                        "filename": "wp-rocket/wp-rocket.php",
+                        "current_version": "3.15.4",
+                        "latest_version": "3.15.4",
+                        "update_available": false,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": false,
+                        "network_wide": false,
+                        "package_available": false,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": true,
+                            "vulnerabilities": [
+                                {
+                                    "vulnerability_id": "34c6723996f5a099473dc894ae5cfbd3",
+                                    "title": "Rocket <= 3.19.4 - Authenticated (Author+) Stored Cross-Site Scripting",
+                                    "cve_id": "CVE-2026-28044",
+                                    "ghsa_id": null,
+                                    "cvss_rating": "medium",
+                                    "cvss_score": 6.4,
+                                    "patched_version": "3.20.0.2",
+                                    "published_at": "2025-10-20T00:00:00Z",
+                                    "virtual_patch": {
+                                        "available": true,
+                                        "mode": "inherit",
+                                        "state": "live",
+                                        "live_at": "2026-06-06T06:52:56Z",
+                                        "applied": true,
+                                        "applied_at": "2026-08-21T15:39:29Z"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "WordPress Beta Tester",
+                        "slug": "wordpress-beta-tester",
+                        "filename": "wordpress-beta-tester/wp-beta-tester.php",
+                        "current_version": "4.0.0",
+                        "latest_version": "4.0.1",
+                        "update_available": true,
+                        "database": {
+                            "current_version": null,
+                            "latest_version": null,
+                            "update_required": false
+                        },
+                        "active": true,
+                        "network_wide": true,
+                        "package_available": true,
+                        "locked": false,
+                        "malicious": false,
+                        "security": {
+                            "vulnerable": false,
+                            "vulnerabilities": []
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "meta": {
+        "pagination": {
+            "page": 1,
+            "perPage": 100,
+            "totalPages": 1,
+            "totalItems": 1
+        }
+    }
+}

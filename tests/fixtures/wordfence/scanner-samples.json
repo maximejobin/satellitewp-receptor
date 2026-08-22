@@ -1,0 +1,384 @@
+{
+    "single_plugin_wildcard": {
+        "id": "0004db27-9ea6-4387-ab1d-b95558784ed9",
+        "title": "We’re Open! <= 1.37 - Authenticated (Administrator+) Stored Cross-Site Scripting",
+        "software": [
+            {
+                "type": "plugin",
+                "name": "We’re Open!",
+                "slug": "opening-hours",
+                "affected_versions": {
+                    "*-1.37": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "1.37",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "1.38"
+                ]
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/0004db27-9ea6-4387-ab1d-b95558784ed9?source=api-scan"
+        ],
+        "published": "2022-09-09 00:00:00",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "theme": {
+        "id": "001c6260-fa3d-49e7-873e-a96c1d6a2e97",
+        "title": "Webenvo <= 0.0.6 - Authenticated (Subscriber+) Arbitrary File Upload",
+        "software": [
+            {
+                "type": "theme",
+                "name": "Webenvo",
+                "slug": "webenvo",
+                "affected_versions": {
+                    "*-0.0.6": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "0.0.6",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "0.0.7"
+                ]
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/001c6260-fa3d-49e7-873e-a96c1d6a2e97?source=api-scan"
+        ],
+        "published": "2026-04-20 00:00:00",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "core": {
+        "id": "00376356-4a85-4898-a101-710e1cb5c6bb",
+        "title": "WordPress Core <= 3.3 - Cross-Site Scripting",
+        "software": [
+            {
+                "type": "core",
+                "name": "WordPress",
+                "slug": "wordpress",
+                "affected_versions": {
+                    "*-3.3": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "3.3",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "3.3.1"
+                ]
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/00376356-4a85-4898-a101-710e1cb5c6bb?source=api-scan"
+        ],
+        "published": "2012-01-03 00:00:00",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "multi_software": {
+        "id": "005a27c6-b9eb-466c-b0c3-ce52c25bb321",
+        "title": "XootiX Framework <= Various Plugin Versions - Missing Authorization to Arbitrary Options Update",
+        "software": [
+            {
+                "type": "plugin",
+                "name": "Waitlist Woocommerce ( Back in stock notifier )",
+                "slug": "waitlist-woocommerce",
+                "affected_versions": {
+                    "*-2.6": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "2.6",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.6.1"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "Side Cart Woocommerce | Woocommerce Cart",
+                "slug": "side-cart-woocommerce",
+                "affected_versions": {
+                    "2.5": {
+                        "from_version": "2.5",
+                        "from_inclusive": true,
+                        "to_version": "2.5",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.5.1"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "Login & Register Forms – Popup, Slider, Profile & WooCommerce",
+                "slug": "easy-login-woocommerce",
+                "affected_versions": {
+                    "2.7.1-2.7.2": {
+                        "from_version": "2.7.1",
+                        "from_inclusive": true,
+                        "to_version": "2.7.2",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.7.3"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "OTP Login & Register Woocommerce",
+                "slug": "mobile-login-woocommerce",
+                "affected_versions": {
+                    "*-2.6.1": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "2.6.1",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.6.2"
+                ]
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/005a27c6-b9eb-466c-b0c3-ce52c25bb321?source=api-scan"
+        ],
+        "published": "2024-06-05 13:11:37",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "informational": {
+        "id": "031a1203-6b0d-453b-be8a-12e7f55cb401",
+        "title": "Under Construction <= 3.96 - Cross-Site Request Forgery via admin_action_ucp_dismiss_notice",
+        "software": [
+            {
+                "type": "plugin",
+                "name": "Under Construction",
+                "slug": "under-construction-page",
+                "affected_versions": {
+                    "*-3.96": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "3.96",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "3.97"
+                ]
+            }
+        ],
+        "informational": true,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/031a1203-6b0d-453b-be8a-12e7f55cb401?source=api-scan"
+        ],
+        "published": "2023-02-10 00:00:00",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "explicit_range": {
+        "id": "005a27c6-b9eb-466c-b0c3-ce52c25bb321",
+        "title": "XootiX Framework <= Various Plugin Versions - Missing Authorization to Arbitrary Options Update",
+        "software": [
+            {
+                "type": "plugin",
+                "name": "Waitlist Woocommerce ( Back in stock notifier )",
+                "slug": "waitlist-woocommerce",
+                "affected_versions": {
+                    "*-2.6": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "2.6",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.6.1"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "Side Cart Woocommerce | Woocommerce Cart",
+                "slug": "side-cart-woocommerce",
+                "affected_versions": {
+                    "2.5": {
+                        "from_version": "2.5",
+                        "from_inclusive": true,
+                        "to_version": "2.5",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.5.1"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "Login & Register Forms – Popup, Slider, Profile & WooCommerce",
+                "slug": "easy-login-woocommerce",
+                "affected_versions": {
+                    "2.7.1-2.7.2": {
+                        "from_version": "2.7.1",
+                        "from_inclusive": true,
+                        "to_version": "2.7.2",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.7.3"
+                ]
+            },
+            {
+                "type": "plugin",
+                "name": "OTP Login & Register Woocommerce",
+                "slug": "mobile-login-woocommerce",
+                "affected_versions": {
+                    "*-2.6.1": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "2.6.1",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": true,
+                "patched_versions": [
+                    "2.6.2"
+                ]
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/005a27c6-b9eb-466c-b0c3-ce52c25bb321?source=api-scan"
+        ],
+        "published": "2024-06-05 13:11:37",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    },
+    "to_wildcard": {
+        "id": "0099c700-e1af-4d97-a518-151a9139ea35",
+        "title": "LiquidThemes Themes <= Various Versions - Missing Authorization to Authenticated (Subscriber+) All Plugins Deactivated",
+        "software": [
+            {
+                "type": "theme",
+                "name": "AI Hub - Startup & Technology WordPress Theme",
+                "slug": "aihub",
+                "affected_versions": {
+                    "*": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "*",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": false,
+                "patched_versions": []
+            },
+            {
+                "type": "theme",
+                "name": "Hub - Responsive Multi-Purpose WordPress Theme",
+                "slug": "hub",
+                "affected_versions": {
+                    "*": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "*",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": false,
+                "patched_versions": []
+            },
+            {
+                "type": "theme",
+                "name": "ArcHub - Architecture and Interior Design WordPress Theme",
+                "slug": "archub",
+                "affected_versions": {
+                    "*": {
+                        "from_version": "*",
+                        "from_inclusive": true,
+                        "to_version": "*",
+                        "to_inclusive": true
+                    }
+                },
+                "patched": false,
+                "patched_versions": []
+            }
+        ],
+        "informational": false,
+        "references": [
+            "https://www.wordfence.com/threat-intel/vulnerabilities/id/0099c700-e1af-4d97-a518-151a9139ea35?source=api-scan"
+        ],
+        "published": "2025-08-27 00:00:00",
+        "copyrights": {
+            "message": "This record contains material that is subject to copyright",
+            "defiant": {
+                "notice": "Copyright 2012-2026 Defiant Inc.",
+                "license": "Defiant hereby grants you a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute this software vulnerability information. Any copy of the software vulnerability information you make for such purposes is authorized provided that you include a hyperlink to this vulnerability record and reproduce Defiant's copyright designation and this license in any such copy.",
+                "license_url": "https://www.wordfence.com/wordfence-intelligence-terms-and-conditions/"
+            }
+        }
+    }
+}

@@ -705,4 +705,139 @@ return [
             return Check::pass('none');
         },
     ],
+
+    // ===================================================================
+    //  BV. BLOGVAULT — VULNERABILITIES, MALWARE, BACKUP            [EXT]
+    // ===================================================================
+    // BlogVault is the single agreed source for these (SOURCE 12). Every rule
+    // returns unknown when the site is not under BlogVault management, so an
+    // unmanaged site never looks like a failing one.
+    [
+        'id' => 'BV1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critique,
+        'check' => static function (Context $c) {
+            $status = $c->string('probe.blogvault.scanner.status');
+            if ($status === null) {
+                return Check::unknown();
+            }
+            $unresolved = (int) ($c->number('probe.blogvault.scanner.unresolved_count') ?? 0);
+
+            return ($status === 'hacked' || $unresolved > 0)
+                ? Check::fail($status, ['detections' => $unresolved])
+                : Check::pass($status);
+        },
+    ],
+    [
+        'id' => 'BV2', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critique,
+        'check' => static function (Context $c) {
+            $total = $c->number('probe.blogvault.vulnerabilities_total');
+            if ($total === null) {
+                return Check::unknown();
+            }
+            if ($total <= 0) {
+                return Check::pass(0);
+            }
+
+            $components = (int) ($c->number('probe.blogvault.plugins.vulnerable_count') ?? 0)
+                + (int) ($c->number('probe.blogvault.themes.vulnerable_count') ?? 0)
+                + (($c->bool('probe.blogvault.core.vulnerable') === true) ? 1 : 0);
+
+            return Check::fail((int) $total, ['components' => $components]);
+        },
+    ],
+    [
+        'id' => 'BV3', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Elevee, 'threshold' => 7,
+        'check' => static function (Context $c, Rule $rule) {
+            if ($c->probeData('blogvault') === null || $c->bool('probe.blogvault.linked') !== true) {
+                return Check::unknown();
+            }
+            if ($c->bool('probe.blogvault.backups.enabled') !== true) {
+                return Check::fail('disabled');
+            }
+            $status = $c->string('probe.blogvault.backups.latest_snapshot.status');
+            $age    = $c->number('probe.blogvault.backups.latest_snapshot.age_days');
+            if ($status !== 'succeeded' || $age === null) {
+                return Check::fail($status ?? 'none');
+            }
+
+            return $age <= (float) $rule->threshold
+                ? Check::pass((int) $age)
+                : Check::fail((int) $age, ['threshold' => $rule->threshold]);
+        },
+    ],
+    [
+        'id' => 'BV4', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Moyenne,
+        'check' => static function (Context $c) {
+            if ($c->probeData('blogvault') === null || $c->bool('probe.blogvault.linked') !== true) {
+                return Check::unknown();
+            }
+            if ($c->bool('probe.blogvault.firewall.enabled') !== true) {
+                return Check::fail('disabled');
+            }
+            $mode = $c->string('probe.blogvault.firewall.mode');
+
+            return $mode === 'protect' ? Check::pass($mode) : Check::fail($mode ?? 'unknown');
+        },
+    ],
+    [
+        'id' => 'BV5', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Moyenne, 'threshold' => 7,
+        'check' => static function (Context $c, Rule $rule) {
+            $lastCheck = $c->string('probe.blogvault.scanner.last_check_at');
+            if ($lastCheck === null) {
+                return $c->bool('probe.blogvault.linked') === true ? Check::fail('never') : Check::unknown();
+            }
+            $when = strtotime($lastCheck);
+            if ($when === false) {
+                return Check::unknown();
+            }
+            $days = (int) floor((time() - $when) / 86400);
+
+            return $days <= (int) $rule->threshold
+                ? Check::pass($days)
+                : Check::fail($days, ['threshold' => $rule->threshold]);
+        },
+    ],
+    [
+        'id' => 'BV6', 'category' => Category::USERS, 'source' => 'EXT', 'severity' => Severity::Moyenne,
+        'check' => static function (Context $c) {
+            $admins = $c->number('probe.blogvault.users.administrators');
+            if ($admins === null) {
+                return Check::unknown();
+            }
+            if ($admins <= 0) {
+                return Check::na();
+            }
+            $without = (int) ($c->number('probe.blogvault.users.administrators_without_2fa') ?? 0);
+
+            return $without === 0
+                ? Check::pass(0)
+                : Check::fail($without, ['administrators' => (int) $admins]);
+        },
+    ],
+
+    // ===================================================================
+    //  WF. WORDFENCE INTELLIGENCE — second, independent detector       [EXT]
+    // ===================================================================
+    // BV2 already covers BlogVault's vulnerability signal. WF1 is not a
+    // duplicate: it is sourced from an entirely separate database (Wordfence
+    // Intelligence, matched locally against the site's own plugin/theme
+    // versions — see WordfenceProbe), so it catches gaps in either single
+    // source. A site can fail BV2, WF1, both, or neither.
+    [
+        'id' => 'WF1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critique,
+        'check' => static function (Context $c) {
+            $total = $c->number('probe.wordfence.vulnerabilities_total');
+            if ($total === null) {
+                return Check::unknown();
+            }
+            if ($total <= 0) {
+                return Check::pass(0);
+            }
+
+            $components = (int) ($c->number('probe.wordfence.plugins.vulnerable_count') ?? 0)
+                + (int) ($c->number('probe.wordfence.themes.vulnerable_count') ?? 0)
+                + (($c->count('probe.wordfence.core.vulnerabilities') ?? 0) > 0 ? 1 : 0);
+
+            return Check::fail((int) $total, ['components' => $components]);
+        },
+    ],
 ];

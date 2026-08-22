@@ -32,4 +32,38 @@ return [
         // 'categories' => ['performance', 'accessibility', 'best-practices', 'seo'],
         // 'min_score'  => 90,          // performance score below which status = warn
     ],
+
+    // Optional integrations — left commented so a fresh copy stays quiet.
+    // A placeholder key here would produce confusing 401s; with the key absent
+    // the probes report a clean "not configured" and the pipeline carries on.
+
+    // BlogVault v6 — vulnerabilities/malware/backup. Account → API Credentials.
+    // 'blogvault' => [
+    //     'api_key' => '…',
+    // ],
+
+    // Wordfence Intelligence v3 — second, independent vulnerability source.
+    // Generate under Account → Integrations. Only used by `wordfence:refresh`
+    // (suggested: daily cron) — never called during a site scan.
+    // 'wordfence' => [
+    //     'api_key' => '…',
+    // ],
+
+    // Google sign-in for the web UI. Create the client under
+    // Google Cloud Console → APIs & Services → Credentials
+    //   → Create credentials → OAuth client ID → Web application,
+    // and register this exact redirect URI on it:
+    //   https://<votre-domaine>/auth/callback
+    // (for local dev: http://127.0.0.1:8080/auth/callback)
+    //
+    // Access is granted only to addresses listed in data/users.json — being
+    // able to sign in with Google is not enough. The first address in that
+    // file is the admin and manages the others from the UI.
+    // 'auth' => [
+    //     'google' => [
+    //         'client_id'     => '…apps.googleusercontent.com',
+    //         'client_secret' => '…',
+    //         // 'redirect_uri' => 'https://votre-domaine/auth/callback',
+    //     ],
+    // ],
 ];

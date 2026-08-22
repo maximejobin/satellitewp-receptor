@@ -20,6 +20,7 @@ $console->addCommands([
     new Console\RulesEvaluateCommand($app),
     new Console\RulesListCommand($app),
     new Console\ReferenceRefreshCommand($app),
+    new Console\WordfenceRefreshCommand($app),
     new Console\CatalogListCommand($app),
     new Console\CatalogSetCommand($app),
     new Console\CatalogSuggestCommand($app),
@@ -28,6 +29,7 @@ $console->addCommands([
     new Console\KeysAddCommand($app),
     new Console\KeysListCommand($app),
     new Console\KeysRevokeCommand($app),
+    new Console\UsersCommand($app),
     new Console\IndexRebuildCommand($app),
 ]);
 $console->run();

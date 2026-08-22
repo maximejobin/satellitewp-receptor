@@ -14,7 +14,7 @@ et produit des fichiers JSON exploitables pour l'affichage brut et les rapports
 - **Une probe = une classe** derrière `ProbeInterface`, exécutable seule au CLI
   ou dans le pipeline. Une probe qui plante n'arrête jamais le run.
 - **La requête HTTP ne fait jamais de probe.** Le receptor stocke et répond ;
-  un cron traite les extractions en attente.
+  un analyste lance l'analyse depuis l'UI, un cron l'exécute hors requête web.
 
 ## Installation
 
@@ -46,11 +46,22 @@ server {
 }
 ```
 
-Crontab (traitement des extractions en attente + relance des runs plantés) :
+Crontab (worker de la file d'analyse + relance des runs plantés) :
 
 ```cron
 * * * * * php /var/www/xtractor/bin/xtractor ingest:process --requeue-stale=30 >> /var/www/xtractor/data/xtractor.log 2>&1
 ```
+
+**Une extraction reçue n'est jamais analysée toute seule.** Elle est stockée en
+`pending` et attend qu'un analyste presse « Lancer l'analyse » dans l'interface,
+ce qui la passe en `queued` — le seul statut que ce worker ramasse. Un site qui
+pousse de lui-même ne coûte donc qu'un fichier sur disque : aucune sonde, aucun
+quota PageSpeed ou BlogVault. Le cron existe uniquement pour que les ~20 s
+d'analyse tournent hors de la requête web, sans risque de timeout.
+
+Cycle de vie : `pending` → *(clic analyste)* → `queued` → `running` → `done`.
+Un run planté depuis plus de N minutes retourne en `queued` (pas en `pending`,
+sinon plus personne ne le reprendrait).
 
 ### PageSpeed Insights
 
@@ -87,7 +98,7 @@ define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
 
 | Commande | Rôle |
 | --- | --- |
-| `ingest:process [--limit=N] [--requeue-stale=MIN]` | Traite les extractions `pending` (point d'entrée cron, verrou flock) |
+| `ingest:process [--limit=N] [--requeue-stale=MIN]` | Worker cron : traite les extractions `queued` (celles lancées depuis l'UI), verrou flock |
 | `pipeline:run <site_id> [extraction] [--probe=a,b]` | Pipeline complet ou partiel (défaut : dernière extraction) |
 | `probe:run <probe> <site_id> [extraction]` | Une probe seule, imprime l'enveloppe JSON |
 | `probe:list` | Probes enregistrées |
@@ -97,12 +108,16 @@ define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
 | `keys:add/list/revoke` | Gestion des clés API par site |
 | `index:rebuild` | Régénère SQLite depuis `data/` |
 | `reference:refresh [--product=php,wordpress]` | Rafraîchit les tables EOL depuis endoflife.date |
+| `wordfence:refresh` | Rafraîchit l'index Wordfence Intelligence — **quotidien**, jamais plus (API à débit strict) |
 
-Crontab suggéré pour les données de référence (elles changent rarement) :
+Crontab suggéré pour les données de référence EOL (elles changent rarement) :
 
 ```cron
 0 4 * * 1 php /var/www/xtractor/bin/xtractor reference:refresh >> /var/www/xtractor/data/xtractor.log 2>&1
 ```
+
+Wordfence est différent — la base change en continu, donc quotidien (détail et
+cron complet dans la section dédiée plus bas).
 
 ## Layout data/
 
@@ -112,8 +127,7 @@ data/sites/<site_id>/
 ├── extractions/<AAAAMMJJTHHMMSSZ>/
 │   ├── payload.json               # payload brut, tel que reçu
 │   ├── meta.json                  # réception (ip, signature, taille)
-│   ├── probes/{dns,rdap,tls,http,pagespeed}.json
-│   ├── summary.json               # digest plat → rapports et listes
+│   ├── probes/{dns,rdap,tls,http,pagespeed,blogvault,wordfence}.json
 │   └── findings.json              # constats du moteur de règles
 ├── extractions/latest             # symlink
 ├── events/AAAA-MM.jsonl           # événements, append-only
@@ -132,9 +146,13 @@ produit un `findings.json` : la matière première du bilan de santé.
 Le catalogue vit dans [`config/rules.php`](config/rules.php) et suit
 `.github/validations-techniques.txt` du repo plugin — mêmes identifiants (`A1`,
 `B7a`, `I1`…), mêmes catégories, mêmes sévérités **(C)ritique / (É)levée /
-(M)oyenne / (I)nfo**. Deux préfixes sont des ajouts hors catalogue, volontairement
-distincts pour ne jamais entrer en collision : `W*` (domaine WHOIS/RDAP) et `PS*`
-(scores Lighthouse).
+(M)oyenne / (I)nfo**. Quatre préfixes sont des ajouts hors catalogue,
+volontairement distincts pour ne jamais entrer en collision : `W*` (domaine
+WHOIS/RDAP), `PS*` (scores Lighthouse), `BV*` (BlogVault) et `WF*` (Wordfence
+Intelligence). `BV2` et `WF1` sont deux détecteurs de vulnérabilités
+**indépendants** — un site peut échouer l'un, l'autre, les deux, ou aucun ; ils
+ne sont jamais fusionnés au niveau des règles, seulement à l'affichage (voir
+plus bas).
 
 Chaque constat porte : id, catégorie, source, sévérité, statut, valeur observée,
 seuil, message d'action et badge rapport (rouge/jaune/bleu).
@@ -177,13 +195,12 @@ $bv->post('sites/scan', ['site_url' => $url]);
 $bv->request('GET', 'n/importe/quel/endpoint', ['query' => [...]]);
 ```
 
-Tout ce qui est spécifique à v6 vit en config (à renseigner depuis leur doc) —
-aucun code à changer :
+Tout ce qui est spécifique à v6 vit en config — aucun code à changer :
 
 ```php
 // config/config.php (base_url) + config/config.local.php (api_key)
 'blogvault' => [
-    'base_url' => 'https://api.blogvault.net/v6',
+    'base_url' => 'https://api.blogvault.net/api/v6',
     'api_key'  => '…',
     'auth'     => ['type' => 'bearer'],   // bearer | header | query | basic | none
     'default_query' => ['account' => '…'], // params envoyés à chaque appel
@@ -191,9 +208,83 @@ aucun code à changer :
 ```
 
 Chaque appel renvoie le JSON décodé ; un échec lève une `BlogVaultException`
-portant le code HTTP et le corps d'erreur de l'API. **Non encore câblé au moteur
-de règles** (F10 vulnérabilités) : en attente de l'URL de base et du schéma
-d'auth v6.
+portant le code HTTP et le message d'erreur de v6 (`{"error":{"message",
+"details"}}`, désenveloppé).
+
+Les listes se sérialisent en `site_ids[]=…` et les filtres en
+`filters[champ:op]=…` : v6 rejette les deux formes que produisent Guzzle et
+`http_build_query`, d'où le constructeur de requête maison
+(`BlogVaultClient::buildQuery`).
+
+**Câblé** via la probe `blogvault` : elle apparie le site sur l'hôte, puis
+collecte vulnérabilités (CVE + score CVSS), statut piraté, pare-feu, sauvegardes,
+2FA des administrateurs et durcissement `wp-config` — 7 appels par extraction.
+Alimente les règles `BV1`–`BV6`. Les identifiants HTTP du site renvoyés par
+`GET /sites/{id}` sont supprimés avant écriture — jamais dans `data/`.
+
+Quand le scan signale un problème non résolu (`scanner.status === 'hacked'` ou
+des détections non marquées sûres), 6 appels supplémentaires ramènent le détail
+exploitable pour un redressement — chemins des fichiers/scripts infectés,
+extensions/tâches cron/redirections malicieuses, et les instantanés de
+sauvegarde **non** signalés piratés (candidats de restauration). Ce détail vit
+sous `data.scanner.remediation` dans `probes/blogvault.json` ; jamais déclenché
+sur un site sain, donc sans coût pour la majorité des extractions.
+
+## Wordfence Intelligence (API v3) — deuxième source de vulnérabilités
+
+Contrairement à BlogVault, ce n'est **pas** un appel par site : la base
+Wordfence Intelligence est une base complète (~33 000 vulnérabilités),
+téléchargée en un seul bloc JSON par variante — `production` (CVE, CVSS,
+description, `remediation`) et `scanner` (détection seule, souvent sans CVE
+encore attribué). Les deux confirmées en direct : ~78-117 Mo, sans pagination,
+sous une limite de débit stricte (observée : les deux variantes en 429 après
+une poignée d'appels le même jour — prévoir **~1 rafraîchissement/jour**).
+
+```php
+// config/config.php (base_url) + config/config.local.php (api_key)
+'wordfence' => [
+    'base_url' => 'https://www.wordfence.com/api/intelligence/v3',
+    'api_key'  => '…',    // Compte Wordfence → Integrations
+    'timeout'  => 120,    // le flux fait des dizaines de Mo
+],
+```
+
+`wordfence:refresh` (cron **quotidien** suggéré) télécharge les deux variantes
+et les réduit en un index compact par `"{type}:{slug}"` dans
+`data/reference/wordfence.json` — jamais les 100+ Mo bruts. Un échec total dès
+le tout premier rafraîchissement (les deux variantes en 429) ne laisse **aucun
+fichier** derrière plutôt qu'un cache vide mais « présent » — sinon la sonde
+croirait le site propre alors que l'index n'a jamais existé.
+
+```cron
+0 5 * * * php /var/www/xtractor/bin/xtractor wordfence:refresh >> /var/www/xtractor/data/xtractor.log 2>&1
+```
+
+**Câblée** via la probe `wordfence` — la seule sans appel réseau : elle
+recoupe localement les extensions/thèmes/version du cœur du site (payload de
+l'extraction, porté par `SiteContext`) contre l'index en cache. Alimente la
+règle `WF1`, indépendante de `BV2` (voir plus haut).
+
+`merge_vulnerabilities()` ([src/Web/helpers.php](src/Web/helpers.php))
+réconcilie les deux sources **à l'affichage seulement** — jamais au niveau des
+règles — en associant par égalité stricte de `cve_id` (jamais par
+recoupement approximatif de plage de version, qui produirait de faux
+« confirmé par les deux »). Chaque vulnérabilité affichée porte son badge de
+source : BlogVault, Wordfence, ou les deux.
+
+> ⚠️ **Le flux `scanner` ne porte aucun `cve_id`** — mesuré sur l'index réel :
+> 0 sur 41 733 entrées scanner, contre 39 189 sur 42 522 (92 %) côté
+> `production`, qui fournit en plus un score CVSS sur 100 % de ses entrées.
+> Comme la fusion associe strictement par `cve_id`, **l'attribution croisée
+> exige que `production` soit dans le cache** : avec le seul flux scanner, le
+> badge « BlogVault + Wordfence » ne peut jamais apparaître.
+
+Le cache est écrit en **JSON Lines** (une ligne par composant) et lu **en
+streaming** : un scan ne décode que les quelques dizaines de composants du site,
+jamais les ~18 000. Décoder le fichier entier coûtait 243 Mo pour en lire 35 —
+soit un *fatal* OOM à la limite PHP par défaut de 128 Mo, qui tuait tout le
+processus `ingest:process`. En streaming : ~8 Mo, constant quelle que soit la
+croissance de la base.
 
 ## Catalogue plugins/thèmes (licences)
 

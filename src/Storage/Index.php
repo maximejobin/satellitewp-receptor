@@ -13,6 +13,11 @@ use PDO;
 final class Index
 {
     public const string STATUS_PENDING = 'pending';
+    /** Received and awaiting a human decision is PENDING; QUEUED means an
+     *  analyst pressed "run" and the cron worker may pick it up. Probes only
+     *  ever run on QUEUED, so an extraction arriving on its own never spends
+     *  a PageSpeed or BlogVault quota. */
+    public const string STATUS_QUEUED  = 'queued';
     public const string STATUS_RUNNING = 'running';
     public const string STATUS_DONE    = 'done';
     public const string STATUS_ERROR   = 'error';
@@ -173,13 +178,30 @@ final class Index
     }
 
     /**
+     * Extractions an analyst has explicitly queued for analysis — the only
+     * ones the cron worker processes.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function queuedExtractions(int $limit = 50): array
+    {
+        $stmt = $this->pdo()->prepare(
+            "SELECT * FROM extractions WHERE status = 'queued' ORDER BY received_at ASC LIMIT :limit"
+        );
+        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll();
+    }
+
+    /**
      * Reset extractions stuck in "running" for longer than $minutes back to "pending".
      */
     public function requeueStale(int $minutes): int
     {
         $cutoff = gmdate('Y-m-d\TH:i:s\Z', time() - $minutes * 60);
         $stmt   = $this->pdo()->prepare(<<<'SQL'
-            UPDATE extractions SET status = 'pending'
+            UPDATE extractions SET status = 'queued'
             WHERE status = 'running' AND COALESCE(processed_at, received_at) < :cutoff
             SQL);
         $stmt->execute(['cutoff' => $cutoff]);
@@ -275,6 +297,12 @@ final class Index
                 $receivedAt = (string) ($meta['received_at'] ?? $seenAt);
                 $probes     = $store->readAllProbeResults($siteId, $extractionId);
 
+                // Reconstructed from what is on disk: probes present means the
+                // analysis ran, absent means it did not. An extraction that was
+                // merely QUEUED has no on-disk trace — it comes back as PENDING
+                // and the analyst re-presses "Lancer l'analyse". Acceptable:
+                // rebuild is a recovery step, and the JSON tree is the source of
+                // truth, not the queue.
                 $status = $probes === [] ? self::STATUS_PENDING : self::STATUS_DONE;
                 $this->insertExtraction($siteId, $extractionId, $receivedAt, $payload, $status);
 

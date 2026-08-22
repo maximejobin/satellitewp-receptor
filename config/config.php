@@ -21,7 +21,7 @@ return [
 
     // Probes executed by the pipeline, in order.
     'probes' => [
-        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed'],
+        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'wordfence'],
         'connect_timeout' => 5,
         'timeout' => 15,
         'user_agent' => 'SatelliteWP-Xtractor/1.0',
@@ -50,14 +50,27 @@ return [
     // params here (fill them from BlogVault's v6 docs), then call any endpoint
     // by path. api_key belongs in config.local.php.
     'blogvault' => [
-        'base_url' => '', // e.g. https://api.blogvault.net/v6  (from their docs)
-        'api_key'  => null,
-        'timeout'  => 20,
+        'base_url' => 'https://api.blogvault.net/api/v6',
+        'api_key'  => null,     // set in config.local.php
+        // /sites?perPage=100 takes ~8 s; leave room for a slow account.
+        'timeout'  => 45,
         // How the key is sent: 'bearer' | 'header' | 'query' | 'basic' | 'none'.
         'auth' => ['type' => 'bearer', 'name' => 'Authorization'],
         // Params/headers sent on every request (e.g. a partner or account id).
         'default_query'   => [],
         'default_headers' => [],
+    ],
+
+    // Wordfence Intelligence v3 — second, independent vulnerability source
+    // alongside BlogVault. Confirmed live: the feed is a full dump (~100+ MB,
+    // no pagination) with a strict rate limit, not a per-site API — never
+    // called during a site scan. `wordfence:refresh` (suggested: daily cron)
+    // downloads it into data/reference/wordfence.json; WordfenceProbe reads
+    // that local cache only.
+    'wordfence' => [
+        'base_url' => 'https://www.wordfence.com/api/intelligence/v3',
+        'api_key'  => null,     // set in config.local.php
+        'timeout'  => 120,      // the feed is tens of MB per variant
     ],
 
     // Server-side reference data (SOURCE 14). endoflife.date products cached
@@ -82,10 +95,37 @@ return [
         'thresholds' => [],
     ],
 
-    // Web UI protection. Set both in config.local.php to enable Basic auth.
-    // 'web_pass_hash' is a password_hash() value.
+    // Web UI protection.
+    //
+    // Two mechanisms, checked in this order:
+    //   1. Google OAuth (auth.google.*) — the real one. Enabled as soon as
+    //      client_id and client_secret are set. Anyone signing in must also be
+    //      listed in the users file below.
+    //   2. Basic auth (web.*) — fallback for local dev, used only while OAuth
+    //      is unconfigured.
+    // With neither set, the UI is open: protect it at the server level.
     'web' => [
         'user' => null,
         'pass_hash' => null,
+    ],
+
+    'auth' => [
+        'google' => [
+            // Google Cloud Console → APIs & Services → Credentials
+            //   → Create credentials → OAuth client ID → Web application.
+            // Both values belong in config.local.php, never here.
+            'client_id'     => null,
+            'client_secret' => null,
+            // Must match an "Authorised redirect URI" registered on that client,
+            // exactly, scheme and all. Leave null to derive it from the incoming
+            // request (scheme://host/auth/callback) — fine behind a correctly
+            // configured vhost, set it explicitly if you terminate TLS upstream.
+            'redirect_uri'  => null,
+        ],
+
+        // Allowed accounts, one email per entry. The FIRST entry is the admin:
+        // the only one who may add or remove users from the web UI.
+        // Created on first use if absent; seed it with your own address.
+        'users_file' => dirname(__DIR__) . '/data/users.json',
     ],
 ];

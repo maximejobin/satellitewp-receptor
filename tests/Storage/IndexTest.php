@@ -114,8 +114,29 @@ final class IndexTest extends TestCase
         $requeued = $this->index->requeueStale(30);
 
         $this->assertSame(1, $requeued);
-        $this->assertSame('pending', $this->index->getExtraction(self::SITE_A, '20260722T100000Z')['status']);
+        // Back to "queued", not "pending": a crashed run was already approved by
+        // an analyst, so it must return to the worker's queue rather than to the
+        // inert received state, where nothing would ever pick it up again.
+        $this->assertSame('queued', $this->index->getExtraction(self::SITE_A, '20260722T100000Z')['status']);
         $this->assertSame('running', $this->index->getExtraction(self::SITE_B, '20260722T110000Z')['status']);
+    }
+
+    /**
+     * The worker must never pick up an extraction that merely arrived: probes
+     * (and their PageSpeed / BlogVault quotas) only run once an analyst has
+     * queued it from the web UI.
+     */
+    public function testQueuedAndPendingAreDistinctQueues(): void
+    {
+        $this->seedExtraction(self::SITE_A, '20260722T100000Z');   // arrived, untouched
+        $this->seedExtraction(self::SITE_B, '20260722T110000Z');
+        $this->index->setExtractionStatus(self::SITE_B, '20260722T110000Z', Index::STATUS_QUEUED);
+
+        $pending = $this->index->pendingExtractions();
+        $queued  = $this->index->queuedExtractions();
+
+        $this->assertSame(['20260722T100000Z'], array_column($pending, 'id'));
+        $this->assertSame(['20260722T110000Z'], array_column($queued, 'id'));
     }
 
     public function testRebuildFromDataStore(): void

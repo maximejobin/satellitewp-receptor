@@ -22,7 +22,18 @@ $langQ = ($lang ?? 'en') === 'en' ? '' : '?lang=' . e($lang ?? 'en');
         <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/<?= $langQ ?>"><?= e($t->ui('sites')) ?></a>
         <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog<?= $langQ ?>">Catalogue</a>
 
-        <div class="side-foot">v1 · 62 rules · 14 sources</div>
+        <?php if (!empty($currentUser)): ?>
+            <div class="nav-label">Compte</div>
+            <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users<?= $langQ ?>">Utilisateurs</a>
+            <a class="nav-item" href="/auth/logout">Déconnexion</a>
+        <?php endif; ?>
+
+        <div class="side-foot">
+            <?php if (!empty($currentUser)): ?>
+                <div class="mono" style="overflow-wrap:anywhere"><?= e($currentUser) ?></div>
+            <?php endif; ?>
+            v1 · 69 rules · 14 sources
+        </div>
     </aside>
 
     <div class="main">

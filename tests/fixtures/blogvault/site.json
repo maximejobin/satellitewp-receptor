@@ -1,0 +1,161 @@
+{
+    "site": {
+        "id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "title": "Site",
+        "url": "https://hacked-demo.test",
+        "home_url": "https://hacked-demo.test",
+        "created_at": "2026-08-21T15:37:03Z",
+        "updated_at": "2026-08-21T16:13:35Z",
+        "client": null,
+        "tags": [
+            {
+                "id": "779",
+                "name": "DEV"
+            },
+            {
+                "id": "5261",
+                "name": "MANUEL"
+            }
+        ],
+        "connection": {
+            "status": "connected",
+            "sticky_ip": "203.0.113.10",
+            "http_auth": {
+                "username": "PLACEHOLDER",
+                "password": "PLACEHOLDER"
+            }
+        },
+        "server": {
+            "hosting": null,
+            "mysql_version": "8.4.7",
+            "php_version": "8.1"
+        },
+        "sync": {
+            "last_sync_at": "2026-08-21T16:05:51Z",
+            "next_sync_at": "2026-08-22T08:04:07Z",
+            "last_sync_status": "succeeded",
+            "last_sync_error": null,
+            "interval": "24h",
+            "daily_sync_time": "08:04:07Z",
+            "paused": false,
+            "in_progress": false
+        },
+        "security": {
+            "enabled": true,
+            "scanner": {
+                "status": "hacked",
+                "malware_detected_at": "2026-08-21T15:44:57Z",
+                "interval": "24h",
+                "last_check_at": "2026-08-21T16:05:51Z",
+                "next_check_at": "2026-08-22T08:04:07Z",
+                "detections": {
+                    "files": 1,
+                    "scripts": 0,
+                    "cron_jobs": 0
+                },
+                "files": {
+                    "total": 11791,
+                    "scanned": 11791
+                },
+                "database": {
+                    "total": 42,
+                    "scanned": 36
+                }
+            },
+            "firewall": {
+                "enabled": true,
+                "mode": "protect",
+                "advanced": true,
+                "bot_protection": {
+                    "enabled": true
+                }
+            }
+        },
+        "backups": {
+            "enabled": true,
+            "real_time": false,
+            "available_snapshots": 2,
+            "retention_days": 90,
+            "latest_snapshot": {
+                "id": "6a887739310c0133dbc36301",
+                "created_at": "2026-08-21T16:05:13Z",
+                "status": "succeeded"
+            },
+            "files": {
+                "count": {
+                    "total": 15130,
+                    "synced": 15058,
+                    "ignored": 72
+                },
+                "size": {
+                    "total": 6315532214,
+                    "synced": 293600714,
+                    "ignored": 6021931500
+                }
+            },
+            "database": {
+                "count": {
+                    "total": 42,
+                    "synced": 36,
+                    "ignored": 6
+                },
+                "size": {
+                    "total": 5436608,
+                    "synced": 5226025,
+                    "ignored": 210583
+                }
+            }
+        },
+        "performance": {
+            "enabled": false
+        },
+        "uptime": {
+            "enabled": false,
+            "status": null
+        },
+        "analytics": {
+            "enabled": false
+        },
+        "activity_logs": {
+            "enabled": true
+        },
+        "wp": {
+            "core": {
+                "current_version": "6.6.2-alpha-58805",
+                "latest_version": "7.1",
+                "update_available": true,
+                "locked": false,
+                "vulnerable": true
+            },
+            "default_wp_object_id": 1,
+            "updates": {
+                "plugins": {
+                    "total": 20,
+                    "available": 9,
+                    "risk": {
+                        "high": 1,
+                        "medium": 6,
+                        "low": 2
+                    }
+                },
+                "themes": {
+                    "total": 14,
+                    "available": 14
+                }
+            }
+        },
+        "screenshot": {
+            "thumbnail_url": "https://public822.blogvault.net/screenshots/3/1/31a5938d/b98b3845/screenshot_thumb.webp",
+            "updated_at": "2026-08-21T16:06:30Z",
+            "full_url": "https://public822.blogvault.net/screenshots/3/1/31a5938d/b98b3845/screenshot_complete.webp"
+        },
+        "locked": true,
+        "multisite": false,
+        "health": {
+            "score": 30,
+            "uptime_percentage": 0,
+            "status": "critical"
+        },
+        "woocommerce": false
+    }
+}

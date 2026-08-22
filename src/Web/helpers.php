@@ -36,7 +36,7 @@ function badge(?string $status): string
     $status = $status ?? 'unknown';
     $class  = match ($status) {
         'ok', 'done'       => 'badge-ok',
-        'warn', 'pending', 'running' => 'badge-warn',
+        'warn', 'pending', 'queued', 'running' => 'badge-warn',
         'error'            => 'badge-error',
         default            => 'badge-muted',
     };
@@ -180,6 +180,88 @@ function fmt_list(mixed $items, int $max = 12): string
     $more  = count($items) - count($shown);
 
     return e(implode(', ', array_map('strval', $shown))) . ($more > 0 ? " <span class=\"val-muted\">+{$more}</span>" : '');
+}
+
+/**
+ * Merges one component's vulnerability lists from BlogVault and Wordfence
+ * Intelligence into one list, each entry tagged with `sources` — the answer
+ * to "does this come from BlogVault, Wordfence, or both?".
+ *
+ * Matched by strict, case-insensitive `cve_id` equality only — the one
+ * unambiguous key two independent databases share. A vulnerability without a
+ * CVE on either side (common in Wordfence's "scanner" feed, published before
+ * a CVE is assigned) is never fuzzy-matched by version range: it stays listed
+ * under its own single source rather than risking a false "confirmed by both".
+ *
+ * @param list<array<string, mixed>> $blogvault BlogVaultProbe vulnerabilities[] for one component
+ * @param list<array<string, mixed>> $wordfence WordfenceProbe vulnerabilities[] for the same component
+ * @return list<array<string, mixed>> each entry: cve_id, title, cvss_rating,
+ *     cvss_score, patched_version, published_at, sources (list of 'blogvault'/'wordfence')
+ */
+function merge_vulnerabilities(array $blogvault, array $wordfence): array
+{
+    $cveKey = static function (array $vuln): ?string {
+        $cve = $vuln['cve_id'] ?? null;
+
+        return is_string($cve) && $cve !== '' ? strtoupper($cve) : null;
+    };
+
+    $merged  = [];
+    $matched = [];
+
+    foreach ($blogvault as $bv) {
+        $cve   = $cveKey($bv);
+        $match = null;
+        if ($cve !== null) {
+            foreach ($wordfence as $i => $wf) {
+                if (!isset($matched[$i]) && $cveKey($wf) === $cve) {
+                    $match      = $wf;
+                    $matched[$i] = true;
+                    break;
+                }
+            }
+        }
+
+        $merged[] = [
+            'cve_id'          => $bv['cve_id'] ?? null,
+            'title'           => $bv['title'] ?? ($match['title'] ?? null),
+            'cvss_rating'     => $bv['cvss_rating'] ?? ($match['cvss_rating'] ?? null),
+            'cvss_score'      => $bv['cvss_score'] ?? ($match['cvss_score'] ?? null),
+            'patched_version' => $bv['patched_version'] ?? ($match['patched_versions'][0] ?? null),
+            'published_at'    => $bv['published_at'] ?? ($match['published_at'] ?? null),
+            'sources'         => $match !== null ? ['blogvault', 'wordfence'] : ['blogvault'],
+        ];
+    }
+
+    foreach ($wordfence as $i => $wf) {
+        if (isset($matched[$i])) {
+            continue;
+        }
+        $merged[] = [
+            'cve_id'          => $wf['cve_id'] ?? null,
+            'title'           => $wf['title'] ?? null,
+            'cvss_rating'     => $wf['cvss_rating'] ?? null,
+            'cvss_score'      => $wf['cvss_score'] ?? null,
+            'patched_version' => $wf['patched_versions'][0] ?? null,
+            'published_at'    => $wf['published_at'] ?? null,
+            'sources'         => ['wordfence'],
+        ];
+    }
+
+    return $merged;
+}
+
+/** Small coloured badge naming the vulnerability source(s): BlogVault, Wordfence, or both. */
+function vulnerability_source_badge(array $sources): string
+{
+    $labels = [
+        'blogvault' => 'BlogVault',
+        'wordfence' => 'Wordfence',
+    ];
+    $names = array_map(static fn (string $s): string => $labels[$s] ?? $s, $sources);
+    $cls   = count($sources) > 1 ? 'badge-ok' : 'badge-muted';
+
+    return '<span class="badge ' . $cls . '">' . e(implode(' + ', $names)) . '</span>';
 }
 
 /** Pretty-printed JSON inside a collapsible block. */

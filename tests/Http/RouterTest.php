@@ -102,23 +102,64 @@ final class RouterTest extends TestCase
             ['payload', 'payload.json'],
             ['meta', 'meta.json'],
             ['findings', 'findings.json'],
-            ['summary', null], // no longer a stored file
+            // A syntactically valid name that is not a stored file resolves to a
+            // probes/ path; the caller's is_file() check turns it into a 404.
+            // The router no longer keeps a name allowlist — see resolveRawFile().
+            ['summary', 'probes/summary.json'],
             ['tls', 'probes/tls.json'],
             ['http', 'probes/http.json'],
             ['pagespeed', 'probes/pagespeed.json'],
             ['payload.json', 'payload.json'], // extension is stripped and re-added
-            // Not allowlisted / traversal attempts -> null (404).
-            ['keys', null],
-            ['../keys', null],
+            // keys.json lives outside the extraction directory, so this points at
+            // a probes/keys.json that never exists -> 404.
+            ['keys', 'probes/keys.json'],
+            ['../keys', 'probes/keys.json'],   // basename() strips the traversal
             ['../../config/config.local', null],
-            ['payload/../../keys', null],
+            ['payload/../../keys', 'probes/keys.json'],
             ['', null],
         ];
     }
 
     #[DataProvider('rawFileCases')]
-    public function testResolveRawFileAllowlistAndTraversal(string $name, ?string $expected): void
+    public function testResolveRawFileNeverEscapesTheExtractionDirectory(string $name, ?string $expected): void
     {
         $this->assertSame($expected, Router::resolveRawFile($name));
+    }
+
+    /**
+     * Any probe, including ones added later, resolves without touching the
+     * router — the old hardcoded allowlist silently 404'd blogvault and
+     * wordfence because nobody remembered to extend it.
+     */
+    public function testEveryProbeResolvesUnderProbes(): void
+    {
+        foreach (['dns', 'rdap', 'tls', 'http', 'pagespeed', 'blogvault', 'wordfence', 'a-future-probe'] as $probe) {
+            $this->assertSame("probes/{$probe}.json", Router::resolveRawFile($probe));
+        }
+
+        foreach (['payload', 'meta', 'findings'] as $top) {
+            $this->assertSame("{$top}.json", Router::resolveRawFile($top));
+        }
+    }
+
+    /**
+     * The name is attacker-controlled: it must never escape the extraction
+     * directory, and must not reach for dotfiles.
+     */
+    public function testRawNameCannotEscapeTheExtractionDirectory(): void
+    {
+        foreach (['../../keys', '../keys', '/etc/passwd', '..', '.', '.env', '', 'UPPER', 'has space', 'sub/dir'] as $evil) {
+            $resolved = Router::resolveRawFile($evil);
+            if ($resolved !== null) {
+                $this->assertStringNotContainsString('..', $resolved, "{$evil} must not traverse");
+                $this->assertMatchesRegularExpression('#^(probes/)?[a-z0-9][a-z0-9_-]*\\.json$#', $resolved);
+            } else {
+                $this->assertNull($resolved);
+            }
+        }
+
+        // keys.json lives outside the extraction dir, so this resolves to a
+        // probes/ path that simply does not exist -> 404 at the caller.
+        $this->assertSame('probes/keys.json', Router::resolveRawFile('keys'));
     }
 }

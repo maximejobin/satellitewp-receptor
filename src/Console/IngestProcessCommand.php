@@ -14,10 +14,16 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 /**
- * The cron entry point: processes pending extractions.
- * Crontab: * * * * * php /path/to/bin/xtractor ingest:process
+ * The cron worker. It only ever picks up extractions an analyst has explicitly
+ * queued from the web UI (status "queued") — never the ones that merely
+ * arrived (status "pending"). A site pushing on its own therefore costs a file
+ * on disk and nothing else: no probes, no PageSpeed or BlogVault quota. The
+ * cron exists so the slow work (~20 s a site, mostly PageSpeed) runs outside
+ * the web request instead of timing it out.
+ *
+ * Crontab: * * * * * php /path/to/bin/xtractor ingest:process --requeue-stale=30
  */
-#[AsCommand(name: 'ingest:process', description: 'Run the probe pipeline on pending extractions')]
+#[AsCommand(name: 'ingest:process', description: 'Run the probe pipeline on queued extractions')]
 final class IngestProcessCommand extends Command
 {
     public function __construct(private readonly App $app)
@@ -51,16 +57,16 @@ final class IngestProcessCommand extends Command
                 }
             }
 
-            $pending = $index->pendingExtractions((int) $input->getOption('limit'));
+            $queued = $index->queuedExtractions((int) $input->getOption('limit'));
 
-            if ($pending === []) {
-                $output->writeln('No pending extractions.');
+            if ($queued === []) {
+                $output->writeln('No queued extractions.');
 
                 return Command::SUCCESS;
             }
 
             $failures = 0;
-            foreach ($pending as $row) {
+            foreach ($queued as $row) {
                 $siteId       = (string) $row['site_id'];
                 $extractionId = (string) $row['id'];
                 $output->write("Processing {$siteId}/{$extractionId} … ");

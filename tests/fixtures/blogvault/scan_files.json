@@ -1,0 +1,18 @@
+{
+    "files": [
+        {
+            "id": "MTc1MTkwOTE3N18xNzYyM19MaTkzY0MxcGJtTnNkV1JsY3k5amJHRnpjeTEzY0Mxb2IyOXJMbkJvY0E9PV9hN2QwMDIzMjgzNzUzMjExZmZiOWVmYmFhY2U0NDcxNw==",
+            "path": "./wp-includes/class-wp-hook.php",
+            "detected_at": "2026-08-21T16:05:13Z",
+            "marked_safe": false
+        }
+    ],
+    "meta": {
+        "pagination": {
+            "page": 1,
+            "perPage": 20,
+            "totalPages": 1,
+            "totalItems": 1
+        }
+    }
+}

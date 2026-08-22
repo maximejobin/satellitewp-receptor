@@ -1,0 +1,29 @@
+{
+    "settings": {
+        "wp_auto_updates": {
+            "enabled": true
+        },
+        "woocommerce_db_upgrade": {
+            "enabled": true
+        },
+        "security_hardening": {
+            "disable_file_editor": {
+                "enabled": false
+            },
+            "block_file_modifications": {
+                "enabled": false
+            },
+            "wp_config": {
+                "observed_at": "2026-08-21T16:08:26Z",
+                "disallow_file_edit": {
+                    "declared": false,
+                    "value": null
+                },
+                "disallow_file_mods": {
+                    "declared": false,
+                    "value": null
+                }
+            }
+        }
+    }
+}

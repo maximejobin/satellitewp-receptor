@@ -242,3 +242,19 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
     .overview { grid-template-columns: 1fr; }
     table.kv th { width: 50%; }
 }
+
+/* Primary action button (e.g. "Lancer l'analyse" on a pending extraction). */
+.btn {
+    display: inline-block;
+    margin-top: .6rem;
+    padding: .5rem .9rem;
+    border: 0;
+    border-radius: 7px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn:hover { filter: brightness(1.07); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

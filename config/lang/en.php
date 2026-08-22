@@ -145,5 +145,12 @@ return [
         // Users
         'M1'  => ['title' => 'Administrator count under control', 'fail' => 'The site has {observed} administrators (threshold {threshold}).', 'pass' => 'The site has {observed} administrator(s).'],
         'M2'  => ['title' => 'No default "admin" account', 'fail' => 'An administrator account uses the default "admin" login.', 'pass' => 'No default "admin" account.'],
+        'BV1' => ['title' => 'Site not flagged as hacked', 'fail' => 'BlogVault has flagged this site: {detections} unresolved detection(s).', 'pass' => 'BlogVault\'s malware scan reports nothing.'],
+        'BV2' => ['title' => 'No known vulnerability', 'fail' => 'BlogVault lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'BlogVault lists no known vulnerability for core, plugins or themes.'],
+        'BV3' => ['title' => 'Recent successful backup', 'fail' => 'No usable recent backup: last snapshot is "{observed}" (threshold {threshold} days).', 'pass' => 'Last successful backup is {observed} day(s) old.'],
+        'BV4' => ['title' => 'Firewall active in protect mode', 'fail' => 'The BlogVault firewall is not in protect mode (currently: {observed}).', 'pass' => 'The firewall is active in protect mode.'],
+        'BV5' => ['title' => 'Recent malware scan', 'fail' => 'The last malware scan is {observed} day(s) old (threshold {threshold}).', 'pass' => 'The last malware scan is {observed} day(s) old.'],
+        'BV6' => ['title' => 'Two-factor authentication for administrators', 'fail' => '{observed} of {administrators} administrator(s) have no two-factor authentication.', 'pass' => 'Every administrator has two-factor authentication enabled.'],
+        'WF1' => ['title' => 'No known vulnerability (Wordfence)', 'fail' => 'Wordfence Intelligence lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'Wordfence Intelligence lists no known vulnerability for core, plugins or themes.'],
     ],
 ];
