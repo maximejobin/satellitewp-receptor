@@ -23,25 +23,47 @@ composer install
 cp config/config.local.php.dist config/config.local.php   # puis ajuster
 ```
 
-Vhost : pointer le DocumentRoot sur `public/`. Toute requête inexistante doit
-être réécrite vers `public/index.php` (le receptor accepte le POST sur
-n'importe quel chemin).
+**Deux applications, deux vhosts, qui ne se parlent pas.** Elles partagent le
+code et `data/`, rien d'autre :
 
-Nginx minimal :
+| Répertoire | Exposition | Rôle |
+| --- | --- | --- |
+| `public/receptor` | **public** | reçoit les push signés du plugin — ne charge jamais le Router, n'ouvre aucune session, ne sert aucun HTML |
+| `public/admin` | **protégé** (Google OAuth) | l'interface analyste — n'accepte jamais un push |
+
+Le receptor est la seule surface exposée à Internet, et tout ce qui n'est pas un
+POST signé y reçoit un 404 sec. L'admin, lui, ne peut pas servir de porte
+d'entrée aux données : le code du receptor n'y est pas.
 
 ```nginx
+# Réception des extractions — public
 server {
     server_name receptor.satellitewp.com;
-    root /var/www/xtractor/public;
+    root /var/www/xtractor/public/receptor;
 
-    location / {
-        try_files $uri /index.php$is_args$args;
-    }
+    location / { try_files $uri /index.php$is_args$args; }
 
     location ~ \.php$ {
         include fastcgi_params;
         fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+    }
+}
+
+# Interface analyste — derrière Google OAuth
+server {
+    server_name xtractor.satellitewp.com;
+    root /var/www/xtractor/public/admin;
+
+    location / { try_files $uri /index.php$is_args$args; }
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        # Indispensable derrière un TLS terminé en amont : sans ça l'URI de
+        # redirection OAuth sort en http:// et Google la refuse.
+        fastcgi_param HTTP_X_FORWARDED_PROTO $scheme;
     }
 }
 ```
@@ -93,6 +115,9 @@ La clé affichée (une seule fois) va dans le `wp-config.php` du site :
 define( 'SWP_API_KEY', '…' );
 define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
 ```
+
+Le plugin ne connaît que l'hôte du receptor. L'interface analyste vit ailleurs
+et n'est jamais joignable depuis un site client.
 
 ## CLI
 

@@ -22,7 +22,7 @@ PHP 8.4+, Composer, symfony/console, Guzzle. No framework.
 
 ## Flow
 
-plugin `POST` signed payload → `public/index.php` **Receptor** (HMAC verify via
+plugin `POST` signed payload → `public/receptor/index.php` **Receptor** (HMAC verify via
 `X-SWP-Signature`, anti-replay, store, index as `pending`) → cron
 `bin/xtractor ingest:process` (worker: picks up **`queued`** only, never
 `pending` — an analyst presses "Lancer l'analyse" in the web UI to queue one, so
@@ -36,6 +36,11 @@ JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
 
 ## Key components
 
+- **Two front controllers, two vhosts, no shared surface**:
+  `public/receptor/index.php` (public; signed pushes only, never loads Router,
+  no session, no HTML, flat 404 for anything else) and `public/admin/index.php`
+  (the UI behind Google sign-in; never accepts a push). They share only the
+  `src/` code and `data/`. Assets live under `public/admin/assets/`.
 - `src/Http/`: Receptor, SignatureVerifier, PayloadValidator, Router (GET web +
   POST with CSRF; `matchRoute`/`resolveRawFile`/`safeReturn` are pure & tested),
   `GoogleAuth` (OAuth2 code flow; reads the email from Google's userinfo

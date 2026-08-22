@@ -84,7 +84,8 @@ KEY=<the key printed above>
 Start the dev server and POST a fixture with a valid HMAC:
 
 ```bash
-php -S 127.0.0.1:8080 -t public &
+php -S 127.0.0.1:8080 -t public/receptor &   # réception
+php -S 127.0.0.1:8081 -t public/admin &      # interface
 BODY=tests/fixtures/extraction-valid.json
 TS=$(date +%s)
 SIG=$(php -r 'echo hash_hmac("sha256", $argv[1].".".file_get_contents($argv[2]), $argv[3]);' "$TS" "$BODY" "$KEY")
@@ -166,7 +167,8 @@ Re-run a single probe and the rules (no re-ingest needed):
 
 ## 5. Web UI (read-only)
 
-Open `http://127.0.0.1:8080/` in a browser.
+Open `http://127.0.0.1:8081/` in a browser (the admin vhost; the receptor on
+8080 serves no UI and answers 404 to every GET).
 
 - ✅ **Sites list** shows the test site with its last status.
 - ✅ Click the site → **site detail**: extraction history, recent events,
