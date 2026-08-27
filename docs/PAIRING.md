@@ -29,30 +29,60 @@ du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
    La clé (64 caractères hexadécimaux) n'est affichée **qu'une fois**. Elle est
    stockée dans `data/keys.json`, en clair, en `0600`.
 
-3. **Retour sur le site**, coller la clé. Deux endroits possibles :
+3. **Retour sur le site**, coller la clé dans **Réglages → SatelliteWP → Appairage**.
+   Elle est écrite dans `.satellitewp-maintenance.php`, à la racine WordPress, à côté
+   de `wp-config.php` — jamais en base, donc elle ne voyage pas dans un export SQL.
 
-   - **Réglages → SatelliteWP → « Signing key »** — pas d'accès disque requis.
-     Le champ est en écriture seule : il s'affiche toujours vide, le soumettre
-     vide veut dire « ne pas toucher ».
-   - **`wp-config.php`**, avant le `/* That's all */` — plus sûr, à préférer
-     quand vous avez l'accès SFTP :
+   Si la racine n'est pas inscriptible, l'écran affiche le contenu exact du fichier à
+   déposer par SFTP. Alternative équivalente, à préférer si tu as l'accès disque :
 
-     ```php
-     define( 'SWP_API_KEY', '<la clé>' );
-     ```
+   ```php
+   define( 'SWP_API_KEY', '<la clé>' );
+   ```
 
-   La constante l'emporte sur l'option : si les deux sont présentes, c'est la
-   constante qui sert, et le champ de réglage s'affiche désactivé.
+   La constante l'emporte sur le fichier ; quand elle est définie, le champ s'affiche
+   désactivé avec la mention de son origine.
 
-4. **Vérifier** : Réglages → SatelliteWP → « Send Extraction Data ». Une réponse
-   `200` signifie que l'extraction est arrivée et attend en `pending` — c'est un
-   analyste qui la met en file avec « Lancer l'analyse ».
+4. **Vérifier** : Réglages → SatelliteWP → « Send Extraction Data ». Une réponse `200`
+   signifie que l'extraction est arrivée et attend en `pending` — c'est un analyste qui
+   la met en file avec « Lancer l'analyse ».
 
-Sans l'étape 3, le plugin **n'envoie aucun en-tête `X-SWP-Signature`** (il ne
-signe que si une clé est configurée) et le receptor répond
-`401 Unsigned payloads are not accepted`, puisque `allow_unsigned` vaut `false`
-dans `config/config.php`. Ne passez `allow_unsigned` à `true` qu'en développement
-local.
+Sans clé, le plugin **n'envoie aucun en-tête `X-SWP-Signature`** (il ne signe que si une
+clé est configurée) et le receptor répond `401 Unsigned payloads are not accepted`,
+puisque `allow_unsigned` vaut `false` dans `config/config.php`. Ne le passe à `true`
+qu'en développement local.
+
+### L'appairage lie le site à son adresse
+
+Enregistrer une clé **note l'adresse sur laquelle le site répond à ce moment-là**, dans
+le fichier local. C'est ce qui empêche une copie restaurée depuis un backup de rapporter
+par-dessus l'historique de la production : elle porte le fichier de la PROD mais répond
+sur `staging.example.com`, donc elle refuse d'émettre et l'affiche sur son écran de
+réglages.
+
+Le receptor applique la même liaison de son côté, parce qu'une vérification côté client
+peut être retirée par quelqu'un qui modifie le plugin. La première extraction reçue lie
+la clé à l'adresse annoncée ; ensuite, toute extraction venant d'une autre adresse est
+refusée avec un `409`. Pour lier explicitement dès la création :
+
+```bash
+bin/xtractor keys:add <uuid> --label "nom du site" --origin https://example.com
+```
+
+Les adresses sont comparées **sans le protocole, sans le `www.` de tête et sans la barre
+oblique finale** : un passage `http` → `https` ou une redirection `www` n'est donc pas lu
+comme un déménagement. Un sous-domaine, un sous-répertoire ou un port différent, si.
+
+### Quand un site déménage vraiment
+
+```bash
+bin/xtractor keys:rebind <uuid> https://nouveau-domaine.com
+```
+
+Le `site_id` ne change pas, donc **tout l'historique du site est conservé**. C'est la
+raison pour laquelle l'identifiant reste un UUID stable plutôt qu'une valeur dérivée de
+l'URL : autrement, chaque changement de domaine créerait un nouveau site et repartirait
+de zéro.
 
 ### Rotation et révocation
 
@@ -63,23 +93,33 @@ bin/xtractor keys:add <uuid>      # remplace l'entrée et remet revoked à false
 ```
 
 Une clé révoquée se comporte exactement comme une clé absente : un push signé
-reçoit `401 No API key registered for this site`. Après une rotation, mettre à
-jour `SWP_API_KEY` sur le site **avant** le prochain envoi.
+reçoit `401 No API key registered for this site`. Après une rotation, mettre à jour la
+clé sur le site **avant** le prochain envoi — écran d'appairage, ou `SWP_API_KEY`.
+
+Enregistrer une nouvelle clé depuis l'écran ré-inscrit aussi l'adresse courante : c'est
+la manière de ré-appairer délibérément une copie pour qu'elle rapporte sous sa propre
+identité.
 
 ---
 
 ## 2. L'endpoint
 
-L'URL du receptor se règle dans **Réglages → SatelliteWP → « Receptor URL »**, ou
-par constante quand elle doit être épinglée par l'infrastructure :
+L'URL du receptor se règle dans **Réglages → SatelliteWP → « Receptor URL »** (écrite
+dans `.satellitewp-maintenance.php`), ou par constante quand elle doit être épinglée par
+l'infrastructure :
 
 ```php
 define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.exemple.com' );
 ```
 
-La constante l'emporte sur le réglage. Champ vide = valeur par défaut,
-`https://receptor.satellitewp.com`. Dans tous les cas, **sans barre oblique
-finale ni chemin**. Les trois types de payload (`extraction`, `event`, `integrity`) vont à
+La constante l'emporte sur le fichier. Champ vide = valeur par défaut,
+`https://receptor.satellitewp.com`. Dans tous les cas, **sans barre oblique finale ni
+chemin**.
+
+Dès que l'endpoint effectif n'est pas celui par défaut, l'écran de réglages du site
+affiche un **encadré orange** nommant l'URL utilisée, l'URL par défaut, et d'où vient la
+surcharge (constante ou fichier). C'est le repère visuel pour ne pas confondre un site
+pointé sur un receptor de test avec un site en production. Les trois types de payload (`extraction`, `event`, `integrity`) vont à
 cette même URL ; c'est l'en-tête `X-SWP-Type` qui les distingue.
 
 Côté serveur, le vhost doit servir `public/receptor/` comme racine :
@@ -145,6 +185,7 @@ ci-dessous relie chaque message à sa cause.
 | 422 | `Body site_id does not match X-SWP-Site header` | comparaison stricte, sensible à la casse |
 | 422 | `Event payload requires an "events" array` | payload `event` mal formé |
 | 422 | `Integrity payload requires an "integrity" object` | payload `integrity` mal formé |
+| 409 | `This site is registered as … but reported from …` | l'extraction vient d'une autre adresse que celle liée à la clé — copie restaurée, ou déménagement réel (voir `keys:rebind`) |
 | 500 | `Storage failure` | écriture impossible sous `data/` — vérifier les droits |
 
 ### Rejouer un push à la main
@@ -191,36 +232,26 @@ sont hors signature.
 
 ## 6. Côté plugin
 
-Ces trois points ont été appliqués dans `satellitewp-plugin-maintenance` en même
-temps que ce document.
+Appliqué dans `satellitewp-plugin-maintenance` en même temps que ce document.
 
 1. **Le message d'erreur du receptor remonte jusqu'à l'écran d'administration.**
-   `RemoteClient` décode `{"status":"error","message":"…"}` et l'ajoute au
-   `WP_Error` : « Remote endpoint returned HTTP 401: Invalid X-SWP-Signature »
-   plutôt qu'un 401 nu. Les cinq causes distinctes de 401 du §4 sont désormais
-   discernables sans accès au serveur. Une réponse non-JSON (un 502 d'un proxy,
-   par exemple) retombe proprement sur le code HTTP seul.
+   `RemoteClient` décode `{"status":"error","message":"…"}` et l'ajoute au `WP_Error` :
+   « Remote endpoint returned HTTP 401: Invalid X-SWP-Signature » plutôt qu'un 401 nu.
+   Une réponse non-JSON (un 502 d'un proxy) retombe proprement sur le code seul.
 
-2. **Les redirections ne sont plus suivies** (`'redirection' => 0`). Le piège du
-   §2 se manifeste maintenant comme « HTTP 301 » — explicite — au lieu d'un GET
-   silencieux répondu par un 404 en texte brut.
+2. **Les redirections ne sont plus suivies** (`'redirection' => 0`). Le piège du §2 se
+   signale maintenant comme « HTTP 301 », explicite, au lieu d'un GET silencieux répondu
+   par un 404 en texte brut.
 
-3. **L'endpoint et la clé sont réglables depuis Réglages → SatelliteWP**, ce qui
-   supprime le besoin d'un accès SFTP pour chaque appairage et chaque rotation.
+3. **L'endpoint et la clé sont dans `.satellitewp-maintenance.php`**, éditables depuis
+   Réglages → SatelliteWP. Rien en base : la clé ne voyage pas dans un export SQL et ne
+   se lit pas avec un accès SQL seul. Le fichier est en `0600`, protégé par
+   `defined( 'ABSPATH' ) || exit;`, et supprimé à la désinstallation. Quand la racine
+   n'est pas inscriptible, l'écran affiche le contenu exact à déposer par SFTP.
 
-   Les constantes restent **prioritaires** sur les options : un site qui garde son
-   secret dans `wp-config.php` ne peut pas être rétrogradé depuis l'écran de
-   réglages, et un endpoint épinglé par l'infrastructure ne peut pas être
-   redirigé. Quand une constante est définie, le champ correspondant est affiché
-   désactivé avec la mention de son origine.
-
-   Le champ « Signing key » est en écriture seule : il est rendu vide à chaque
-   chargement (le secret n'est jamais réémis dans la page), le soumettre vide
-   signifie « ne pas toucher », et une case à cocher distincte sert à effacer la
-   clé stockée.
-
-   **Compromis à connaître** : `wp_options` est un moins bon endroit qu'un
-   `wp-config.php` pour un secret partagé — tout ce qui peut lire la table des
-   options peut lire la clé, alors que le fichier demande un accès disque.
-   Utilisez la constante `SWP_API_KEY` quand vous avez l'accès aux fichiers, et
-   l'option quand vous ne l'avez pas.
+4. **Le menu SatelliteWP est masqué par défaut.** Un administrateur l'affiche avec
+   `?satellitewp=on` sur n'importe quelle URL de wp-admin, et le masque avec
+   `?satellitewp=off` ; l'état tient dans un cookie de session, et le paramètre est
+   retiré par une redirection. C'est de l'obscurité assumée, pas un contrôle d'accès —
+   la page exige toujours `manage_options` — dont le but est qu'un client ne tombe pas
+   par hasard sur nos outils. Cela remplace la case à cocher de Réglages → Général.

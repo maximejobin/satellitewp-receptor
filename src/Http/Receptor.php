@@ -7,6 +7,7 @@ namespace SatelliteWP\Xtractor\Http;
 use InvalidArgumentException;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
+use SatelliteWP\Xtractor\Storage\KeyStore;
 use Throwable;
 
 /**
@@ -21,6 +22,7 @@ final class Receptor
         private readonly DataStore $store,
         private readonly Index $index,
         private readonly int $maxBodyBytes,
+        private readonly ?KeyStore $keys = null,
     ) {
     }
 
@@ -58,6 +60,13 @@ final class Receptor
             $payload = $this->validator->validate($rawBody, $type, $siteId);
         } catch (InvalidArgumentException $e) {
             return $this->error(422, $e->getMessage());
+        }
+
+        if ($type === PayloadValidator::TYPE_EXTRACTION) {
+            $originError = $this->checkOrigin($siteId, $payload);
+            if ($originError !== null) {
+                return $originError;
+            }
         }
 
         $receivedAt = gmdate('Y-m-d\TH:i:s\Z');
@@ -128,6 +137,53 @@ final class Receptor
         $id = $this->store->storeIntegrity($siteId, $payload, $receivedAt);
 
         return ['status' => 200, 'body' => ['status' => 'received', 'id' => $id]];
+    }
+
+    /**
+     * Refuses an extraction whose site no longer answers on the address it was
+     * bound to — the signature of a copy restored from a backup, which would
+     * otherwise report over the original site's history.
+     *
+     * A site with no origin on file is bound by its first extraction, so an
+     * existing pairing does not have to be touched. The plugin makes the same
+     * check before sending, but that one runs on the client; this is the one that
+     * holds.
+     *
+     * @param array<string, mixed> $payload
+     * @return array{status: int, body: array<string, mixed>}|null null when accepted
+     */
+    private function checkOrigin(string $siteId, array $payload): ?array
+    {
+        if ($this->keys === null) {
+            return null;
+        }
+
+        $claimed = PayloadValidator::normalizeOrigin(
+            (string) ($payload['home_url'] ?? $payload['site_url'] ?? '')
+        );
+
+        if ($claimed === '') {
+            return null;
+        }
+
+        $bound = $this->keys->getOrigin($siteId);
+
+        if ($bound === null) {
+            $this->keys->setOrigin($siteId, $claimed);
+
+            return null;
+        }
+
+        if (hash_equals($bound, $claimed)) {
+            return null;
+        }
+
+        return $this->error(
+            409,
+            "This site is registered as {$bound} but reported from {$claimed}. "
+            . 'Refusing it so a restored copy cannot report over the original. '
+            . "Run 'xtractor keys:rebind' if the site really moved."
+        );
     }
 
     /** @return array{status: int, body: array<string, mixed>} */

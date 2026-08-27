@@ -20,6 +20,7 @@ final class ReceptorTest extends TestCase
     private DataStore $store;
     private Index $index;
     private Receptor $receptor;
+    private KeyStore $keys;
 
     protected function setUp(): void
     {
@@ -28,15 +29,16 @@ final class ReceptorTest extends TestCase
         $this->store = new DataStore($this->tmpDir);
         $this->index = new Index($this->tmpDir . '/index.sqlite');
 
-        $keys = new KeyStore($this->tmpDir . '/keys.json');
-        $keys->addKey(self::SITE_ID, self::API_KEY);
+        $this->keys = new KeyStore($this->tmpDir . '/keys.json');
+        $this->keys->addKey(self::SITE_ID, self::API_KEY);
 
         $this->receptor = new Receptor(
-            new SignatureVerifier($keys, 300, false),
+            new SignatureVerifier($this->keys, 300, false),
             new PayloadValidator(),
             $this->store,
             $this->index,
-            1024 * 1024
+            1024 * 1024,
+            $this->keys
         );
     }
 
@@ -166,5 +168,65 @@ final class ReceptorTest extends TestCase
         $result = $receptor->handle(['site' => self::SITE_ID, 'type' => 'extraction', 'timestamp' => (string) time()], $body);
 
         $this->assertSame(413, $result['status']);
+    }
+
+    public function testFirstExtractionBindsTheSiteToItsAddress(): void
+    {
+        $body = $this->fixture('extraction-valid.json');
+
+        $this->assertNull($this->keys->getOrigin(self::SITE_ID), 'unbound before the first push');
+
+        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+
+        $this->assertSame(200, $result['status']);
+        $this->assertSame('example.com', $this->keys->getOrigin(self::SITE_ID));
+    }
+
+    /**
+     * A site restored from a backup carries the original's id and key but answers
+     * elsewhere. Accepting it would let a staging copy report over production.
+     */
+    public function testExtractionFromAnotherAddressIsRefused(): void
+    {
+        $this->keys->setOrigin(self::SITE_ID, 'example.com');
+
+        $payload             = $this->fixtureArray('extraction-valid.json');
+        $payload['home_url'] = 'https://staging.example.com';
+        $payload['site_url'] = 'https://staging.example.com';
+        $body                = (string) json_encode($payload);
+
+        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+
+        $this->assertSame(409, $result['status']);
+        $this->assertStringContainsString('staging.example.com', $result['body']['message']);
+        $this->assertSame([], glob($this->store->siteDir(self::SITE_ID) . '/extractions/*') ?: []);
+    }
+
+    /** http -> https and a www redirect are the same site, not a move. */
+    public function testSchemeAndWwwDoNotCountAsAMove(): void
+    {
+        $this->keys->setOrigin(self::SITE_ID, 'example.com');
+
+        $payload             = $this->fixtureArray('extraction-valid.json');
+        $payload['home_url'] = 'http://www.example.com/';
+        $body                = (string) json_encode($payload);
+
+        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+
+        $this->assertSame(200, $result['status']);
+    }
+
+    public function testRebindingLetsAMovedSiteReportAgain(): void
+    {
+        $this->keys->setOrigin(self::SITE_ID, 'old-domain.com');
+
+        $body   = $this->fixture('extraction-valid.json');
+        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $this->assertSame(409, $result['status']);
+
+        $this->keys->setOrigin(self::SITE_ID, 'example.com');
+
+        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $this->assertSame(200, $result['status']);
     }
 }

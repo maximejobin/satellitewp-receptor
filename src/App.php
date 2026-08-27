@@ -84,7 +84,8 @@ final class App
             $this->payloadValidator(),
             $this->dataStore(),
             $this->index(),
-            (int) $this->config->get('max_body_bytes', 10 * 1024 * 1024)
+            (int) $this->config->get('max_body_bytes', 10 * 1024 * 1024),
+            $this->keyStore()
         );
     }
 

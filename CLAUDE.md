@@ -64,6 +64,16 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   confines it to the extraction directory and everything there is on the page
   anyway, so a list guarded nothing while silently 404-ing any probe someone
   forgot to add — which is how blogvault/wordfence became dead links.
+- **Site binding**: a key record in `data/keys.json` carries an `origin` (the site's
+  normalized `home_url`). The first extraction received binds it; afterwards an
+  extraction from any other address is refused with **409** — that is what stops a
+  site restored from a backup from reporting over the original's history. The plugin
+  refuses to send in that case too, but that check runs on the client and a client can
+  be modified. `PayloadValidator::normalizeOrigin()` mirrors `ConfigFile::normalize_url()`
+  plugin-side (scheme, leading `www.` and trailing slash dropped, so http→https and a
+  www redirect are not a move) — **keep the two in step**. A real move is
+  `keys:rebind <uuid> <url>`, which preserves `site_id` and therefore the history; this
+  is why site_id stays a UUID rather than something derived from the URL.
 - **Web auth**: Google sign-in when `auth.google.client_id`+`client_secret` are
   set, Basic auth (`web.*`) as a dev fallback, open otherwise. Identity is
   session-backed and the allowlist is re-checked on *every* request, so removing
@@ -197,12 +207,12 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
 `rules:evaluate [--lang]`/`rules:list` · `reference:refresh` ·
 `wordfence:refresh` (suggested cron: **daily**) ·
 `catalog:list [--needs-license]`/`catalog:set`/`catalog:suggest` ·
-`keys:add`/`list`/`revoke` · `users:add` (seeds the web allowlist; no argument
+`keys:add [--origin]`/`list`/`revoke`/`rebind` · `users:add` (seeds the web allowlist; no argument
 lists it) · `sites:list` · `extractions:list` · `index:rebuild`.
 
 ## Testing
 
-`composer test` — 231 tests, no network. Manual end-to-end: `docs/TESTING.md`.
+`composer test` — 246 tests, no network. Manual end-to-end: `docs/TESTING.md`.
 `phpunit.xml.dist` excludes the `network` group, reserved for any future
 live-probe tests; none exist yet, so the suite runs fully offline.
 

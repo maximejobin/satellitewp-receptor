@@ -119,4 +119,35 @@ final class PayloadValidatorTest extends TestCase
     {
         $this->assertSame($expected, PayloadValidator::isUuid($value));
     }
+
+    /**
+     * Must stay in step with ConfigFile::normalize_url() in the plugin: the two
+     * decide, independently, whether a site has moved.
+     *
+     * @param string $url      Raw address.
+     * @param string $expected Normalized form.
+     */
+    #[DataProvider('origins')]
+    public function testOriginNormalization(string $url, string $expected): void
+    {
+        $this->assertSame($expected, PayloadValidator::normalizeOrigin($url));
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function origins(): array
+    {
+        return [
+            'plain'              => ['https://example.com', 'example.com'],
+            'trailing slash'     => ['https://example.com/', 'example.com'],
+            'http'               => ['http://example.com', 'example.com'],
+            'www'                => ['https://www.example.com', 'example.com'],
+            'http + www + slash' => ['http://www.example.com/', 'example.com'],
+            'uppercase'          => ['HTTPS://WWW.Example.COM/', 'example.com'],
+            'padded'             => ['  https://example.com/  ', 'example.com'],
+            'subdirectory kept'  => ['https://example.com/blog/', 'example.com/blog'],
+            'subdomain kept'     => ['https://staging.example.com', 'staging.example.com'],
+            'port kept'          => ['http://example.com:8080', 'example.com:8080'],
+            'empty'              => ['', ''],
+        ];
+    }
 }

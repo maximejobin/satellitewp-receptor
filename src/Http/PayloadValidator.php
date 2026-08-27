@@ -50,6 +50,22 @@ final class PayloadValidator
         return $payload;
     }
 
+    /**
+     * Normalizes a site address for comparison with a bound origin.
+     *
+     * Mirrors ConfigFile::normalize_url() in the plugin — scheme and a leading
+     * "www." dropped, trailing slash trimmed — so an http->https move or a www
+     * redirect does not read as a different site. Keep the two in step.
+     */
+    public static function normalizeOrigin(string $url): string
+    {
+        $url = strtolower(trim($url));
+        $url = (string) preg_replace('#^[a-z][a-z0-9+.-]*://#', '', $url);
+        $url = (string) preg_replace('#^www\.#', '', $url);
+
+        return rtrim($url, '/');
+    }
+
     public static function isUuid(string $value): bool
     {
         return (bool) preg_match(
