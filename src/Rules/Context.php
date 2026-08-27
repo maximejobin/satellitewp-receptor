@@ -69,6 +69,30 @@ final readonly class Context
         return $value === null ? null : (bool) $value;
     }
 
+    /**
+     * A wp-config constant, read from payload.constants.*.
+     *
+     * The plugin's ConstantsCollector emits the string "N/A" for a constant
+     * that is not defined, and (bool) "N/A" is true — which silently turned
+     * "no hardening at all" into a green pastille on K4/K6. In WordPress an
+     * undefined boolean constant behaves as false, so "N/A" reads as false.
+     *
+     * Null is reserved for "we never received the constants at all", so a
+     * missing extraction still reports unknown instead of inventing failures.
+     */
+    public function constant(string $name): ?bool
+    {
+        $collected = $this->get('payload.constants');
+
+        if (!is_array($collected)) {
+            return null;
+        }
+
+        $value = $collected[$name] ?? null;
+
+        return !($value === null || $value === 'N/A') && (bool) $value;
+    }
+
     public function number(string $path): ?float
     {
         $value = $this->get($path);

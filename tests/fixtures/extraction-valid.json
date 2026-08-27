@@ -9,14 +9,18 @@
     "home_url": "https://www.example.com",
     "admin_url": "https://www.example.com/wp-admin/",
     "site_locale": "fr_CA",
-    "timezone_offset": "-5",
+    "timezone_offset": -5,
     "timezone_string": "America/Toronto",
     "permalink_structure": "/%postname%/",
     "is_ssl": true,
     "is_backend_ssl": true,
+    "db_table_prefix": "wp_",
     "is_multisite": false,
+    "multisite_type": null,
+    "multisite_count": 0,
+    "multisite_sites_status": [],
     "web_server": "nginx",
-    "document_root": "/var/www/html",
+    "document_root": "/var/www/html/",
     "website_administrator_email": "admin@example.com",
     "php": {
         "version": "8.3.11",
@@ -27,11 +31,10 @@
         "post_max_size": "64M",
         "upload_max_filesize": "64M",
         "memory_limit": "256M",
-        "upload_max_size": "64M"
+        "upload_max_size": 67108864
     },
     "database_type": "mysql",
     "database_version": "8.0.36",
-    "db_table_prefix": "wp_",
     "database": {
         "total_bytes": 52428800,
         "tables": [
@@ -44,8 +47,25 @@
         "WP_DEBUG": false,
         "WP_DEBUG_LOG": false,
         "WP_DEBUG_DISPLAY": false,
+        "SCRIPT_DEBUG": false,
+        "WP_CACHE": true,
+        "WP_AUTO_UPDATE_CORE": "minor",
+        "AUTOMATIC_UPDATER_DISABLED": "N/A",
         "DISALLOW_FILE_EDIT": true,
-        "FORCE_SSL_ADMIN": true
+        "DISALLOW_FILE_MODS": "N/A",
+        "FORCE_SSL_ADMIN": true,
+        "FORCE_SSL_LOGIN": "N/A",
+        "WP_MEMORY_LIMIT": "256M",
+        "WP_MAX_MEMORY_LIMIT": "512M",
+        "WP_CONTENT_DIR": "/var/www/html/wp-content",
+        "WP_CONTENT_URL": "https://www.example.com/wp-content",
+        "WP_PLUGIN_DIR": "/var/www/html/wp-content/plugins",
+        "WP_PLUGIN_URL": "https://www.example.com/wp-content/plugins",
+        "MULTISITE": "N/A",
+        "SUBDOMAIN_INSTALL": "N/A",
+        "DISABLE_WP_CRON": "N/A",
+        "MEDIA_TRASH": "N/A",
+        "EMPTY_TRASH_DAYS": 30
     },
     "cron": {
         "disabled": false,
@@ -59,12 +79,21 @@
         "disk_free_bytes": 21474836480,
         "disk_total_bytes": 107374182400,
         "core_writable": true,
-        "uploads_writable": true
+        "uploads_writable": true,
+        "permissions": {
+            "wp_config": { "mode": "0640", "writable": false, "readable": true },
+            "root": { "mode": "0755", "writable": true, "readable": true },
+            "index": { "mode": "0644", "writable": false, "readable": true },
+            "content_dir": { "mode": "0755", "writable": true, "readable": true },
+            "plugins_dir": { "mode": "0755", "writable": true, "readable": true },
+            "themes_dir": { "mode": "0755", "writable": true, "readable": true },
+            "uploads_dir": { "mode": "0775", "writable": true, "readable": true }
+        }
     },
     "mail": {
         "sendmail_path": "/usr/sbin/sendmail -t -i",
-        "smtp": null,
-        "smtp_port": null,
+        "smtp": "",
+        "smtp_port": "",
         "validation_hash": "a1b2c3d4e5f60718"
     },
     "core_update": {
@@ -73,8 +102,8 @@
         "minor_update_version": null,
         "auto_update_core": "minor"
     },
-    "plugins": [
-        {
+    "plugins": {
+        "woocommerce/woocommerce.php": {
             "name": "WooCommerce",
             "slug": "woocommerce/woocommerce.php",
             "version": "9.9.5",
@@ -83,34 +112,123 @@
             "requires_php": "7.4",
             "network_activated": false,
             "active": true
+        },
+        "akismet/akismet.php": {
+            "name": "Akismet Anti-spam",
+            "slug": "akismet/akismet.php",
+            "version": "5.3.7",
+            "new_version": "",
+            "requires_wp": "5.8",
+            "requires_php": "5.6",
+            "network_activated": false,
+            "active": false
         }
-    ],
+    },
     "active_plugins": ["woocommerce/woocommerce.php"],
-    "active_theme": "storefront",
-    "themes": [
-        {
+    "auto_update_plugins": ["akismet/akismet.php"],
+    "mu_plugins": {
+        "swp-loader.php": {
+            "Name": "SatelliteWP Loader",
+            "PluginURI": "",
+            "Version": "1.0.0",
+            "Description": "Chargeur must-use.",
+            "Author": "SatelliteWP",
+            "Network": false
+        }
+    },
+    "dropin_plugins": {
+        "advanced-cache.php": ["Advanced caching plugin.", "advanced-cache.php"]
+    },
+    "plugin_updates": ["woocommerce/woocommerce.php"],
+    "theme_updates": [],
+    "active_theme": "storefront-child",
+    "themes": {
+        "storefront": {
             "name": "Storefront",
             "slug": "storefront",
             "version": "4.6.0",
-            "new_version": null,
+            "new_version": "",
             "template": "storefront",
             "requires_wp": "6.0",
             "requires_php": "7.4",
-            "active": true
+            "active": false
+        },
+        "storefront-child": {
+            "name": "Storefront Child",
+            "slug": "storefront-child",
+            "version": "1.0.0",
+            "new_version": "",
+            "template": "storefront",
+            "requires_wp": "",
+            "requires_php": "",
+            "active": true,
+            "parent_slug": "storefront",
+            "parent_name": "Storefront"
         }
-    ],
-    "users_count": 42,
+    },
+    "users_count": {
+        "total_users": 42,
+        "avail_roles": {
+            "administrator": 1,
+            "editor": 2,
+            "shop_manager": 1,
+            "customer": 38,
+            "none": 0
+        }
+    },
     "administrators": [{ "id": 1, "login": "maxadmin" }],
-    "posts_count": 1200,
+    "super_admins": [],
+    "posts_count": {
+        "publish": "1200",
+        "future": "0",
+        "draft": "3",
+        "pending": "0",
+        "private": "1",
+        "trash": "7",
+        "auto-draft": "12",
+        "inherit": "890"
+    },
     "page_count": 14,
-    "comments_count": 350,
-    "media_count": 890,
+    "post_types": {
+        "post": "post",
+        "page": "page",
+        "attachment": "attachment",
+        "product": "product"
+    },
+    "post_type_count": {
+        "post": { "publish": "1200", "draft": "3", "trash": "7" },
+        "page": { "publish": "14", "draft": "0", "trash": "0" },
+        "attachment": { "inherit": "890", "trash": "0" },
+        "product": { "publish": "312", "draft": "5", "trash": "2" }
+    },
+    "comments_count": {
+        "approved": 350,
+        "moderated": 4,
+        "spam": 128,
+        "trash": 0,
+        "post-trashed": 0,
+        "total_comments": 354,
+        "all": 354
+    },
+    "media_count": {
+        "image/jpeg": "620",
+        "image/png": "180",
+        "application/pdf": "90",
+        "trash": 0
+    },
     "autoload": {
         "total_bytes": 512000,
         "count": 320,
         "top": [{ "name": "some_big_option", "bytes": 128000 }]
     },
     "connectors": {
-        "woocommerce": { "version": "9.9.5", "db_version": "9.9.5" }
+        "woocommerce": {
+            "version": "9.9.5",
+            "db_version": "9.9.5",
+            "product_count": 312,
+            "order_count": 4821,
+            "active_gateways": ["stripe", "cod"],
+            "hpos_enabled": true
+        }
     }
 }

@@ -123,6 +123,35 @@ function section(string $title, string $rows, string $badge = ''): string
 }
 
 /**
+ * Reads a WordPress count. The plugin ships wp_count_posts(),
+ * wp_count_comments(), wp_count_attachments() and count_users() verbatim, so
+ * these arrive as maps keyed by status / mime type / role, never as integers.
+ * Returns the first named key that is present, or the sum of the map when none
+ * is named; `trash` is excluded from that sum. A plain integer passes through,
+ * which keeps older payloads working.
+ */
+function wp_count(mixed $value, string ...$keys): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    if (!is_array($value)) {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    foreach ($keys as $key) {
+        if (isset($value[$key]) && is_numeric($value[$key])) {
+            return (int) $value[$key];
+        }
+    }
+
+    unset($value['trash']);
+
+    return (int) array_sum(array_map('intval', array_filter($value, 'is_numeric')));
+}
+
+/**
  * One label/value row. $status colours the value: ok (green), warn (orange),
  * error (red), or null (default). Booleans are rendered oui/non.
  */
@@ -130,6 +159,11 @@ function field(string $label, mixed $value, ?string $status = null): string
 {
     if (is_bool($value)) {
         $value = $value ? 'oui' : 'non';
+    }
+    // Never let a structure reach e(): "(string) $array" is a warning that
+    // renders the literal word "Array" in the page.
+    if (is_array($value)) {
+        $value = null;
     }
     $display = ($value === null || $value === '') ? '—' : e($value);
 

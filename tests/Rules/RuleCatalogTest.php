@@ -78,7 +78,8 @@ final class RuleCatalogTest extends TestCase
         $payload['db_table_prefix']       = 'swp_';
         $payload['object_cache']          = ['external' => true, 'dropin' => true, 'page_cache' => true];
         $payload['filesystem']['core_writable'] = false;
-        $payload['plugins'][0]['new_version']   = null;
+        // plugins/themes arrive keyed by plugin file / stylesheet, never as lists.
+        $payload['plugins']['woocommerce/woocommerce.php']['new_version'] = '';
 
         $findings = array_column(
             $this->engine()->evaluate(new Context($payload))['findings'],
@@ -114,6 +115,50 @@ final class RuleCatalogTest extends TestCase
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
             // Findings are neutral: they carry the raw observed value, not prose.
             $this->assertArrayHasKey('observed', $findings[$id]);
+        }
+    }
+
+    /**
+     * ConstantsCollector sends the string "N/A" for a constant that is not
+     * defined, and (bool) "N/A" is true — which used to turn "no hardening at
+     * all" into a green K4/K6. An undefined constant is false in WordPress.
+     */
+    public function testUndefinedConstantsAreReadAsFalseNotTrue(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $payload['constants'] = array_fill_keys(array_keys($payload['constants']), 'N/A');
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        // Undefined WP_DEBUG / WP_DEBUG_DISPLAY means debugging is off.
+        foreach (['K1', 'K2'] as $id) {
+            $this->assertSame(Status::Pass->value, $findings[$id]['status'], "{$id} should pass");
+        }
+
+        // Undefined DISALLOW_FILE_EDIT / FORCE_SSL_ADMIN means not hardened.
+        foreach (['K4', 'K6'] as $id) {
+            $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
+        }
+    }
+
+    /** No constants collected at all is unknown, not a fabricated failure. */
+    public function testMissingConstantsBlockStaysUnknown(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        unset($payload['constants']);
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        foreach (['K1', 'K2', 'K4', 'K6'] as $id) {
+            $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} should be unknown");
         }
     }
 

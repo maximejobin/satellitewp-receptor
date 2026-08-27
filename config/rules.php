@@ -639,19 +639,19 @@ return [
     // ===================================================================
     [
         'id' => 'K1', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Elevee,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.constants.WP_DEBUG')),
+        'check' => static fn (Context $c) => Check::isFalse($c->constant('WP_DEBUG')),
     ],
     [
         'id' => 'K2', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Elevee,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.constants.WP_DEBUG_DISPLAY')),
+        'check' => static fn (Context $c) => Check::isFalse($c->constant('WP_DEBUG_DISPLAY')),
     ],
     [
         'id' => 'K4', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Moyenne,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.constants.DISALLOW_FILE_EDIT')),
+        'check' => static fn (Context $c) => Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
     ],
     [
         'id' => 'K6', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Moyenne,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.constants.FORCE_SSL_ADMIN')),
+        'check' => static fn (Context $c) => Check::isTrue($c->constant('FORCE_SSL_ADMIN')),
     ],
 
     // ===================================================================

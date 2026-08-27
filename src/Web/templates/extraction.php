@@ -430,10 +430,10 @@ if ($awaiting):
 <section class="section"><h2>Content &amp; languages</h2>
     <div class="cards">
         <?php echo section('Content',
-            field('Posts', $p['posts_count'] ?? null)
-            . field('Pages', $p['page_count'] ?? null)
-            . field('Media', $p['media_count'] ?? null)
-            . field('Comments', $p['comments_count'] ?? null)
+            field('Posts', wp_count($p['posts_count'] ?? null, 'publish'))
+            . field('Pages', wp_count($p['page_count'] ?? null, 'publish'))
+            . field('Media', wp_count($p['media_count'] ?? null))
+            . field('Comments', wp_count($p['comments_count'] ?? null, 'approved', 'total_comments'))
         ); ?>
         <?php
         $wpml = $p['connectors']['wpml'] ?? null;
@@ -457,7 +457,7 @@ if ($awaiting):
         <?php
         $admins = is_array($p['administrators'] ?? null) ? $p['administrators'] : [];
         echo section('Accounts',
-            field('Total users', $p['users_count'] ?? null)
+            field('Total users', wp_count($p['users_count'] ?? null, 'total_users'))
             . field('Administrators', count($admins), count($admins) > 5 ? 'warn' : 'ok')
             . field_raw('Admin logins', fmt_list(array_map(static fn ($a) => $a['login'] ?? '?', $admins)))
         );

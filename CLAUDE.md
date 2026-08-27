@@ -7,9 +7,13 @@ PHP 8.4+, Composer, symfony/console, Guzzle. No framework.
 
 ## Golden rules (user feedback — also in the persistent memory/)
 
-- **Work only in this repo.** Never modify `../satellitewp-plugin-maintenance`;
-  it is read-only reference (wire protocol in `src/class-remote-client.php`,
-  planning docs in `.github/*.txt` — French).
+- **Two repos, one protocol.** `../satellitewp-plugin-maintenance` is a sibling
+  working directory and **is editable** — the earlier "read-only reference" rule
+  was lifted on 2026-08-27. Wire protocol lives in `src/class-remote-client.php`,
+  planning docs in `.github/*.txt` (French). Anything touching the protocol
+  (headers, signed string, envelope) must land on **both** sides in the same
+  change, and the xtractor fixture `tests/fixtures/extraction-valid.json` must
+  keep mirroring the plugin's collectors.
 - **Keep it simple.** This is for a ~10-person SMB, not the US army. Do not
   over-architect.
 - **`data/` holds raw data + one analysis file only:** `payload.json`,
@@ -33,6 +37,17 @@ slugs into the **SoftwareCatalog**, then **RuleEngine** evaluates
 
 JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
 (`index:rebuild`).
+
+The wire protocol was verified field-by-field against the plugin and **matches
+exactly** — same signed string (`timestamp . '.' . rawBody`), same lowercase-hex
+unprefixed HMAC-SHA256, same four headers, same envelope. Nothing to adapt.
+`tests/fixtures/extraction-valid.json` is therefore a **faithful mirror of the
+plugin's collectors**, not a convenient hand-written sample: `plugins`/`themes`
+are maps keyed by plugin file / stylesheet, the WP count objects are objects, and
+`constants` carries all 22 of `SAFE_CONSTANTS` with the `"N/A"` sentinel. It had
+drifted into lists and integers, which hid two real bugs — keep it faithful.
+Operational pairing (key provisioning, vhost redirects, clock skew) is
+`docs/PAIRING.md`.
 
 ## Key components
 
@@ -146,6 +161,15 @@ JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
   in `src/Web/helpers.php` reconciles the two for display, matched **only** by
   exact `cve_id` (never by fuzzy version-range overlap), tagging each finding
   `sources: ['blogvault']` / `['wordfence']` / `['blogvault','wordfence']`.
+- **Two plugin-side shapes that bite**: `ConstantsCollector` emits the string
+  `"N/A"` for an undefined constant, and `(bool) "N/A"` is `true` — which turned
+  "no hardening at all" into a **green** K4/K6. Read constants through
+  `Context::constant()`, never `bool('payload.constants.*')`; it maps `"N/A"` to
+  false (WordPress semantics) and reserves null for "no constants collected".
+  Likewise `posts_count`/`comments_count`/`media_count`/`users_count` are the raw
+  `wp_count_*()` / `count_users()` objects, not integers — render them through
+  `wp_count()` in `helpers.php`, and `field()` now refuses arrays outright rather
+  than printing the literal word "Array".
 - `src/Web/`: `templates/` (sidebar `layout`, `sites`, `site`, `extraction`,
   `catalog`) + `helpers.php` (incl. `merge_vulnerabilities()`,
   `vulnerability_source_badge()`); `public/assets/style.css`.
@@ -178,7 +202,7 @@ lists it) · `sites:list` · `extractions:list` · `index:rebuild`.
 
 ## Testing
 
-`composer test` — 219 tests, no network. Manual end-to-end: `docs/TESTING.md`.
+`composer test` — 231 tests, no network. Manual end-to-end: `docs/TESTING.md`.
 `phpunit.xml.dist` excludes the `network` group, reserved for any future
 live-probe tests; none exist yet, so the suite runs fully offline.
 
@@ -212,6 +236,13 @@ base URLs / timeouts / auth schemes are non-secret and stay in `config.php`.
   `cve_id`/`cvss_score` values (the **scanner** variant's shape — `id`, `title`,
   `software[]`, `informational`, wildcard `"*"` version bounds — *is* confirmed
   live, field-by-field, against a real ~78 MB / ~39k-record response).
+- **Plugin data with no home in the UI yet.** The faithful fixture makes these
+  visible: `post_types` / `post_type_count`, `mu_plugins`, `dropin_plugins`,
+  `auto_update_plugins`, `plugin_updates` / `theme_updates`, `super_admins`,
+  `connectors` (WooCommerce order/product counts, HPOS, gateways; WPML
+  languages), `_errors` (per-collector failures), `filesystem.permissions`,
+  `database.transients`, `is_backend_ssl`, `multisite_type` / `multisite_count` /
+  `multisite_sites_status`. "Every datum has a home" is not true of these yet.
 - **WooCommerce platform** → §Account & plan (client, care plan, renewal).
 - **Analytics tags** (GA / Ads / pixel) → §SEO & analytics — needs a `[DATA+]`
   extractor field (plugin side).
