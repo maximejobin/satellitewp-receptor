@@ -188,6 +188,17 @@ ci-dessous relie chaque message à sa cause.
 | 409 | `This site is registered as … but reported from …` | l'extraction vient d'une autre adresse que celle liée à la clé — copie restaurée, ou déménagement réel (voir `keys:rebind`) |
 | 500 | `Storage failure` | écriture impossible sous `data/` — vérifier les droits |
 
+### Commencer par l'écran du site
+
+`Réglages → SatelliteWP → Appairage` se termine par un tableau **Status**. Il donne, sans
+avoir à ouvrir un log : le receptor réellement contacté et d'où vient ce réglage, si une
+clé est configurée et d'où elle vient, l'état du fichier de configuration, l'adresse du
+site comparée à celle pour laquelle la clé a été émise, et surtout **le dernier envoi** —
+quand, vers quelle URL, et le code HTTP ou l'erreur exacte, message du receptor compris.
+
+Un push refusé localement (copie restaurée) y apparaît aussi : le plugin enregistre la
+tentative même quand il choisit de ne rien envoyer.
+
 ### Rejouer un push à la main
 
 ```bash
@@ -249,7 +260,12 @@ Appliqué dans `satellitewp-plugin-maintenance` en même temps que ce document.
    `defined( 'ABSPATH' ) || exit;`, et supprimé à la désinstallation. Quand la racine
    n'est pas inscriptible, l'écran affiche le contenu exact à déposer par SFTP.
 
-4. **Le menu SatelliteWP est masqué par défaut.** Un administrateur l'affiche avec
+4. **Un tableau Status sur l'écran d'appairage** : receptor effectif et sa provenance,
+   présence et provenance de la clé, état du fichier, adresse courante contre adresse
+   liée, dernier envoi (code HTTP ou erreur complète), planification et prochaine
+   exécution, versions. C'est le point de départ de tout diagnostic côté site.
+
+5. **Le menu SatelliteWP est masqué par défaut.** Un administrateur l'affiche avec
    `?satellitewp=on` sur n'importe quelle URL de wp-admin, et le masque avec
    `?satellitewp=off` ; l'état tient dans un cookie de session, et le paramètre est
    retiré par une redirection. C'est de l'obscurité assumée, pas un contrôle d'accès —
