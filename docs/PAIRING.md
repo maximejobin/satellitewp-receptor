@@ -186,7 +186,79 @@ ci-dessous relie chaque message à sa cause.
 | 422 | `Event payload requires an "events" array` | payload `event` mal formé |
 | 422 | `Integrity payload requires an "integrity" object` | payload `integrity` mal formé |
 | 409 | `This site is registered as … but reported from …` | l'extraction vient d'une autre adresse que celle liée à la clé — copie restaurée, ou déménagement réel (voir `keys:rebind`) |
-| 500 | `Storage failure` | écriture impossible sous `data/` — vérifier les droits |
+| 500 | `Storage failure (ref …)` | écriture impossible sous `data/` — le détail est dans `logs/`, voir ci-dessous |
+
+### Retrouver un 500 par sa référence
+
+Le receptor ne renvoie jamais le détail d'une erreur interne au plugin — un site
+client n'a pas à connaître l'arborescence du serveur. Il renvoie un message générique
+et une **référence** : `Storage failure (ref 9f3a1c02)`. Cette référence pointe sur
+une ligne unique côté serveur :
+
+```bash
+grep 9f3a1c02 logs/error-$(date -u +%F).log | python3 -m json.tool
+```
+
+L'entrée contient le type d'exception, son message, le fichier et la ligne, les
+premières frames de la pile, le `site_id` et le type de payload concernés. Ni corps de
+requête, ni signature, ni cookie n'y sont écrits.
+
+Les trois manières d'obtenir un 500 sont couvertes — exception non attrapée, erreur
+fatale PHP, et statut 5xx posé à la main — parce que le gestionnaire est installé par
+les deux front controllers **avant** le chargement de la configuration : un
+`config.local.php` cassé se journalise comme le reste.
+
+**Si `logs/` est vide alors qu'un 500 est survenu**, c'est que le répertoire n'est pas
+inscriptible par l'utilisateur PHP-FPM. Le logger ne lève jamais d'exception : il
+retombe sur `error_log()` et la ligne JSON part dans le log PHP-FPM. Créer le
+répertoire avec le bon propriétaire résout ça :
+
+```bash
+ps -o user= -p "$(pgrep -n php-fpm)"
+mkdir -p logs && chown <user-php-fpm> logs && chmod 750 logs
+```
+
+### Fonctions PHP désactivées
+
+Un hébergement managé met souvent des fonctions dans `disable_functions`, et **une
+fonction désactivée lève une `Error`** — que l'opérateur `@` ne supprime pas : il
+silencie les diagnostics, pas les throwables. Un appel réputé « best effort » peut
+donc faire tomber toute la requête.
+
+Le message dans `logs/` est reconnaissable, avec le namespace de l'appelant :
+
+```
+Call to undefined function SatelliteWP\Xtractor\Storage\symlink()
+```
+
+C'est arrivé pour de vrai avec `symlink()`, utilisé pour le raccourci
+`data/sites/<id>/extractions/latest` que rien ne lit. Corrigé : l'échec est maintenant
+sans conséquence, le raccourci est simplement absent. Les probes sont déjà isolées une
+par une par le worker, donc une fonction réseau désactivée y devient un probe en erreur,
+pas une panne.
+
+Pour vérifier ce que l'hébergeur interdit :
+
+```bash
+php -r 'echo ini_get("disable_functions"), "\n";'
+```
+
+### Droits sur `data/`
+
+L'autre source classique de `500 Storage failure`. `data/` est écrit par **deux
+utilisateurs différents** : PHP-FPM pour le receptor (`data/sites/…`,
+`data/index.sqlite`, `data/keys.json` lors de la liaison d'origine), et le compte SSH
+ou cron pour `bin/xtractor`. Un `data/` créé par l'un n'est pas forcément inscriptible
+par l'autre.
+
+```bash
+ls -la data/ data/sites/
+chgrp -R <groupe-commun> data logs && chmod -R g+w data logs
+find data logs -type d -exec chmod g+s {} +   # les nouveaux fichiers héritent du groupe
+```
+
+SQLite en mode WAL crée `index.sqlite-wal` et `index.sqlite-shm` à côté de la base :
+c'est le **répertoire** qui doit être inscriptible, pas seulement le fichier.
 
 ### Commencer par l'écran du site
 

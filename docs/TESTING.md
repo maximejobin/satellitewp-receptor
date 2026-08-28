@@ -18,7 +18,7 @@ cp config/config.local.php.dist config/config.local.php
 ```
 
 - ✅ `vendor/` is created, no Composer errors.
-- ✅ `composer test` → **all tests green** (currently 268).
+- ✅ `composer test` → **all tests green** (currently 270).
 - Edit `config/config.local.php`: set `pagespeed.api_key`, and for a first run
   set `allow_unsigned => false` (default). `blogvault.api_key` and
   `wordfence.api_key` are optional — their probes report a clean `error`

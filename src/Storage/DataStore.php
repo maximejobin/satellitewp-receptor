@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Storage;
 
 use RuntimeException;
+use Throwable;
 
 /**
  * All reads/writes under data/. JSON files are the source of truth.
@@ -259,15 +260,29 @@ final class DataStore
         return gmdate('Ymd\THis\Z', $ts);
     }
 
+    /**
+     * Refreshes the `latest` shortcut. Nothing reads it — the index and the
+     * directory listing both know which extraction is newest — so it exists only
+     * to make data/ pleasant to walk by hand, and any failure is harmless.
+     *
+     * Hence the catch: `symlink()` is a standard entry in disable_functions on
+     * managed hosting, and a disabled function raises an Error, which `@` does
+     * NOT suppress — it silences diagnostics, not throwables. Without this, a
+     * host that forbids symlinks turned every stored extraction into an HTTP 500.
+     */
     private function updateLatestLink(string $siteId, string $extractionId): void
     {
         $link = $this->siteDir($siteId) . '/extractions/latest';
 
-        if (is_link($link)) {
-            @unlink($link);
+        try {
+            if (is_link($link)) {
+                @unlink($link);
+            }
+            // Relative target so data/ stays relocatable.
+            @symlink($extractionId, $link);
+        } catch (Throwable) {
+            // A missing shortcut costs nothing; failing the extraction costs the push.
         }
-        // Relative target so data/ stays relocatable. Failure is harmless (index has the info).
-        @symlink($extractionId, $link);
     }
 
     private function mkdir(string $dir): void

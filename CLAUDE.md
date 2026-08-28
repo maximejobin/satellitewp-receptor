@@ -66,6 +66,12 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   confines it to the extraction directory and everything there is on the page
   anyway, so a list guarded nothing while silently 404-ing any probe someone
   forgot to add — which is how blogvault/wordfence became dead links.
+- **`@` does not suppress an `Error`.** A function in the host's
+  `disable_functions` raises one, and `@` only silences diagnostics — so a
+  best-effort `@symlink()` in `DataStore::updateLatestLink()` turned every stored
+  extraction into an HTTP 500 on managed hosting. Anything genuinely optional needs
+  a `try`/`catch`, not an `@`. The `latest` shortcut is read by nothing; the index
+  and the directory listing already know which extraction is newest.
 - **Site binding**: a key record in `data/keys.json` carries an `origin` (the site's
   normalized `home_url`). The first extraction received binds it; afterwards an
   extraction from any other address is refused with **409** — that is what stops a
@@ -226,7 +232,7 @@ lists it) · `sites:list` · `extractions:list` · `index:rebuild`.
 
 ## Testing
 
-`composer test` — 268 tests, no network. Manual end-to-end: `docs/TESTING.md`.
+`composer test` — 270 tests, no network. Manual end-to-end: `docs/TESTING.md`.
 `phpunit.xml.dist` excludes the `network` group, reserved for any future
 live-probe tests; none exist yet, so the suite runs fully offline.
 
