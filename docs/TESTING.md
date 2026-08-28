@@ -18,7 +18,7 @@ cp config/config.local.php.dist config/config.local.php
 ```
 
 - ✅ `vendor/` is created, no Composer errors.
-- ✅ `composer test` → **all tests green** (currently 246).
+- ✅ `composer test` → **all tests green** (currently 268).
 - Edit `config/config.local.php`: set `pagespeed.api_key`, and for a first run
   set `allow_unsigned => false` (default). `blogvault.api_key` and
   `wordfence.api_key` are optional — their probes report a clean `error`
@@ -234,6 +234,28 @@ minimal payload manually and run `pipeline:run`. Confirm:
 - ✅ DNS returns real NS/MX/SPF/DMARC; TLS shows the real issuer and expiry;
   RDAP shows the registrar; HTTP shows compression, HTTP version, robots/sitemap;
   PageSpeed returns mobile + desktop scores.
+
+---
+
+## 8. Error logging (`logs/`)
+
+Every HTTP 500 — an uncaught exception, a PHP fatal, or the receptor's own
+storage failure — lands in `logs/error-<UTC date>.log` as one JSON line, and the
+client gets a short reference id instead of a blank page.
+
+Force one by making the index unopenable, then resend the extraction from step 3:
+
+```bash
+chmod 000 data/index.sqlite
+# ... resend the signed POST ...
+chmod 644 data/index.sqlite
+```
+
+- ✅ HTTP 500, body `{"status":"error","message":"Storage failure (ref XXXXXXXX)"}`.
+- ✅ `logs/error-$(date -u +%F).log` gained one line whose `ref` is that id, with
+  the exception type, file, line, trace and the site id.
+- ✅ That line contains no payload body, no signature and no cookie — only the
+  request method, URI, IP and the `X-SWP-Site` / `X-SWP-Type` headers.
 
 ---
 

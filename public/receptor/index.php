@@ -19,6 +19,12 @@ declare(strict_types=1);
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use SatelliteWP\Xtractor\Bootstrap;
+use SatelliteWP\Xtractor\Http\ErrorHandler;
+use SatelliteWP\Xtractor\Support\ErrorLog;
+
+// Before anything else, including the config load: a 500 raised while booting
+// is exactly the one nobody would otherwise see.
+ErrorHandler::install(new ErrorLog(ErrorLog::defaultDir()), 'receptor', json: true);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' || !isset($_SERVER['HTTP_X_SWP_TYPE'])) {
     http_response_code(404);

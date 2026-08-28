@@ -29,6 +29,7 @@ use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
 use SatelliteWP\Xtractor\Storage\UserStore;
+use SatelliteWP\Xtractor\Support\ErrorLog;
 
 /**
  * Tiny hand-rolled service registry. Everything is lazy and cached.
@@ -63,6 +64,12 @@ final class App
         );
     }
 
+    /** Where every HTTP 500 is written. Same logs/ the front controllers use. */
+    public function errorLog(): ErrorLog
+    {
+        return $this->services[ErrorLog::class] ??= new ErrorLog(ErrorLog::defaultDir());
+    }
+
     public function signatureVerifier(): SignatureVerifier
     {
         return $this->services[SignatureVerifier::class] ??= new SignatureVerifier(
@@ -85,7 +92,8 @@ final class App
             $this->dataStore(),
             $this->index(),
             (int) $this->config->get('max_body_bytes', 10 * 1024 * 1024),
-            $this->keyStore()
+            $this->keyStore(),
+            $this->errorLog()
         );
     }
 

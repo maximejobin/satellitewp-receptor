@@ -10,6 +10,7 @@ use SatelliteWP\Xtractor\Http\SignatureVerifier;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Xtractor\Support\ErrorLog;
 use SatelliteWP\Xtractor\Tests\TestCase;
 
 final class ReceptorTest extends TestCase
@@ -228,5 +229,44 @@ final class ReceptorTest extends TestCase
 
         $result = $this->receptor->handle($this->headers('extraction', $body), $body);
         $this->assertSame(200, $result['status']);
+    }
+
+    /**
+     * The one 500 the receptor raises on purpose. It must leave a full entry in
+     * logs/ and hand the plugin the reference that points at it — the storage
+     * failure itself is invisible from the site's side.
+     */
+    public function testAStorageFailureIsLoggedWithTheReferenceItReturns(): void
+    {
+        $log = new ErrorLog($this->tmpDir . '/logs');
+
+        $receptor = new Receptor(
+            new SignatureVerifier($this->keys, 300, false),
+            new PayloadValidator(),
+            $this->store,
+            // A directory where the database file should be: SQLite cannot open
+            // it, so indexing throws exactly as a broken data/ would.
+            new Index($this->tmpDir),
+            1024 * 1024,
+            $this->keys,
+            $log
+        );
+
+        $body   = $this->fixture('extraction-valid.json');
+        $result = $receptor->handle($this->headers('extraction', $body), $body);
+
+        $this->assertSame(500, $result['status']);
+        $this->assertSame(1, preg_match('/ref ([a-f0-9]{8})/', (string) $result['body']['message'], $m));
+
+        $entry = (array) json_decode(
+            (string) strtok((string) file_get_contents($log->file()), "\n"),
+            true
+        );
+
+        $this->assertSame($m[1], $entry['ref']);
+        $this->assertSame('receptor', $entry['source']);
+        $this->assertSame(self::SITE_ID, $entry['context']['site_id']);
+        $this->assertSame('extraction', $entry['context']['payload']);
+        $this->assertNotEmpty($entry['exception']['trace']);
     }
 }

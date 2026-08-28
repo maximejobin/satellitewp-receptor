@@ -16,7 +16,13 @@ declare(strict_types=1);
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use SatelliteWP\Xtractor\Bootstrap;
+use SatelliteWP\Xtractor\Http\ErrorHandler;
 use SatelliteWP\Xtractor\Http\Router;
+use SatelliteWP\Xtractor\Support\ErrorLog;
+
+// Before anything else, including the config load: a 500 raised while booting
+// is exactly the one nobody would otherwise see.
+ErrorHandler::install(new ErrorLog(ErrorLog::defaultDir()), 'admin');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path   = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');

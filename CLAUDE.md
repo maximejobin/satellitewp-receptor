@@ -18,6 +18,8 @@ PHP 8.4+, Composer, symfony/console, Guzzle. No framework.
   over-architect.
 - **`data/` holds raw data + one analysis file only:** `payload.json`,
   `meta.json`, `probes/*.json`, `findings.json`. No derived files (no summary.json).
+  Operational output is not data: HTTP 500s go to `logs/` (gitignored), never
+  under `data/`.
 - **Source files are language-neutral.** `findings.json` and probes carry only
   ids/status/observed/data — never FR/EN prose. Sentences live in
   `config/lang/{en,fr}.php` and are rendered at display time by
@@ -180,6 +182,18 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   `wp_count_*()` / `count_users()` objects, not integers — render them through
   `wp_count()` in `helpers.php`, and `field()` now refuses arrays outright rather
   than printing the literal word "Array".
+- **500 logging**: `src/Support/ErrorLog.php` writes one JSON line per HTTP 500
+  into `logs/error-<UTC date>.log` (gitignored, created on first write) and
+  returns a short `ref` that also goes back to the client — a site owner quoting
+  "ref 9f3a1c02" points at one line. `src/Http/ErrorHandler.php` is installed by
+  **both** front controllers before the app boots (so a broken
+  `config.local.php` is logged too) and covers the three ways a 500 happens:
+  uncaught throwable (`set_exception_handler`), fatal error and hand-set 5xx
+  (`register_shutdown_function`). The receptor's own `Storage failure` logs
+  itself with the site id and payload type, and `ErrorLog::entriesWritten()`
+  keeps the shutdown pass from recording it twice. The logger never throws — a
+  failed write falls back to `error_log()`. Entries carry no body, no headers
+  beyond `X-SWP-Site`/`X-SWP-Type`, no cookies.
 - `src/Web/`: `templates/` (sidebar `layout`, `sites`, `site`, `extraction`,
   `catalog`) + `helpers.php` (incl. `merge_vulnerabilities()`,
   `vulnerability_source_badge()`); `public/assets/style.css`.
@@ -212,7 +226,7 @@ lists it) · `sites:list` · `extractions:list` · `index:rebuild`.
 
 ## Testing
 
-`composer test` — 246 tests, no network. Manual end-to-end: `docs/TESTING.md`.
+`composer test` — 268 tests, no network. Manual end-to-end: `docs/TESTING.md`.
 `phpunit.xml.dist` excludes the `network` group, reserved for any future
 live-probe tests; none exist yet, so the suite runs fully offline.
 

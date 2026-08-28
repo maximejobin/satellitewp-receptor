@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Xtractor\Support\ErrorLog;
 use Throwable;
 
 /**
@@ -23,6 +24,7 @@ final class Receptor
         private readonly Index $index,
         private readonly int $maxBodyBytes,
         private readonly ?KeyStore $keys = null,
+        private readonly ?ErrorLog $errorLog = null,
     ) {
     }
 
@@ -80,9 +82,23 @@ final class Receptor
                 PayloadValidator::TYPE_INTEGRITY => $this->storeIntegrity($siteId, $payload, $receivedAt),
             };
         } catch (Throwable $e) {
-            error_log('[xtractor] receptor storage failure: ' . $e->getMessage());
+            // The one 500 the receptor raises on purpose. It logs itself rather
+            // than falling through to the shutdown handler, so the entry carries
+            // which site and which payload type were being stored.
+            $ref = $this->errorLog?->recordThrowable('receptor', $e, [
+                'site_id' => $siteId,
+                'payload' => $type,
+            ]);
 
-            return $this->error(500, 'Storage failure');
+            if ($ref === null) {
+                error_log('[xtractor] receptor storage failure: ' . $e->getMessage());
+
+                return $this->error(500, 'Storage failure');
+            }
+
+            // The reference goes back to the plugin, which logs the response:
+            // the site owner can quote it and it points at one line in logs/.
+            return $this->error(500, "Storage failure (ref {$ref})");
         }
     }
 
