@@ -64,7 +64,7 @@ rm -rf data/sites data/index.sqlite data/keys.json data/reference
 ## 2. Register a site key
 
 ```bash
-./bin/xtractor keys:add 3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c --label="Test"
+./bin/xtractor keys:add 3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c
 ./bin/xtractor keys:list
 ```
 

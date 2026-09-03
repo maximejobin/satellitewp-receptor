@@ -123,8 +123,8 @@ final class Receptor
             'body_bytes'        => strlen($rawBody),
         ]);
 
-        $this->store->updateSiteInfo($siteId, $payload, $receivedAt);
-        $this->index->upsertSite($siteId, $payload, $receivedAt);
+        $this->store->updateSiteInfo($siteId, $payload);
+        $this->index->upsertSite($siteId, $payload);
         $this->index->insertExtraction($siteId, $extractionId, $receivedAt, $payload);
 
         return ['status' => 200, 'body' => ['status' => 'received', 'id' => $extractionId]];

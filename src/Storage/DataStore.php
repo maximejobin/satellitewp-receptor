@@ -60,18 +60,16 @@ final class DataStore
     }
 
     /** @param array<string, mixed> $payload */
-    public function updateSiteInfo(string $siteId, array $payload, string $seenAt): void
+    public function updateSiteInfo(string $siteId, array $payload): void
     {
         $file     = $this->siteDir($siteId) . '/site.json';
         $existing = $this->readJson($file) ?? [];
 
         $this->writeJson($file, [
-            'site_id'    => $siteId,
-            'site_url'   => $payload['site_url'] ?? $existing['site_url'] ?? null,
-            'home_url'   => $payload['home_url'] ?? $existing['home_url'] ?? null,
-            'name'       => $payload['site_title'] ?? $existing['name'] ?? null,
-            'first_seen' => $existing['first_seen'] ?? $seenAt,
-            'last_seen'  => $seenAt,
+            'site_id'  => $siteId,
+            'site_url' => $payload['site_url'] ?? $existing['site_url'] ?? null,
+            'home_url' => $payload['home_url'] ?? $existing['home_url'] ?? null,
+            'name'     => $payload['site_title'] ?? $existing['name'] ?? null,
         ]);
     }
 

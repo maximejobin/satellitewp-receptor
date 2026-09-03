@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Tests\Integration;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
@@ -188,5 +189,37 @@ final class BlogVaultClientTest extends TestCase
         $client->get('ping');
 
         $this->assertFalse($this->sent[0]->hasHeader('Authorization'));
+    }
+
+    /**
+     * With 'query' auth the key rides in the request URL — Guzzle transport
+     * exceptions commonly embed that URL verbatim in getMessage(). A failed
+     * request must not leak the key into probes/blogvault.json (or logs) via
+     * that message (2026-08-31).
+     */
+    public function testTransportErrorMessageNeverContainsTheApiKey(): void
+    {
+        $request = new Request('GET', 'https://api.blogvault.test/v6/ping?apikey=secret-key');
+        $mock    = new MockHandler([
+            new ConnectException(
+                'cURL error 6: Could not resolve host for GET https://api.blogvault.test/v6/ping?apikey=secret-key',
+                $request
+            ),
+        ]);
+        $http = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $client = BlogVaultClient::fromConfig([
+            'base_url' => 'https://api.blogvault.test/v6',
+            'api_key'  => 'secret-key',
+            'auth'     => ['type' => 'query', 'name' => 'apikey'],
+        ], $http);
+
+        try {
+            $client->get('ping');
+            $this->fail('expected BlogVaultException');
+        } catch (BlogVaultException $e) {
+            $this->assertStringNotContainsString('secret-key', $e->getMessage());
+            $this->assertStringContainsString('***', $e->getMessage());
+        }
     }
 }

@@ -13,19 +13,19 @@ final class PastilleTest extends TestCase
 {
     public function testPassIsGreen(): void
     {
-        $this->assertSame(Pastille::Green, Pastille::for(Status::Pass, Severity::Elevee));
-        $this->assertSame(Pastille::Green, Pastille::for(Status::Pass, Severity::Moyenne));
+        $this->assertSame(Pastille::Green, Pastille::for(Status::Pass, Severity::High));
+        $this->assertSame(Pastille::Green, Pastille::for(Status::Pass, Severity::Medium));
     }
 
     public function testFailCriticalOrHighIsRed(): void
     {
-        $this->assertSame(Pastille::Red, Pastille::for(Status::Fail, Severity::Critique));
-        $this->assertSame(Pastille::Red, Pastille::for(Status::Fail, Severity::Elevee));
+        $this->assertSame(Pastille::Red, Pastille::for(Status::Fail, Severity::Critical));
+        $this->assertSame(Pastille::Red, Pastille::for(Status::Fail, Severity::High));
     }
 
     public function testFailMediumIsOrange(): void
     {
-        $this->assertSame(Pastille::Orange, Pastille::for(Status::Fail, Severity::Moyenne));
+        $this->assertSame(Pastille::Orange, Pastille::for(Status::Fail, Severity::Medium));
     }
 
     public function testInfoIsAlwaysBlue(): void
@@ -37,8 +37,8 @@ final class PastilleTest extends TestCase
 
     public function testNaAndUnknownAreGreyEvenForInfoSeverity(): void
     {
-        $this->assertSame(Pastille::Grey, Pastille::for(Status::NotApplicable, Severity::Moyenne));
-        $this->assertSame(Pastille::Grey, Pastille::for(Status::Unknown, Severity::Elevee));
+        $this->assertSame(Pastille::Grey, Pastille::for(Status::NotApplicable, Severity::Medium));
+        $this->assertSame(Pastille::Grey, Pastille::for(Status::Unknown, Severity::High));
         // "No result" beats the Info-severity blue override.
         $this->assertSame(Pastille::Grey, Pastille::for(Status::Unknown, Severity::Info));
     }

@@ -55,19 +55,19 @@ final class Index
                 site_id    TEXT PRIMARY KEY,
                 site_url   TEXT,
                 home_url   TEXT,
-                name       TEXT,
-                first_seen TEXT NOT NULL,
-                last_seen  TEXT NOT NULL
+                name       TEXT
             );
             CREATE TABLE IF NOT EXISTS extractions (
-                id             TEXT NOT NULL,
-                site_id        TEXT NOT NULL,
-                received_at    TEXT NOT NULL,
-                schema_version TEXT,
-                wp_version     TEXT,
-                php_version    TEXT,
-                status         TEXT NOT NULL DEFAULT 'pending',
-                processed_at   TEXT,
+                id               TEXT NOT NULL,
+                site_id          TEXT NOT NULL,
+                received_at      TEXT NOT NULL,
+                schema_version   TEXT,
+                wp_version       TEXT,
+                php_version      TEXT,
+                database_type    TEXT,
+                database_version TEXT,
+                status           TEXT NOT NULL DEFAULT 'pending',
+                processed_at     TEXT,
                 PRIMARY KEY (site_id, id)
             );
             CREATE TABLE IF NOT EXISTS probe_runs (
@@ -82,25 +82,46 @@ final class Index
             CREATE INDEX IF NOT EXISTS idx_extractions_status ON extractions(status);
             CREATE INDEX IF NOT EXISTS idx_extractions_site ON extractions(site_id, received_at DESC);
             SQL);
+
+        // CREATE TABLE IF NOT EXISTS above does nothing to an index.sqlite that
+        // already existed before these two columns were added — add them here
+        // so an upgrade does not have to wait for an explicit index:rebuild.
+        $columns = array_column($this->pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
+        foreach (['database_type', 'database_version'] as $column) {
+            if (!in_array($column, $columns, true)) {
+                $this->pdo->exec("ALTER TABLE extractions ADD COLUMN {$column} TEXT");
+            }
+        }
+
+        // Dropped 2026-09-01: a site's own first/last "seen" timestamp
+        // duplicated what the extractions table already knows precisely
+        // (received_at per extraction) without telling an analyst anything
+        // extractions doesn't — listSites() below now derives "last
+        // extraction" straight from that table instead. Same upgrade-in-place
+        // approach as the ADD COLUMN block above, mirrored for a drop.
+        $siteColumns = array_column($this->pdo->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
+        foreach (['first_seen', 'last_seen'] as $column) {
+            if (in_array($column, $siteColumns, true)) {
+                $this->pdo->exec("ALTER TABLE sites DROP COLUMN {$column}");
+            }
+        }
     }
 
     /** @param array<string, mixed> $payload */
-    public function upsertSite(string $siteId, array $payload, string $seenAt): void
+    public function upsertSite(string $siteId, array $payload): void
     {
         $this->pdo()->prepare(<<<'SQL'
-            INSERT INTO sites (site_id, site_url, home_url, name, first_seen, last_seen)
-            VALUES (:site_id, :site_url, :home_url, :name, :seen, :seen)
+            INSERT INTO sites (site_id, site_url, home_url, name)
+            VALUES (:site_id, :site_url, :home_url, :name)
             ON CONFLICT(site_id) DO UPDATE SET
                 site_url = COALESCE(excluded.site_url, site_url),
                 home_url = COALESCE(excluded.home_url, home_url),
-                name     = COALESCE(excluded.name, name),
-                last_seen = excluded.last_seen
+                name     = COALESCE(excluded.name, name)
             SQL)->execute([
             'site_id'  => $siteId,
             'site_url' => $payload['site_url'] ?? null,
             'home_url' => $payload['home_url'] ?? null,
             'name'     => $payload['site_title'] ?? null,
-            'seen'     => $seenAt,
         ]);
     }
 
@@ -114,16 +135,18 @@ final class Index
     ): void {
         $this->pdo()->prepare(<<<'SQL'
             INSERT OR REPLACE INTO extractions
-                (id, site_id, received_at, schema_version, wp_version, php_version, status)
-            VALUES (:id, :site_id, :received_at, :schema_version, :wp_version, :php_version, :status)
+                (id, site_id, received_at, schema_version, wp_version, php_version, database_type, database_version, status)
+            VALUES (:id, :site_id, :received_at, :schema_version, :wp_version, :php_version, :database_type, :database_version, :status)
             SQL)->execute([
-            'id'             => $extractionId,
-            'site_id'        => $siteId,
-            'received_at'    => $receivedAt,
-            'schema_version' => $payload['schema_version'] ?? null,
-            'wp_version'     => $payload['wp_version'] ?? null,
-            'php_version'    => $payload['php']['version'] ?? null,
-            'status'         => $status,
+            'id'                => $extractionId,
+            'site_id'           => $siteId,
+            'received_at'       => $receivedAt,
+            'schema_version'    => $payload['schema_version'] ?? null,
+            'wp_version'        => $payload['wp_version'] ?? null,
+            'php_version'       => $payload['php']['version'] ?? null,
+            'database_type'     => $payload['database_type'] ?? null,
+            'database_version'  => $payload['database_version'] ?? null,
+            'status'            => $status,
         ]);
     }
 
@@ -212,12 +235,18 @@ final class Index
     /** @return list<array<string, mixed>> */
     public function listSites(?string $search = null): array
     {
+        // "Last extraction" is read straight off the extractions table
+        // (received_at of the newest row for the site) rather than a
+        // separately-tracked site-level timestamp — one source for it, and
+        // it is exact instead of an approximation of the same fact.
         $sql = <<<'SQL'
             SELECT s.*,
                    (SELECT e.id FROM extractions e
                      WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_id,
                    (SELECT e.status FROM extractions e
                      WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_status,
+                   (SELECT e.received_at FROM extractions e
+                     WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_received_at,
                    (SELECT COUNT(*) FROM extractions e WHERE e.site_id = s.site_id) AS extraction_count
             FROM sites s
             SQL;
@@ -227,7 +256,9 @@ final class Index
             $sql .= ' WHERE s.site_url LIKE :q OR s.name LIKE :q OR s.site_id LIKE :q';
             $params['q'] = '%' . $search . '%';
         }
-        $sql .= ' ORDER BY s.last_seen DESC';
+        // NULL (no extraction yet) sorts last under DESC in SQLite — exactly
+        // where a site with nothing to show belongs.
+        $sql .= ' ORDER BY last_extraction_received_at DESC';
 
         $stmt = $this->pdo()->prepare($sql);
         $stmt->execute($params);
@@ -283,18 +314,21 @@ final class Index
 
         $count = 0;
         foreach ($store->listSiteIds() as $siteId) {
-            $site   = $store->readSiteInfo($siteId) ?? [];
-            $seenAt = (string) ($site['last_seen'] ?? gmdate('Y-m-d\TH:i:s\Z'));
+            $site = $store->readSiteInfo($siteId) ?? [];
             $this->upsertSite($siteId, [
                 'site_url'   => $site['site_url'] ?? null,
                 'home_url'   => $site['home_url'] ?? null,
                 'site_title' => $site['name'] ?? null,
-            ], $seenAt);
+            ]);
 
             foreach ($store->listExtractionIds($siteId) as $extractionId) {
                 $payload    = $store->readExtractionPayload($siteId, $extractionId) ?? [];
                 $meta       = $store->readMeta($siteId, $extractionId) ?? [];
-                $receivedAt = (string) ($meta['received_at'] ?? $seenAt);
+                // meta.json always carries received_at in practice; this
+                // fallback only matters for a hand-damaged data/ tree during
+                // a manual rebuild, so "now" is an honest placeholder rather
+                // than inventing a past time nothing on disk actually recorded.
+                $receivedAt = (string) ($meta['received_at'] ?? gmdate('Y-m-d\TH:i:s\Z'));
                 $probes     = $store->readAllProbeResults($siteId, $extractionId);
 
                 // Reconstructed from what is on disk: probes present means the

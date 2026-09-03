@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Tests\Http;
 
+use SatelliteWP\Xtractor\Http\ReplayCache;
 use SatelliteWP\Xtractor\Http\SignatureException;
 use SatelliteWP\Xtractor\Http\SignatureVerifier;
 use SatelliteWP\Xtractor\Storage\KeyStore;
@@ -112,5 +113,50 @@ final class SignatureVerifierTest extends TestCase
         $ts   = (string) time();
         $body = '{}';
         $verifier->verify(self::SITE_ID, $ts, $this->sign($ts, $body), $body);
+    }
+
+    /**
+     * The timestamp window alone only bounds *how late* a captured request
+     * can be replayed — not whether it already has been. Without a
+     * ReplayCache, the exact same signed request can be verified twice.
+     */
+    public function testWithoutAReplayCacheTheSameSignatureIsAcceptedTwice(): void
+    {
+        $verifier = $this->verifier();
+        $ts       = (string) time();
+        $body     = '{}';
+        $sig      = $this->sign($ts, $body);
+
+        $this->assertSame(SignatureVerifier::RESULT_VALID, $verifier->verify(self::SITE_ID, $ts, $sig, $body));
+        $this->assertSame(SignatureVerifier::RESULT_VALID, $verifier->verify(self::SITE_ID, $ts, $sig, $body));
+    }
+
+    public function testWithAReplayCacheTheSameSignatureIsRejectedTheSecondTime(): void
+    {
+        $keys = new KeyStore($this->tmpDir . '/keys.json');
+        $keys->addKey(self::SITE_ID, self::API_KEY);
+        $verifier = new SignatureVerifier($keys, 300, false, new ReplayCache($this->tmpDir . '/replay-cache.json'));
+
+        $ts   = (string) time();
+        $body = '{}';
+        $sig  = $this->sign($ts, $body);
+
+        $this->assertSame(SignatureVerifier::RESULT_VALID, $verifier->verify(self::SITE_ID, $ts, $sig, $body));
+
+        $this->expectException(SignatureException::class);
+        $this->expectExceptionMessage('replay rejected');
+        $verifier->verify(self::SITE_ID, $ts, $sig, $body);
+    }
+
+    public function testReplayCacheDoesNotConfuseTwoDifferentSignatures(): void
+    {
+        $keys = new KeyStore($this->tmpDir . '/keys.json');
+        $keys->addKey(self::SITE_ID, self::API_KEY);
+        $verifier = new SignatureVerifier($keys, 300, false, new ReplayCache($this->tmpDir . '/replay-cache.json'));
+
+        $ts = (string) time();
+
+        $this->assertSame(SignatureVerifier::RESULT_VALID, $verifier->verify(self::SITE_ID, $ts, $this->sign($ts, '{"a":1}'), '{"a":1}'));
+        $this->assertSame(SignatureVerifier::RESULT_VALID, $verifier->verify(self::SITE_ID, $ts, $this->sign($ts, '{"a":2}'), '{"a":2}'));
     }
 }

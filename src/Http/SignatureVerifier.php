@@ -21,6 +21,7 @@ final class SignatureVerifier
         private readonly KeyStore $keys,
         private readonly int $replayWindowSeconds,
         private readonly bool $allowUnsigned,
+        private readonly ?ReplayCache $replayCache = null,
     ) {
     }
 
@@ -60,6 +61,14 @@ final class SignatureVerifier
 
         if (!hash_equals($expected, $signature)) {
             throw new SignatureException('Invalid X-SWP-Signature', 401);
+        }
+
+        // The timestamp window alone only bounds how *late* a captured
+        // request can be replayed, not whether it already has been — a
+        // signature seen once before, still inside its own window, is a
+        // replay of the same request, not a second legitimate one.
+        if ($this->replayCache?->seenBefore($signature, (int) $timestamp, $this->replayWindowSeconds) === true) {
+            throw new SignatureException('X-SWP-Signature already used (replay rejected)', 401);
         }
 
         return self::RESULT_VALID;

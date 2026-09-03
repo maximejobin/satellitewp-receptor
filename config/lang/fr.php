@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 return [
     'ui' => [
-        'sites'          => 'Sites',
+        'sites'          => 'Extractions',
         'site'           => 'Site',
         'extraction'     => 'Extraction',
         'findings'       => 'Constats',
@@ -77,8 +77,7 @@ return [
         'A8'  => ['title' => 'En-tête HSTS présent', 'fail' => 'L\'en-tête Strict-Transport-Security est absent.'],
         'A10' => ['title' => 'Redirection HTTP vers HTTPS', 'fail' => 'Le site répond en HTTP sans rediriger vers HTTPS. Ajouter une redirection 301.', 'pass' => 'Le HTTP est redirigé vers HTTPS.'],
         // HTTP
-        'B1'  => ['title' => 'Compression du HTML', 'fail' => 'Le HTML est servi sans compression. Activer gzip ou Brotli.', 'pass' => 'Le HTML est compressé ({observed}).'],
-        'B1b' => ['title' => 'Compression des assets statiques', 'fail' => 'Les assets statiques sont servis sans compression, contrairement au HTML.', 'pass' => 'Les assets statiques sont compressés ({observed}).'],
+        'B1'  => ['title' => 'Compression Gzip', 'fail' => 'Gzip n\'est pas utilisé ({observed}). Activer la compression gzip.', 'pass' => 'Le HTML est compressé en gzip.'],
         'B2'  => ['title' => 'Compression Brotli', 'fail' => 'Brotli n\'est pas utilisé ({observed}) ; il compresse mieux que gzip.'],
         'B3'  => ['title' => 'HTTP/2 supporté', 'fail' => 'Le site est servi en HTTP/{observed}. Activer HTTP/2 accélère le chargement.', 'pass' => 'Le site est servi en HTTP/{observed}.'],
         'B6'  => ['title' => 'En-têtes de cache sur les assets', 'fail' => 'Les assets statiques ont un cache de {observed}s (attendu au moins {threshold}s).'],
@@ -86,13 +85,13 @@ return [
         'B7b' => ['title' => 'Protection contre le clickjacking', 'fail' => 'Ni X-Frame-Options ni Content-Security-Policy ne sont présents.'],
         'B7c' => ['title' => 'Content-Security-Policy présent', 'fail' => 'Aucune Content-Security-Policy n\'est définie.'],
         'B7d' => ['title' => 'Referrer-Policy définie', 'fail' => 'L\'en-tête Referrer-Policy est absent.'],
+        'B7e' => ['title' => 'Permissions-Policy définie', 'fail' => 'L\'en-tête Permissions-Policy est absent.'],
         'B8'  => ['title' => 'Cookies sécurisés', 'fail' => 'Les cookies manquent d\'attributs de sécurité : {observed}.'],
         'B9'  => ['title' => 'Aucune divulgation de version serveur', 'fail' => 'Le serveur divulgue sa version : {observed}.'],
         // DNS
         'C1'  => ['title' => 'IPv6 (enregistrement AAAA)', 'fail' => 'Aucun enregistrement AAAA : le site n\'est pas joignable en IPv6.'],
         'C2'  => ['title' => 'Enregistrement CAA présent', 'fail' => 'Aucun enregistrement CAA : n\'importe quelle autorité peut émettre un certificat.'],
         'C5'  => ['title' => 'Chaîne de redirection courte', 'fail' => 'La chaîne de redirection est trop longue ou boucle ({observed}).'],
-        'C6'  => ['title' => 'Temps de réponse (TTFB)', 'fail' => 'Le TTFB est de {observed} ms (seuil {threshold} ms).', 'pass' => 'Temps de réponse rapide ({observed} ms).'],
         'C7'  => ['title' => 'Site disponible', 'fail' => 'Le site répond un code HTTP {observed}.', 'pass' => 'Le site est disponible (HTTP {observed}).'],
         'C8'  => ['title' => 'Page 404 correcte', 'fail' => 'Une URL inexistante répond 200 au lieu de 404 (soft 404).'],
         'C9'  => ['title' => 'robots.txt présent et non bloquant', 'fail' => 'robots.txt est {observed}.', 'pass' => 'robots.txt est présent.'],
@@ -143,12 +142,21 @@ return [
         // Utilisateurs
         'M1'  => ['title' => 'Nombre d\'administrateurs maîtrisé', 'fail' => 'Le site compte {observed} administrateurs (seuil {threshold}).', 'pass' => 'Le site compte {observed} administrateur(s).'],
         'M2'  => ['title' => 'Aucun compte « admin » par défaut', 'fail' => 'Un compte administrateur utilise l\'identifiant par défaut « admin ».', 'pass' => 'Aucun compte « admin » par défaut.'],
+        // BlogVault
         'BV1' => ['title' => 'Site non signalé comme piraté', 'fail' => 'BlogVault signale ce site comme piraté : {detections} détection(s) non résolue(s).', 'pass' => 'L\'analyse antimaliciel de BlogVault ne signale rien.'],
         'BV2' => ['title' => 'Aucune vulnérabilité connue', 'fail' => 'BlogVault recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'BlogVault ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
         'BV3' => ['title' => 'Sauvegarde récente et réussie', 'fail' => 'Aucune sauvegarde récente exploitable : dernier instantané « {observed} » (seuil {threshold} jours).', 'pass' => 'La dernière sauvegarde réussie date de {observed} jour(s).'],
         'BV4' => ['title' => 'Pare-feu actif en mode protection', 'fail' => 'Le pare-feu BlogVault n\'est pas en mode protection (actuellement : {observed}).', 'pass' => 'Le pare-feu est actif en mode protection.'],
         'BV5' => ['title' => 'Analyse antimaliciel récente', 'fail' => 'La dernière analyse antimaliciel date de {observed} jour(s) (seuil {threshold}).', 'pass' => 'La dernière analyse antimaliciel date de {observed} jour(s).'],
         'BV6' => ['title' => 'Authentification à deux facteurs des administrateurs', 'fail' => '{observed} administrateur(s) sur {administrators} n\'ont pas d\'authentification à deux facteurs.', 'pass' => 'Tous les administrateurs ont l\'authentification à deux facteurs activée.'],
+        // Wordfence
         'WF1' => ['title' => 'Aucune vulnérabilité connue (Wordfence)', 'fail' => 'Wordfence Intelligence recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'Wordfence Intelligence ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
+        // Exposition
+        'X1'  => ['title' => 'xmlrpc.php non exposé', 'fail' => 'xmlrpc.php répond — amplification de brute-force et abus de pingback possibles.', 'pass' => 'xmlrpc.php est bloqué ou désactivé.'],
+        'X2'  => ['title' => 'Aucune divulgation d\'identifiant via l\'API REST', 'fail' => 'L\'API REST liste les comptes utilisateurs sur /wp-json/wp/v2/users, divulguant chaque identifiant.', 'pass' => 'L\'API REST ne divulgue pas les comptes utilisateurs.'],
+        'X3'  => ['title' => 'Aucune divulgation d\'identifiant via les archives auteur', 'fail' => '?author=1 redirige vers l\'archive de l\'auteur, divulguant l\'identifiant dans l\'URL.', 'pass' => 'La redirection d\'archive auteur ne divulgue pas d\'identifiant.'],
+        'X4'  => ['title' => 'Aucun fichier de sauvegarde/config exposé', 'fail' => 'Accessible publiquement : {observed}. Ces fichiers peuvent divulguer les identifiants de la base de données directement.', 'pass' => 'Aucun fichier de sauvegarde/config courant n\'est accessible publiquement.'],
+        'X5'  => ['title' => 'Dossier uploads non navigable', 'fail' => 'wp-content/uploads/ retourne une liste de répertoire.', 'pass' => 'wp-content/uploads/ n\'est pas navigable.'],
+        'X6'  => ['title' => 'Méthode HTTP TRACE désactivée', 'fail' => 'Le serveur répond à une requête HTTP TRACE (risque de cross-site tracing).', 'pass' => 'Le serveur refuse HTTP TRACE.'],
     ],
 ];

@@ -106,7 +106,7 @@ réessaie 3 fois avec backoff, et un run partiel est signalé `warn` (jamais `ok
 ## Enregistrer un site
 
 ```bash
-./bin/xtractor keys:add <site_id> --label="Client X"
+./bin/xtractor keys:add <site_id> --origin="https://client-x.example.com"
 ```
 
 La clé affichée (une seule fois) va dans le `wp-config.php` du site :
@@ -135,14 +135,18 @@ et n'est jamais joignable depuis un site client.
 | `reference:refresh [--product=php,wordpress]` | Rafraîchit les tables EOL depuis endoflife.date |
 | `wordfence:refresh` | Rafraîchit l'index Wordfence Intelligence — **quotidien**, jamais plus (API à débit strict) |
 
-Crontab suggéré pour les données de référence EOL (elles changent rarement) :
+Crontab pour les tables de référence WordPress/PHP/MySQL/MariaDB affichées sous
+« Données » (`/data/wp-versions`, `/data/php-versions`, `/data/databases`) :
+rafraîchi **toutes les heures**, pour que la sortie d'une nouvelle version
+n'attende pas une semaine :
 
 ```cron
-0 4 * * 1 php /var/www/xtractor/bin/xtractor reference:refresh >> /var/www/xtractor/data/xtractor.log 2>&1
+0 * * * * php /var/www/xtractor/bin/xtractor reference:refresh --product=wordpress,php,mysql,mariadb >> /var/www/xtractor/logs/xtractor-cron.log 2>&1
 ```
 
-Wordfence est différent — la base change en continu, donc quotidien (détail et
-cron complet dans la section dédiée plus bas).
+Wordfence est différent — la base change en continu, mais son API est sous un
+débit strict, donc quotidien (détail et cron complet dans la section dédiée
+plus bas).
 
 ## Layout data/
 
@@ -195,7 +199,7 @@ Seuils ajustables **sans toucher au catalogue**, par identifiant :
 
 ```php
 // config/config.local.php
-'rules' => ['thresholds' => ['I1' => 1048576, 'M1' => 3, 'C6' => 800]],
+'rules' => ['thresholds' => ['I1' => 1048576, 'M1' => 3, 'A2' => 45]],
 ```
 
 ```bash

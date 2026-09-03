@@ -1,0 +1,215 @@
+/* ============================================================
+   Extraction report — visual redesign (2026-08-29, v2)
+   Scoped entirely under .xt-report so nothing here leaks onto
+   the rest of the admin UI (sites list, catalog, users, /data/*),
+   which still use the plain .card/.kv/.badge styles in style.css.
+   ============================================================ */
+
+/* Registering --p as a real <number> lets the browser tween it smoothly
+   (report.js sweeps it from 0 to the real score on load); browsers that don't
+   support @property just show the final value with no animation — harmless. */
+@property --p {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 0;
+}
+
+.xt-report {
+    --group-overview: var(--accent);
+    --group-infra:    #4f9bff;
+    --group-content:  #2dd4bf;
+    --group-quality:  #a78bfa;
+    display: flex;
+    flex-direction: column;
+    gap: 1.7rem;
+}
+
+/* ---------- hero (cover-page treatment) ---------- */
+.xt-hero {
+    --hero-bg-1: #101b2c;
+    --hero-bg-2: #1c2c44;
+    background:
+        radial-gradient(900px 260px at 8% -20%, rgba(242,111,43,.35), transparent 60%),
+        linear-gradient(155deg, var(--hero-bg-2) 0%, var(--hero-bg-1) 100%);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 45px -22px rgba(8,15,28,.55);
+    padding: 1.8rem 2rem;
+    color: #eef2f8;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    position: relative;
+    overflow: hidden;
+}
+.xt-hero-top { display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; }
+.xt-hero-main { display: flex; align-items: center; gap: 1.5rem; flex: 1; min-width: 280px; }
+
+.xt-hero-grade { display: flex; align-items: center; gap: 1rem; flex: none; }
+.xt-grade-letter {
+    width: 74px; height: 74px; border-radius: 16px; flex: none;
+    background: color-mix(in srgb, var(--c) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+    color: var(--c);
+    display: grid; place-items: center;
+    font-size: 2.2rem; font-weight: 800; letter-spacing: -.03em;
+}
+.xt-hero-ring {
+    --p: 0; --c: var(--ok);
+    width: 108px; height: 108px; border-radius: 50%; flex: none;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255,255,255,.12) 0);
+    display: grid; place-items: center;
+    transition: background 1.1s cubic-bezier(.22,.9,.3,1);
+}
+.xt-hero-ring .xt-hero-ring-inner {
+    width: 84px; height: 84px; border-radius: 50%; background: var(--hero-bg-1);
+    display: grid; place-items: center; text-align: center;
+}
+.xt-hero-ring .score { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: #fff; }
+.xt-hero-ring .cap { font-size: .6rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(238,242,248,.6); }
+
+.xt-hero-title { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.xt-hero-eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .68rem; font-weight: 700; color: #f8a06c; }
+.xt-hero-title h1 { margin: 0; color: #fff; }
+.xt-hero-title .xt-hero-url { color: rgba(238,242,248,.72); font-size: .87rem; }
+.xt-hero-title .xt-hero-url a { color: #cfe0ff; }
+.xt-hero-explain { margin-top: .5rem; }
+.xt-hero-explain summary {
+    cursor: pointer; font-size: .8rem; font-weight: 600; color: #f8a06c;
+    list-style: none; display: inline-block;
+}
+.xt-hero-explain summary::-webkit-details-marker { display: none; }
+.xt-hero-explain summary::before { content: '▸ '; }
+.xt-hero-explain[open] summary::before { content: '▾ '; }
+.xt-score-breakdown {
+    margin-top: .6rem; max-width: 34rem; border-radius: 10px; overflow: hidden;
+    background: var(--surface); color: var(--text); box-shadow: 0 10px 30px -12px rgba(0,0,0,.4);
+}
+.xt-score-breakdown table.kv th { width: 55%; color: var(--muted); }
+.xt-score-breakdown table.kv td { color: var(--text); }
+
+.xt-hero-actions { display: flex; flex-direction: column; gap: .5rem; align-items: flex-end; }
+.xt-hero-actions .btn-ghost {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .4rem .85rem; border-radius: 8px; border: 1px solid rgba(238,242,248,.25);
+    background: rgba(255,255,255,.06); color: #eef2f8; text-decoration: none;
+    font-size: .84rem; cursor: pointer; font: inherit;
+}
+.xt-hero-actions .btn-ghost:hover { border-color: var(--accent); background: rgba(255,255,255,.12); }
+.xt-hero-actions .btn-ghost .xt-icon { width: 15px; height: 15px; }
+
+/* Severity distribution — one glance at the shape of the whole report. */
+.xt-sevbar { display: flex; width: 100%; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.08); }
+.xt-sevbar-seg { height: 100%; min-width: 3px; }
+.xt-hero .xt-hero-tally { display: flex; flex-wrap: wrap; gap: .5rem; }
+.xt-hero .chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); color: #eef2f8; }
+.xt-hero .chip b { color: #fff; }
+
+/* ---------- KPI stat cards ---------- */
+.xt-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: .8rem;
+}
+.xt-stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: .85rem 1rem; display: flex; gap: .7rem; align-items: flex-start;
+    box-shadow: var(--shadow);
+}
+.xt-stat .xt-icon { width: 20px; height: 20px; color: var(--muted); flex: none; margin-top: .1rem; }
+.xt-stat.crit .xt-icon { color: var(--error); }
+.xt-stat.warn .xt-icon { color: var(--warn); }
+.xt-stat-k { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.xt-stat-v { font-size: 1.15rem; font-weight: 700; letter-spacing: -.01em; }
+.xt-stat-s { font-size: .78rem; color: var(--muted); }
+.xt-stat-s.crit { color: var(--error); font-weight: 600; }
+.xt-stat-s.warn { color: var(--warn); font-weight: 600; }
+
+/* ---------- sticky section nav ---------- */
+.xt-nav {
+    position: sticky; top: 52px; z-index: 4;
+    display: flex; gap: .3rem; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: .4rem; box-shadow: var(--shadow);
+}
+.xt-nav a {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .4rem .75rem; border-radius: 7px; font-size: .84rem; font-weight: 600;
+    color: var(--muted); text-decoration: none; white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.xt-nav a .xt-icon { width: 15px; height: 15px; }
+.xt-nav a:hover { background: var(--surface-2); color: var(--text); }
+.xt-nav a.on { background: var(--group-color, var(--accent-weak)); color: #fff; }
+
+/* ---------- groups ---------- */
+.xt-group { scroll-margin-top: 100px; display: flex; flex-direction: column; gap: 1rem; }
+.xt-group-head {
+    display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+    padding-bottom: .7rem; border-bottom: 2px solid var(--group-color, var(--border));
+}
+.xt-group-head .xt-icon-badge {
+    width: 42px; height: 42px; border-radius: 11px; flex: none;
+    background: var(--group-color, var(--accent)); color: #fff;
+    display: grid; place-items: center;
+    box-shadow: 0 6px 14px -6px var(--group-color, var(--accent));
+}
+.xt-group-head .xt-icon-badge .xt-icon { width: 23px; height: 23px; }
+.xt-group-head h2 { margin: 0; font-size: 1.25rem; letter-spacing: -.01em; }
+.xt-group-head p { margin: .1rem 0 0; }
+.xt-group-head > div:not(.xt-group-rate) { flex: 1; min-width: 220px; }
+
+.xt-group-rate { display: flex; flex-direction: column; gap: .3rem; min-width: 160px; align-items: flex-end; }
+.xt-group-rate-bar { width: 140px; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.xt-group-rate-bar div { height: 100%; background: var(--group-color, var(--accent)); border-radius: 999px; }
+.xt-group-rate span { font-size: .76rem; color: var(--muted); white-space: nowrap; }
+
+/* Data-provenance marker (src_note() in helpers.php) — every field's "where
+   did this come from, and did Xtractor verify it or just relay it" note.
+   Native title tooltip: zero JS, works everywhere, keyboard-reachable via
+   tabindex. Deliberately quiet (not another coloured badge) — it should be
+   discoverable, not compete with the actual pass/fail signal on the row. */
+.xt-src {
+    display: inline-block; margin-left: .3rem; cursor: help;
+    color: var(--faint); font-size: .85em; font-style: normal;
+}
+.xt-src:hover, .xt-src:focus-visible { color: var(--accent-2); outline: none; }
+
+.xt-subsection { display: flex; flex-direction: column; gap: .7rem; }
+.xt-subsection:not(:first-child) { margin-top: .3rem; }
+.xt-subsection-head { display: flex; align-items: center; gap: .55rem; }
+.xt-subsection-head .xt-icon { width: 17px; height: 17px; color: var(--group-color, var(--muted)); }
+.xt-subsection-head h3 { margin: 0; font-size: .98rem; }
+.xt-subsection-head .xt-sub-count { margin-left: auto; }
+
+/* Cards keep the shared .card/.info-card/.kv structure from style.css — only
+   restyled here (border accent, radius, spacing), never redefined globally,
+   so /site, /catalog etc. keep their original plain look. */
+.xt-report .card.info-card {
+    border-top: 3px solid var(--group-color, var(--border));
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.xt-report .card.info-card:hover { box-shadow: 0 10px 24px -12px rgba(20,35,50,.28); transform: translateY(-1px); }
+.xt-report table.kv th { font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+    .xt-hero-ring { transition: none; }
+}
+
+/* ---------- print ---------- */
+@media print {
+    .side, .topbar, .xt-nav, .xt-hero-actions, details > summary { display: none !important; }
+    .app { display: block; }
+    main.content, .content { max-width: none; padding: 0; }
+    .xt-group { scroll-margin-top: 0; break-inside: avoid; }
+    .card.info-card { break-inside: avoid; box-shadow: none; }
+    .xt-hero { background: var(--hero-bg-1) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    details { display: block; }
+    a { color: inherit; text-decoration: none; }
+}
+
+@media (max-width: 720px) {
+    .xt-hero-top { flex-direction: column; align-items: stretch; }
+    .xt-hero-actions { align-items: stretch; flex-direction: row; }
+    .xt-group-head > div:not(.xt-group-rate) { min-width: 100%; }
+    .xt-group-rate { align-items: flex-start; }
+}

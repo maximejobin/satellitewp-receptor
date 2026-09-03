@@ -52,16 +52,14 @@ final class DataStoreTest extends TestCase
         $this->assertSame('A1', $store->readFindings(self::SITE_ID, $id)['findings'][0]['id']);
     }
 
-    public function testSiteInfoPreservesFirstSeen(): void
+    public function testSiteInfoIsOverwrittenByTheLatestPayload(): void
     {
         $store = new DataStore($this->tmpDir);
 
-        $store->updateSiteInfo(self::SITE_ID, ['site_url' => 'https://a.test'], '2026-01-01T00:00:00Z');
-        $store->updateSiteInfo(self::SITE_ID, ['site_url' => 'https://b.test'], '2026-07-22T00:00:00Z');
+        $store->updateSiteInfo(self::SITE_ID, ['site_url' => 'https://a.test']);
+        $store->updateSiteInfo(self::SITE_ID, ['site_url' => 'https://b.test']);
 
         $info = $store->readSiteInfo(self::SITE_ID);
-        $this->assertSame('2026-01-01T00:00:00Z', $info['first_seen']);
-        $this->assertSame('2026-07-22T00:00:00Z', $info['last_seen']);
         $this->assertSame('https://b.test', $info['site_url']);
     }
 }

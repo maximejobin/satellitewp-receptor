@@ -7,6 +7,12 @@
 declare(strict_types=1);
 
 return [
+    // Shown in the sidebar footer (e.g. "v1"). Bump by hand on a real release —
+    // this is a display label, not a semver/build tracker.
+    'app' => [
+        'version' => 'v1',
+    ],
+
     // Absolute path to the runtime data directory.
     'data_dir' => dirname(__DIR__) . '/data',
 
@@ -77,6 +83,37 @@ return [
     // under data/reference/ by `reference:refresh` and read offline by rules.
     'reference' => [
         'products' => ['php', 'wordpress', 'mysql', 'mariadb'],
+    ],
+
+    // External CRM/billing database (clients, subscriptions, products,
+    // websites, website items) — a separate MySQL database this app only
+    // ever reads from, never writes to. Fill host/database/username/password
+    // in config.local.php; until 'host' and 'database' are both set, every
+    // CRM page (/clients, /websites, /products, /items) shows "not connected"
+    // instead of erroring (same isConfigured() pattern as blogvault/wordfence
+    // above).
+    'crm_db' => [
+        'host'     => null,
+        'port'     => 3306,
+        'database' => null,
+        'username' => null,
+        'password' => null,
+        'charset'  => 'utf8mb4',
+    ],
+
+    // "Edit at the source" / "view in X" links on the CRM pages (2026-09-02).
+    // Each is a URL pattern with a literal "{id}" placeholder, substituted
+    // with the id named in the comment; helpers.php's external_link() turns
+    // a configured, non-empty pattern into a real link and falls back to
+    // plain text otherwise. All null until the real URLs are known — set
+    // them in config.local.php, same as crm_db above.
+    'external_links' => [
+        'teamwork_client_url'          => null, // {id} = swp_clients.teamwork_id
+        'hubspot_client_url'           => null, // {id} = swp_clients.hubspot_id
+        'blogvault_client_url'         => null, // {id} = swp_clients.blogvault_client_id
+        'blogvault_view_website'       => null, // {id} = swp_websites.blogvault_site_id
+        'wordpress_edit_user'          => null, // {id} = swp_clients.id — TBD, confirm with user what WordPress actually expects here
+        'wordpress_edit_subscription'  => null, // {id} = swp_subscriptions.id
     ],
 
     // Display language. Findings and raw data stay language-neutral; sentences

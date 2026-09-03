@@ -26,7 +26,6 @@ final class KeysAddCommand extends Command
         $this
             ->addArgument('site_id', InputArgument::REQUIRED, 'Site UUID (X-SWP-Site)')
             ->addOption('key', null, InputOption::VALUE_REQUIRED, 'Explicit API key (generated when omitted)')
-            ->addOption('label', null, InputOption::VALUE_REQUIRED, 'Human-readable label')
             ->addOption('origin', null, InputOption::VALUE_REQUIRED, 'Site address to bind the key to (defaults to the first extraction received)');
     }
 
@@ -48,7 +47,6 @@ final class KeysAddCommand extends Command
         $key = $this->app->keyStore()->addKey(
             $siteId,
             $input->getOption('key'),
-            $input->getOption('label'),
             $origin
         );
 

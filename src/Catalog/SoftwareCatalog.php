@@ -19,10 +19,11 @@ final class SoftwareCatalog
     public const string LICENSE_FREE    = 'free';
     public const string LICENSE_PREMIUM = 'premium';
     public const string LICENSE_MIXED   = 'mixed';   // free plugin that unlocks a paid licence (e.g. MailPoet)
+    public const string LICENSE_CUSTOM  = 'custom';  // bespoke code, not a wp.org/marketplace plugin at all
     public const string LICENSE_UNKNOWN = 'unknown';
 
     public const array LICENSES = [
-        self::LICENSE_FREE, self::LICENSE_PREMIUM, self::LICENSE_MIXED, self::LICENSE_UNKNOWN,
+        self::LICENSE_FREE, self::LICENSE_PREMIUM, self::LICENSE_MIXED, self::LICENSE_CUSTOM, self::LICENSE_UNKNOWN,
     ];
 
     /** @var array<string, array<string, mixed>>|null lazy-loaded cache */
@@ -34,14 +35,16 @@ final class SoftwareCatalog
 
     /**
      * Record every plugin/theme slug in an extraction payload. New entries are
-     * created with license "unknown"; existing ones get last_seen bumped.
+     * created with license "unknown"; an already-known slug is left as-is
+     * beyond keeping its friendliest known name (no "seen" bookkeeping here —
+     * removed 2026-09-01, it told an analyst nothing that helped classify a
+     * licence).
      *
      * @param array<string, mixed> $payload
      * @return int number of newly discovered slugs
      */
-    public function recordExtraction(array $payload, ?string $seenAt = null): int
+    public function recordExtraction(array $payload): int
     {
-        $seenAt ??= gmdate('Y-m-d\TH:i:s\Z');
         $new = 0;
 
         foreach (['plugin' => $payload['plugins'] ?? [], 'theme' => $payload['themes'] ?? []] as $type => $items) {
@@ -56,7 +59,7 @@ final class SoftwareCatalog
                 if ($slug === '') {
                     continue;
                 }
-                $new += $this->upsert($type, $slug, (string) ($item['name'] ?? $slug), $seenAt);
+                $new += $this->upsert($type, $slug, (string) ($item['name'] ?? $slug));
             }
         }
 
@@ -71,14 +74,12 @@ final class SoftwareCatalog
      * @param 'plugin'|'theme' $type
      * @return int 1 if newly created, 0 if it already existed
      */
-    private function upsert(string $type, string $slug, string $name, string $seenAt): int
+    private function upsert(string $type, string $slug, string $name): int
     {
         $this->load();
         $key = $type . ':' . $slug;
 
         if (isset($this->entries[$key])) {
-            $this->entries[$key]['last_seen']   = $seenAt;
-            $this->entries[$key]['seen_count']  = ($this->entries[$key]['seen_count'] ?? 0) + 1;
             // Keep the friendliest known name.
             if ($name !== $slug && ($this->entries[$key]['name'] ?? '') === $slug) {
                 $this->entries[$key]['name'] = $name;
@@ -88,15 +89,12 @@ final class SoftwareCatalog
         }
 
         $this->entries[$key] = [
-            'type'       => $type,
-            'slug'       => $slug,
-            'name'       => $name,
-            'license'    => self::LICENSE_UNKNOWN,
-            'suggested'  => null,
-            'source'     => 'unknown', // wporg | absent | unknown (repo presence not yet checked)
-            'first_seen' => $seenAt,
-            'last_seen'  => $seenAt,
-            'seen_count' => 1,
+            'type'      => $type,
+            'slug'      => $slug,
+            'name'      => $name,
+            'license'   => self::LICENSE_UNKNOWN,
+            'suggested' => null,
+            'source'    => 'unknown', // wporg | absent | unknown (repo presence not yet checked)
         ];
 
         return 1;
@@ -176,7 +174,61 @@ final class SoftwareCatalog
         return $rows;
     }
 
-    /** @param 'plugin'|'theme' $type */
+    /**
+     * Datatables server-side search: same filters as all(), plus a free-text
+     * query (matched against slug/name) and pagination. The catalogue is
+     * expected to grow into the thousands of entries, too many to hand the
+     * whole rendered table to the browser at once — this is what backs the
+     * AJAX-mode /catalog table. Unlike WordfenceIndex's streamed search, the
+     * catalogue file is small enough that loading it whole and
+     * filtering/sorting/slicing in PHP is not a real cost.
+     *
+     * @param 'plugin'|'theme'|null $type
+     * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
+     */
+    public function search(
+        ?string $type,
+        bool $onlyNeedsLicense,
+        bool $onlyUnclassified,
+        string $query,
+        int $start,
+        int $length,
+    ): array {
+        $this->load();
+        $all   = array_values($this->entries);
+        $total = count($all);
+
+        $rows = $all;
+        if ($type !== null) {
+            $rows = array_values(array_filter($rows, static fn ($e) => $e['type'] === $type));
+        }
+        if ($onlyNeedsLicense) {
+            $rows = array_values(array_filter($rows, static fn ($e) => self::needsLicense($e)));
+        }
+        if ($onlyUnclassified) {
+            $rows = array_values(array_filter($rows, static fn ($e) => ($e['license'] ?? 'unknown') === 'unknown'));
+        }
+        if ($query !== '') {
+            $q    = strtolower($query);
+            $rows = array_values(array_filter(
+                $rows,
+                static fn ($e) => str_contains(strtolower((string) $e['slug']), $q)
+                    || str_contains(strtolower((string) $e['name']), $q)
+            ));
+        }
+
+        usort($rows, static fn ($a, $b) => [$a['type'], strtolower($a['name'])] <=> [$b['type'], strtolower($b['name'])]);
+
+        $filtered = count($rows);
+        $rows     = $length > 0 ? array_slice($rows, $start, $length) : $rows;
+
+        return ['total' => $total, 'filtered' => $filtered, 'rows' => $rows];
+    }
+
+    /**
+     * @param 'plugin'|'theme' $type
+     * @return array<string, mixed>|null
+     */
     public function get(string $type, string $slug): ?array
     {
         $this->load();

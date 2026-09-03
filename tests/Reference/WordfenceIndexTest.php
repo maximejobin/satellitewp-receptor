@@ -224,6 +224,79 @@ final class WordfenceIndexTest extends TestCase
         $this->assertTrue((new WordfenceIndex($this->cacheFile()))->isAvailable());
     }
 
+    /** search() streams the cache — no query returns everything, paginated. */
+    public function testSearchWithoutQueryPaginatesEverything(): void
+    {
+        $mk = static fn (string $id, string $slug): array => [
+            'id' => $id, 'title' => "Issue {$id}",
+            'software' => [[
+                'type' => 'plugin', 'slug' => $slug, 'name' => $slug,
+                'patched' => true, 'patched_versions' => ['2.0'],
+                'affected_versions' => ['r' => ['from_version' => '*', 'from_inclusive' => true, 'to_version' => '1.9', 'to_inclusive' => true]],
+            ]],
+        ];
+        $raw = ['a' => $mk('a', 'alpha'), 'b' => $mk('b', 'bravo'), 'c' => $mk('c', 'charlie')];
+
+        mkdir(dirname($this->cacheFile()), 0775, true);
+        WordfenceIndex::write($this->cacheFile(), WordfenceIndex::buildIndex($raw, 'scanner'));
+        $index = new WordfenceIndex($this->cacheFile());
+
+        $page1 = $index->search('', 0, 2);
+        $this->assertSame(3, $page1['total']);
+        $this->assertSame(3, $page1['filtered']);
+        $this->assertCount(2, $page1['rows']);
+
+        $page2 = $index->search('', 2, 2);
+        $this->assertCount(1, $page2['rows']);
+    }
+
+    /** search() matches on slug, title, and CVE id, case-insensitively. */
+    public function testSearchFiltersBySlugTitleOrCve(): void
+    {
+        $record = [
+            'id' => 'v-1', 'title' => 'SQL Injection in Alpha Plugin', 'cve' => 'CVE-2026-1234',
+            'software' => [[
+                'type' => 'plugin', 'slug' => 'alpha-plugin', 'name' => 'Alpha',
+                'patched' => true, 'patched_versions' => ['2.0'],
+                'affected_versions' => ['r' => ['from_version' => '*', 'from_inclusive' => true, 'to_version' => '1.9', 'to_inclusive' => true]],
+            ]],
+        ];
+        $other = [
+            'id' => 'v-2', 'title' => 'Unrelated issue', 'cve' => null,
+            'software' => [[
+                'type' => 'plugin', 'slug' => 'bravo-plugin', 'name' => 'Bravo',
+                'patched' => false, 'patched_versions' => [],
+                'affected_versions' => ['r' => ['from_version' => '*', 'from_inclusive' => true, 'to_version' => '1.0', 'to_inclusive' => true]],
+            ]],
+        ];
+
+        mkdir(dirname($this->cacheFile()), 0775, true);
+        WordfenceIndex::write($this->cacheFile(), WordfenceIndex::buildIndex(['v-1' => $record, 'v-2' => $other], 'production'));
+        $index = new WordfenceIndex($this->cacheFile());
+
+        $this->assertSame(2, $index->search('', 0, 100)['total']);
+
+        $bySlug = $index->search('alpha-plugin', 0, 100);
+        $this->assertSame(1, $bySlug['filtered']);
+        $this->assertSame('alpha-plugin', $bySlug['rows'][0]['slug']);
+
+        $byCve = $index->search('cve-2026-1234', 0, 100); // case-insensitive
+        $this->assertSame(1, $byCve['filtered']);
+
+        $byTitle = $index->search('unrelated', 0, 100);
+        $this->assertSame(1, $byTitle['filtered']);
+        $this->assertSame('bravo-plugin', $byTitle['rows'][0]['slug']);
+
+        $this->assertSame(0, $index->search('no-such-match', 0, 100)['filtered']);
+    }
+
+    public function testSearchOnMissingCacheReturnsEmpty(): void
+    {
+        $index = new WordfenceIndex($this->cacheFile());
+
+        $this->assertSame(['total' => 0, 'filtered' => 0, 'rows' => []], $index->search('', 0, 10));
+    }
+
     public function testRefreshWithoutAClientThrows(): void
     {
         $index = new WordfenceIndex($this->cacheFile());

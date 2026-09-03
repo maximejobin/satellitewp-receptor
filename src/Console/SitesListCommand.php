@@ -39,13 +39,13 @@ final class SitesListCommand extends Command
             $s['site_id'],
             $s['site_url'] ?? '',
             $s['name'] ?? '',
-            $s['last_seen'],
+            $s['last_extraction_received_at'] ?? '',
             $s['extraction_count'],
             $s['last_extraction_status'] ?? '',
         ], $sites);
 
         (new Table($output))
-            ->setHeaders(['site_id', 'url', 'name', 'last_seen', 'extractions', 'last status'])
+            ->setHeaders(['site_id', 'url', 'name', 'last extraction', 'extractions', 'last status'])
             ->setRows($rows)
             ->render();
 

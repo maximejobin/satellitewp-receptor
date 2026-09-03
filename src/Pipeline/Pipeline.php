@@ -15,6 +15,7 @@ use SatelliteWP\Xtractor\Rules\Context as RuleContext;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
+use SatelliteWP\Xtractor\Storage\KeyStore;
 use Throwable;
 
 /**
@@ -23,6 +24,7 @@ use Throwable;
  */
 final class Pipeline
 {
+    /** @param array<string, mixed> $referenceData */
     public function __construct(
         private readonly ProbeRegistry $registry,
         private readonly DataStore $store,
@@ -30,6 +32,7 @@ final class Pipeline
         private readonly ?RuleEngine $ruleEngine = null,
         private readonly array $referenceData = [],
         private readonly ?SoftwareCatalog $catalog = null,
+        private readonly ?KeyStore $keyStore = null,
     ) {
     }
 
@@ -43,7 +46,7 @@ final class Pipeline
             ?? throw new RuntimeException("Extraction {$siteId}/{$extractionId} not found");
 
         $context = new ExtractionContext(
-            SiteContext::fromExtractionPayload($siteId, $payload),
+            SiteContext::fromExtractionPayload($siteId, $payload, $this->keyStore?->getHttpAuth($siteId)),
             $extractionId,
             $this->store->extractionDir($siteId, $extractionId)
         );
@@ -104,7 +107,10 @@ final class Pipeline
         return $results[$probeName];
     }
 
-    /** @return list<ProbeInterface> */
+    /**
+     * @param list<string>|null $onlyProbes
+     * @return list<ProbeInterface>
+     */
     private function selectProbes(?array $onlyProbes): array
     {
         if ($onlyProbes === null) {

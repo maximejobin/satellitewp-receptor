@@ -3,5 +3,6 @@
 /config/config.local.php
 .phpunit.result.cache
 .phpunit.cache/
+.phpstan.cache/
 .DS_Store
 /logs/

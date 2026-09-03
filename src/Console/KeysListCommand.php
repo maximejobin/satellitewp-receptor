@@ -26,7 +26,7 @@ final class KeysListCommand extends Command
             $key    = (string) ($entry['api_key'] ?? '');
             $rows[] = [
                 $siteId,
-                $entry['label'] ?? '',
+                $entry['origin'] ?? '',
                 $key !== '' ? substr($key, 0, 6) . '…' : '',
                 $entry['created_at'] ?? '',
                 empty($entry['revoked']) ? 'active' : 'revoked',
@@ -40,7 +40,7 @@ final class KeysListCommand extends Command
         }
 
         (new Table($output))
-            ->setHeaders(['site_id', 'label', 'key', 'created_at', 'status'])
+            ->setHeaders(['site_id', 'origin', 'key', 'created_at', 'status'])
             ->setRows($rows)
             ->render();
 

@@ -9,10 +9,11 @@ use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\TransferStats;
 use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
+use SatelliteWP\Xtractor\Support\HostGuard;
 
 /**
  * HTTP behaviour of the site: redirect chain (http→https, www canonical),
- * negotiated HTTP version, TTFB, compression, cache/security headers,
+ * negotiated HTTP version, compression, cache/security headers,
  * server fingerprint, CDN hints, soft-404 behaviour.
  */
 final class HttpProbe extends AbstractProbe
@@ -33,6 +34,20 @@ final class HttpProbe extends AbstractProbe
         'x-fastly-request-id' => 'fastly',
         'x-akamai-transformed' => 'akamai',
         'x-cache-status'  => 'generic-cache',
+    ];
+
+    /**
+     * Common backup/config/log files people leave in the webroot — the
+     * single most consequential item here: `.env`/`wp-config.php.bak`
+     * disclose database credentials directly, no vulnerability needed.
+     */
+    private const array SENSITIVE_PATHS = [
+        '.env',
+        'wp-config.php.bak',
+        'wp-config.php~',
+        '.git/config',
+        'wp-content/debug.log',
+        'backup.sql',
     ];
 
     public function __construct(
@@ -58,14 +73,25 @@ final class HttpProbe extends AbstractProbe
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['No host in site context']];
         }
 
-        $client = new Client([
+        if (!HostGuard::isPubliclyRoutable($site->host)) {
+            return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['Host does not resolve to a public address — refusing to connect (SSRF guard)']];
+        }
+
+        $clientOptions = [
             'connect_timeout' => $this->connectTimeout,
             'timeout'         => $this->timeout,
             'headers'         => ['User-Agent' => $this->userAgent],
             'http_errors'     => false,
             'verify'          => true,
             'allow_redirects' => false,
-        ]);
+        ];
+        // A site paired behind HTTP Basic Auth (staging, an IP-restriction
+        // bypass, …) needs these to see anything past a 401 — see
+        // KeyStore::getHttpAuth() / the site's "⚙ Site settings" panel.
+        if ($site->httpAuth !== null) {
+            $clientOptions['auth'] = [$site->httpAuth['username'], $site->httpAuth['password']];
+        }
+        $client = new Client($clientOptions);
 
         $errors = [];
 
@@ -75,6 +101,17 @@ final class HttpProbe extends AbstractProbe
         // 2. Main request on the final URL.
         $finalUrl = $redirects['final_url'] ?? ('https://' . $site->host . '/');
         $main     = $this->mainRequest($client, $finalUrl, $errors);
+
+        // A bare 401 on the homepage itself means the site isn't reachable
+        // by an anonymous request at all — every check below would also 401
+        // regardless of what it is actually testing for. That is not the
+        // same fact as "checked, nothing exposed", so it must not be allowed
+        // to look like one (2026-08-30, user: "pour tes vérifications de
+        // fichiers sensibles, tu dis que tout est ok. Ce n'est pas ce que
+        // c'est ok... c'est que le site n'est pas public"). If credentials
+        // are configured and correct, the main request above already
+        // authenticated and this stays false.
+        $authRequired = ($main['status_code'] ?? null) === 401;
 
         // 3. Soft-404 detection.
         $soft404 = $this->soft404Check($client, $finalUrl, $errors);
@@ -86,12 +123,21 @@ final class HttpProbe extends AbstractProbe
         // 5. robots.txt (+ the sitemap it declares).
         $robots = $this->robotsCheck($client, $finalUrl);
 
+        // 6. Passive exposure checks — xmlrpc.php, REST/legacy user
+        //    enumeration, browsable uploads dir, common backup files, TRACE.
+        $exposure = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
+
         $data = [
             'redirects'        => $redirects,
             'final_url'        => $finalUrl,
             'soft_404'         => $soft404,
             'asset'            => $asset,
             'robots'           => $robots,
+            'exposure'         => $exposure,
+            'auth'             => [
+                'required'   => $authRequired,
+                'configured' => $site->httpAuth !== null,
+            ],
         ] + $main;
 
         return [
@@ -146,10 +192,23 @@ final class HttpProbe extends AbstractProbe
 
                 return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => true];
             }
+
+            // The starting host was already checked in collect(), but a
+            // redirect can point anywhere — including an internal address a
+            // public site has no business sending an anonymous prober to.
+            // Same SSRF guard, applied per hop instead of once up front.
+            if (!HostGuard::isSafeUrl($next)) {
+                $errors[] = "Redirect chain: {$next} does not resolve to a public address — refusing to follow it (SSRF guard)";
+
+                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
+            }
             $url = $next;
         }
 
-        $finalUrl = $chain !== [] ? end($chain)['url'] : $startUrl;
+        // $chain always has at least one entry by this point: every path out
+        // of the loop above (break or exhaustion) appends to it first —
+        // caught by PHPStan as dead code, not just a style nit.
+        $finalUrl = end($chain)['url'];
 
         return [
             'chain'         => $chain,
@@ -232,9 +291,6 @@ final class HttpProbe extends AbstractProbe
         return [
             'status_code'      => $statusCode,
             'http_version'     => $httpVersion,
-            'ttfb_ms'          => isset($stats['starttransfer_time'])
-                ? (int) round(((float) $stats['starttransfer_time']) * 1000)
-                : null,
             'content_encoding' => $headers['content-encoding'] ?? null,
             'gzip'             => ($headers['content-encoding'] ?? '') === 'gzip',
             'brotli'           => ($headers['content-encoding'] ?? '') === 'br',
@@ -456,6 +512,213 @@ final class HttpProbe extends AbstractProbe
         ];
     }
 
+    /**
+     * Passive exposure checks — no exploitation, nothing destructive: every
+     * one of these is a request any anonymous visitor (or `wpscan --enumerate`)
+     * can already make. This only automates the well-known targets so an
+     * analyst does not have to run a separate tool for the basics.
+     *
+     * Every check also records its own `evidence` (exact URL requested, HTTP
+     * status, and whatever detail justified the verdict — the Location
+     * header for author enumeration, the usernames actually parsed out for
+     * REST enumeration, which of the sensitive paths were tried) so a finding
+     * is never "trust me" — an analyst can point at exactly what was
+     * requested and what came back, the same request they could re-run by
+     * hand with curl.
+     *
+     * The sensitive-files and directory-listing checks are skipped entirely
+     * on a soft-404 site (every path would answer 200 regardless of whether
+     * it exists, which would report all of them as "exposed") — `null`
+     * there means "not checked", never "checked, found nothing".
+     *
+     * Same logic, wider gate, for a site that answered the homepage itself
+     * with a 401: every one of these checks would also 401 regardless of
+     * what it is testing for, which would report all of them as "not
+     * exposed" — a false "clean" when the truth is "not public, couldn't
+     * check". `$authRequired` skips the lot up front instead of letting each
+     * individual check independently (and misleadingly) read a 401 as "no".
+     *
+     * @return array<string, mixed>
+     */
+    private function exposureCheck(Client $client, string $finalUrl, bool $isSoft404, bool $authRequired): array
+    {
+        if ($authRequired) {
+            return self::authGatedExposureResult();
+        }
+
+        $origin = $this->origin($finalUrl);
+
+        $xmlrpcUrl = $origin . '/xmlrpc.php';
+        $xmlrpc    = $this->probeExposure($client, $xmlrpcUrl);
+
+        $restUrl   = $origin . '/wp-json/wp/v2/users';
+        $restUsers = $this->probeExposure($client, $restUrl);
+
+        $authorUrl = $origin . '/?author=1';
+        $author    = $this->probeExposure($client, $authorUrl);
+
+        $directoryListing  = null;
+        $sensitiveFiles    = null;
+        $uploadsEvidence   = null;
+        $sensitiveEvidence = ['checked' => self::SENSITIVE_PATHS, 'found' => []];
+        if (!$isSoft404) {
+            $uploadsUrl = $origin . '/wp-content/uploads/';
+            $uploads    = $this->probeExposure($client, $uploadsUrl);
+            $directoryListing = $uploads === null ? null : self::isDirectoryListing($uploads['status'], $uploads['body']);
+            $uploadsEvidence  = ['url' => $uploadsUrl, 'status' => $uploads['status'] ?? null];
+
+            $sensitiveFiles = [];
+            foreach (self::SENSITIVE_PATHS as $path) {
+                $result = $this->probeExposure($client, $origin . '/' . $path);
+                if ($result !== null && $result['status'] === 200) {
+                    $sensitiveFiles[] = $path;
+                }
+            }
+            $sensitiveEvidence['found'] = $sensitiveFiles;
+        }
+
+        $traceUrl = $finalUrl;
+        $trace    = $this->traceCheck($client, $traceUrl);
+
+        return [
+            'xmlrpc_enabled'        => $xmlrpc === null ? null : self::isXmlrpcEnabled($xmlrpc['status'], $xmlrpc['body']),
+            'rest_user_enumeration' => $restUsers === null ? null : self::isRestUserEnumerationExposed($restUsers['status'], $restUsers['body']),
+            'author_enumeration'    => $author === null ? null : self::isAuthorEnumerationExposed($author['status'], $author['location']),
+            'directory_listing'     => $directoryListing,
+            'sensitive_files'       => $sensitiveFiles,
+            'trace_enabled'         => $trace['enabled'],
+            'auth_required'         => false,
+            'evidence'              => [
+                'xmlrpc'            => ['url' => $xmlrpcUrl, 'status' => $xmlrpc['status'] ?? null],
+                'rest_users'        => ['url' => $restUrl, 'status' => $restUsers['status'] ?? null, 'usernames' => $restUsers !== null ? self::extractUsernames($restUsers['body']) : []],
+                'author'            => ['url' => $authorUrl, 'status' => $author['status'] ?? null, 'location' => $author['location'] ?? null],
+                'directory_listing' => $uploadsEvidence,
+                'sensitive_files'   => $sensitiveEvidence,
+                'trace'             => ['url' => $traceUrl, 'status' => $trace['status']],
+            ],
+        ];
+    }
+
+    /**
+     * The result exposureCheck() returns without making a single request when
+     * the site itself requires HTTP auth we don't have (or don't have right):
+     * every field `null` ("not checked"), never `false` ("checked, clean") —
+     * pulled out as its own pure method so the shape is unit-testable without
+     * a Guzzle client.
+     *
+     * @return array<string, mixed>
+     */
+    public static function authGatedExposureResult(): array
+    {
+        return [
+            'xmlrpc_enabled'        => null,
+            'rest_user_enumeration' => null,
+            'author_enumeration'    => null,
+            'directory_listing'     => null,
+            'sensitive_files'       => null,
+            'trace_enabled'         => null,
+            'auth_required'         => true,
+            'evidence'              => [],
+        ];
+    }
+
+    /** @return array{status: int, body: string, location: string}|null null only on a request failure (network/timeout) */
+    private function probeExposure(Client $client, string $url): ?array
+    {
+        try {
+            $response = $client->get($url);
+        } catch (GuzzleException) {
+            return null;
+        }
+
+        return [
+            'status'   => $response->getStatusCode(),
+            'body'     => (string) $response->getBody(),
+            'location' => $response->getHeaderLine('Location'),
+        ];
+    }
+
+    /**
+     * A raw HTTP TRACE request most hardened servers reject outright
+     * (405/501/403); a 200 answer is itself the exposure (reflected XST),
+     * regardless of the exact body content.
+     *
+     * @return array{enabled: ?bool, status: ?int}
+     */
+    private function traceCheck(Client $client, string $url): array
+    {
+        try {
+            $response = $client->request('TRACE', $url);
+        } catch (GuzzleException) {
+            return ['enabled' => null, 'status' => null];
+        }
+
+        $status = $response->getStatusCode();
+
+        return ['enabled' => $status === 200, 'status' => $status];
+    }
+
+    /** GET xmlrpc.php answers 200 with this exact line — extremely stable across WP versions. */
+    public static function isXmlrpcEnabled(int $status, string $body): bool
+    {
+        return $status === 200 && str_contains($body, 'XML-RPC server accepts POST requests only.');
+    }
+
+    /** A 200 JSON array of user objects (keyed by `slug`) discloses every author's username. */
+    public static function isRestUserEnumerationExposed(int $status, string $body): bool
+    {
+        if ($status !== 200) {
+            return false;
+        }
+        $decoded = json_decode($body, true);
+
+        return is_array($decoded) && isset($decoded[0]) && is_array($decoded[0]) && isset($decoded[0]['slug']);
+    }
+
+    /**
+     * The actual usernames a REST enumeration response discloses — the
+     * evidence, not just the yes/no.
+     *
+     * @return list<string>
+     */
+    public static function extractUsernames(string $body): array
+    {
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $slugs = [];
+        foreach ($decoded as $user) {
+            if (is_array($user) && isset($user['slug'])) {
+                $slugs[] = (string) $user['slug'];
+            }
+        }
+
+        return $slugs;
+    }
+
+    /**
+     * The classic `?author=1` probe: with pretty permalinks on, WordPress
+     * 301s straight to `/author/<username>/`, leaking the login in the
+     * Location header alone — no page content to parse.
+     */
+    public static function isAuthorEnumerationExposed(int $status, string $location): bool
+    {
+        return in_array($status, [301, 302, 307, 308], true) && str_contains($location, '/author/');
+    }
+
+    /** A generic Apache/nginx autoindex page, not a WordPress "not found" or soft-404 catch-all. */
+    public static function isDirectoryListing(int $status, string $body): bool
+    {
+        if ($status !== 200) {
+            return false;
+        }
+        $lower = strtolower($body);
+
+        return str_contains($lower, 'index of /') || str_contains($lower, 'parent directory');
+    }
+
     private function origin(string $url): string
     {
         $parts = parse_url($url);
@@ -464,7 +727,11 @@ final class HttpProbe extends AbstractProbe
             . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
-    /** Assess collected data into ok/warn. */
+    /**
+     * Assess collected data into ok/warn.
+     *
+     * @param array<string, mixed> $data
+     */
     private function assess(array $data): string
     {
         $asset = $data['asset'] ?? [];
@@ -472,14 +739,23 @@ final class HttpProbe extends AbstractProbe
             && ($asset['gzip'] ?? false) === false
             && ($asset['brotli'] ?? false) === false;
 
+        $exposure = $data['exposure'] ?? [];
+        $exposed =
+            ($exposure['xmlrpc_enabled'] ?? false) === true
+            || ($exposure['rest_user_enumeration'] ?? false) === true
+            || ($exposure['author_enumeration'] ?? false) === true
+            || ($exposure['directory_listing'] ?? false) === true
+            || ($exposure['trace_enabled'] ?? false) === true
+            || !empty($exposure['sensitive_files']);
+
         $warn =
             ($data['gzip'] ?? false) === false && ($data['brotli'] ?? false) === false
             || $assetUncompressed
             || ($data['redirects']['forces_https'] ?? true) === false
             || (($data['security_headers']['x-content-type-options'] ?? null) === null)
-            || (($data['ttfb_ms'] ?? 0) > 600)
             || (($data['soft_404']['is_soft_404'] ?? false) === true)
-            || (($data['redirects']['loop_detected'] ?? false) === true);
+            || (($data['redirects']['loop_detected'] ?? false) === true)
+            || $exposed;
 
         return $warn ? ProbeResult::STATUS_WARN : ProbeResult::STATUS_OK;
     }

@@ -21,7 +21,7 @@ final class SoftwareCatalogTest extends TestCase
         $this->assertSame('storefront', SoftwareCatalog::normalizeSlug('theme', 'storefront'));
     }
 
-    public function testRecordExtractionCreatesThenBumps(): void
+    public function testRecordExtractionCreatesThenLeavesExistingAlone(): void
     {
         $catalog = $this->catalog();
 
@@ -33,17 +33,14 @@ final class SoftwareCatalogTest extends TestCase
             'themes' => [['slug' => 'storefront', 'name' => 'Storefront']],
         ];
 
-        $this->assertSame(3, $catalog->recordExtraction($payload, '2026-07-01T00:00:00Z'));
+        $this->assertSame(3, $catalog->recordExtraction($payload));
 
-        // Second extraction: same slugs -> nothing new, seen_count bumps.
-        $this->assertSame(0, $catalog->recordExtraction($payload, '2026-07-25T00:00:00Z'));
+        // Second extraction: same slugs -> nothing new.
+        $this->assertSame(0, $catalog->recordExtraction($payload));
 
         $wc = $catalog->get('plugin', 'woocommerce');
         $this->assertSame('WooCommerce', $wc['name']);
         $this->assertSame('unknown', $wc['license']);
-        $this->assertSame(2, $wc['seen_count']);
-        $this->assertSame('2026-07-01T00:00:00Z', $wc['first_seen']);
-        $this->assertSame('2026-07-25T00:00:00Z', $wc['last_seen']);
     }
 
     public function testSetLicenseAndNeedsLicense(): void

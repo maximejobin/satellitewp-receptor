@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'ui' => [
-        'sites'          => 'Sites',
+        'sites'          => 'Extractions',
         'site'           => 'Site',
         'extraction'     => 'Extraction',
         'findings'       => 'Findings',
@@ -79,8 +79,7 @@ return [
         'A8'  => ['title' => 'HSTS header present', 'fail' => 'The Strict-Transport-Security header is missing.'],
         'A10' => ['title' => 'HTTP to HTTPS redirect', 'fail' => 'The site answers over HTTP without redirecting to HTTPS. Add a 301 redirect.', 'pass' => 'HTTP is redirected to HTTPS.'],
         // HTTP
-        'B1'  => ['title' => 'HTML compression', 'fail' => 'The HTML is served without compression. Enable gzip or Brotli.', 'pass' => 'The HTML is compressed ({observed}).'],
-        'B1b' => ['title' => 'Static asset compression', 'fail' => 'Static assets are served without compression, unlike the HTML.', 'pass' => 'Static assets are compressed ({observed}).'],
+        'B1'  => ['title' => 'Gzip compression', 'fail' => 'Gzip is not used ({observed}). Enable gzip compression.', 'pass' => 'The HTML is gzip-compressed.'],
         'B2'  => ['title' => 'Brotli compression', 'fail' => 'Brotli is not used ({observed}); it compresses better than gzip.'],
         'B3'  => ['title' => 'HTTP/2 supported', 'fail' => 'The site is served over HTTP/{observed}. Enabling HTTP/2 speeds up loading.', 'pass' => 'The site is served over HTTP/{observed}.'],
         'B6'  => ['title' => 'Cache headers on static assets', 'fail' => 'Static assets have a cache of {observed}s (expected at least {threshold}s).'],
@@ -88,13 +87,13 @@ return [
         'B7b' => ['title' => 'Clickjacking protection', 'fail' => 'Neither X-Frame-Options nor Content-Security-Policy is present.'],
         'B7c' => ['title' => 'Content-Security-Policy present', 'fail' => 'No Content-Security-Policy is defined.'],
         'B7d' => ['title' => 'Referrer-Policy set', 'fail' => 'The Referrer-Policy header is missing.'],
+        'B7e' => ['title' => 'Permissions-Policy set', 'fail' => 'The Permissions-Policy header is missing.'],
         'B8'  => ['title' => 'Secure cookies', 'fail' => 'Cookies are missing security attributes: {observed}.'],
         'B9'  => ['title' => 'No server version leak', 'fail' => 'The server leaks its version: {observed}.'],
         // DNS
         'C1'  => ['title' => 'IPv6 (AAAA record)', 'fail' => 'No AAAA record: the site is not reachable over IPv6.'],
         'C2'  => ['title' => 'CAA record present', 'fail' => 'No CAA record: any certificate authority can issue a certificate.'],
         'C5'  => ['title' => 'Short redirect chain', 'fail' => 'The redirect chain is too long or loops ({observed}).'],
-        'C6'  => ['title' => 'Response time (TTFB)', 'fail' => 'The TTFB is {observed} ms (threshold {threshold} ms).', 'pass' => 'Fast response time ({observed} ms).'],
         'C7'  => ['title' => 'Site available', 'fail' => 'The site answers HTTP {observed}.', 'pass' => 'The site is available (HTTP {observed}).'],
         'C8'  => ['title' => 'Correct 404 page', 'fail' => 'A non-existent URL answers 200 instead of 404 (soft 404).'],
         'C9'  => ['title' => 'robots.txt present and not blocking', 'fail' => 'robots.txt is {observed}.', 'pass' => 'robots.txt is present.'],
@@ -145,12 +144,21 @@ return [
         // Users
         'M1'  => ['title' => 'Administrator count under control', 'fail' => 'The site has {observed} administrators (threshold {threshold}).', 'pass' => 'The site has {observed} administrator(s).'],
         'M2'  => ['title' => 'No default "admin" account', 'fail' => 'An administrator account uses the default "admin" login.', 'pass' => 'No default "admin" account.'],
+        // BlogVault
         'BV1' => ['title' => 'Site not flagged as hacked', 'fail' => 'BlogVault has flagged this site: {detections} unresolved detection(s).', 'pass' => 'BlogVault\'s malware scan reports nothing.'],
         'BV2' => ['title' => 'No known vulnerability', 'fail' => 'BlogVault lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'BlogVault lists no known vulnerability for core, plugins or themes.'],
         'BV3' => ['title' => 'Recent successful backup', 'fail' => 'No usable recent backup: last snapshot is "{observed}" (threshold {threshold} days).', 'pass' => 'Last successful backup is {observed} day(s) old.'],
         'BV4' => ['title' => 'Firewall active in protect mode', 'fail' => 'The BlogVault firewall is not in protect mode (currently: {observed}).', 'pass' => 'The firewall is active in protect mode.'],
         'BV5' => ['title' => 'Recent malware scan', 'fail' => 'The last malware scan is {observed} day(s) old (threshold {threshold}).', 'pass' => 'The last malware scan is {observed} day(s) old.'],
         'BV6' => ['title' => 'Two-factor authentication for administrators', 'fail' => '{observed} of {administrators} administrator(s) have no two-factor authentication.', 'pass' => 'Every administrator has two-factor authentication enabled.'],
+        // Wordfence
         'WF1' => ['title' => 'No known vulnerability (Wordfence)', 'fail' => 'Wordfence Intelligence lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'Wordfence Intelligence lists no known vulnerability for core, plugins or themes.'],
+        // Exposure
+        'X1'  => ['title' => 'xmlrpc.php not exposed', 'fail' => 'xmlrpc.php answers — brute-force amplification and pingback abuse are possible.', 'pass' => 'xmlrpc.php is blocked or disabled.'],
+        'X2'  => ['title' => 'No username disclosure via the REST API', 'fail' => 'The REST API lists user accounts at /wp-json/wp/v2/users, disclosing every login.', 'pass' => 'The REST API does not disclose user accounts.'],
+        'X3'  => ['title' => 'No username disclosure via author archives', 'fail' => '?author=1 redirects to the author archive, disclosing the login in the URL.', 'pass' => 'The author-archive redirect does not disclose a login.'],
+        'X4'  => ['title' => 'No exposed backup/config file', 'fail' => 'Publicly reachable: {observed}. These can disclose database credentials directly.', 'pass' => 'No common backup/config file is publicly reachable.'],
+        'X5'  => ['title' => 'Uploads directory not browsable', 'fail' => 'wp-content/uploads/ returns a directory listing.', 'pass' => 'wp-content/uploads/ is not browsable.'],
+        'X6'  => ['title' => 'HTTP TRACE method disabled', 'fail' => 'The server answers an HTTP TRACE request (cross-site tracing risk).', 'pass' => 'The server rejects HTTP TRACE.'],
     ],
 ];

@@ -89,6 +89,14 @@ final class WordfenceIndex
         return is_file($this->cacheFile);
     }
 
+    /** When the cache was last written, or null if it never has been. */
+    public function refreshedAt(): ?string
+    {
+        $time = is_file($this->cacheFile) ? filemtime($this->cacheFile) : false;
+
+        return $time !== false ? gmdate('Y-m-d\TH:i:s\Z', $time) : null;
+    }
+
     /**
      * Download both feed variants and rebuild the local index. A variant that
      * fails (e.g. 429 — the API allows very few requests) does not abort the
@@ -222,6 +230,160 @@ final class WordfenceIndex
         }
 
         fclose($handle);
+    }
+
+    /**
+     * Server-side search across the FULL cache — every vulnerability from
+     * every component, flattened to one row per vulnerability — for the
+     * /data/vulnerabilities Datatables.net browser. The cache holds ~84 000
+     * vulnerability records across ~18 000 components: far too many to ever
+     * send to the browser at once, so this streams the file exactly like
+     * preload() does (one sequential pass, never the whole cache in memory)
+     * and returns only the requested page window plus the counts Datatables'
+     * server-side mode needs.
+     *
+     * Column sorting is deliberately not supported here: sorting would mean
+     * buffering every matched row before slicing a page, which defeats the
+     * point of streaming. Rows come back in cache order; the UI disables
+     * column sort on this table.
+     *
+     * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
+     */
+    public function search(string $query, int $offset, int $limit): array
+    {
+        $needle  = mb_strtolower(trim($query));
+        $total   = 0;
+        $matches = [];
+
+        $handle = is_file($this->cacheFile) ? @fopen($this->cacheFile, 'rb') : false;
+        if ($handle === false) {
+            return ['total' => 0, 'filtered' => 0, 'rows' => []];
+        }
+
+        while (($line = fgets($handle)) !== false) {
+            $row = json_decode($line, true);
+            if (!is_array($row) || !isset($row['k'], $row['v']) || !is_array($row['v'])) {
+                continue;
+            }
+            [$type, $slug] = array_pad(explode(':', (string) $row['k'], 2), 2, '');
+
+            foreach ($row['v'] as $vuln) {
+                if (!is_array($vuln)) {
+                    continue;
+                }
+                $total++;
+
+                if ($needle !== '') {
+                    $haystack = mb_strtolower($slug . ' '
+                        . ($vuln['title'] ?? '') . ' '
+                        . ($vuln['cve_id'] ?? '') . ' '
+                        . ($vuln['id'] ?? ''));
+                    if (!str_contains($haystack, $needle)) {
+                        continue;
+                    }
+                }
+
+                $matches[] = [
+                    'type'             => $type,
+                    'slug'             => $slug,
+                    'id'               => $vuln['id'] ?? null,
+                    'title'            => $vuln['title'] ?? null,
+                    'cve_id'           => $vuln['cve_id'] ?? null,
+                    'cvss_score'       => $vuln['cvss_score'] ?? null,
+                    'cvss_rating'      => $vuln['cvss_rating'] ?? null,
+                    'patched'          => $vuln['patched'] ?? null,
+                    'patched_versions' => $vuln['patched_versions'] ?? [],
+                    'informational'    => $vuln['informational'] ?? false,
+                    'source'           => $vuln['source'] ?? null,
+                    'published_at'     => $vuln['published_at'] ?? null,
+                    'sort_version'     => self::sortVersion($vuln),
+                ];
+            }
+        }
+
+        fclose($handle);
+
+        // Ordered by version descending on every request, search or not — a
+        // fixed, meaningful order beats "file order" (an artefact of refresh()'s
+        // merge). This means sorting the whole filtered set before slicing a
+        // page, i.e. holding it in memory — but that is the *filtered* set of
+        // flat scalar rows (worst case ~84 000 of them, a few tens of MB), not
+        // the full nested per-component structure whose one-shot decode is what
+        // actually caused the OOM documented on preload() above.
+        usort(
+            $matches,
+            static fn (array $a, array $b): int => self::compareVersionDesc($a['sort_version'], $b['sort_version'])
+        );
+
+        $filtered = count($matches);
+        $rows     = array_slice($matches, $offset, $limit);
+
+        return ['total' => $total, 'filtered' => $filtered, 'rows' => $rows];
+    }
+
+    /**
+     * The version to order a vulnerability row by: the highest patched version
+     * when one is known, else the highest affected-range upper bound.
+     *
+     * @param array<string, mixed> $vuln
+     */
+    private static function sortVersion(array $vuln): ?string
+    {
+        $patched = array_values(array_filter(
+            (array) ($vuln['patched_versions'] ?? []),
+            static fn ($v): bool => is_string($v) && $v !== ''
+        ));
+        if ($patched !== []) {
+            return self::maxVersion($patched);
+        }
+
+        $upperBounds = [];
+        foreach ((array) ($vuln['affected_versions'] ?? []) as $range) {
+            $to = is_array($range) ? ($range['to_version'] ?? null) : null;
+            if (is_string($to) && $to !== '') {
+                $upperBounds[] = $to;
+            }
+        }
+
+        return self::maxVersion($upperBounds);
+    }
+
+    /**
+     * @param list<string> $versions
+     * A "*" upper bound means the range is open-ended ("every version up to
+     * current") — the most urgent case, not an unknown one, so it outranks any
+     * concrete version rather than being dropped or sorted last.
+     */
+    private static function maxVersion(array $versions): ?string
+    {
+        if ($versions === []) {
+            return null;
+        }
+        if (in_array('*', $versions, true)) {
+            return '*';
+        }
+
+        usort($versions, static fn ($a, $b) => version_compare((string) $b, (string) $a));
+
+        return (string) $versions[0];
+    }
+
+    private static function compareVersionDesc(?string $a, ?string $b): int
+    {
+        if ($a === $b) {
+            return 0;
+        }
+        if ($a === null) {
+            return 1;
+        }
+        if ($b === null) {
+            return -1;
+        }
+        if ($a === '*' || $b === '*') {
+            return $a === '*' ? -1 : 1;
+        }
+
+        return version_compare($b, $a);
     }
 
     /**
@@ -373,7 +535,10 @@ final class WordfenceIndex
         return $merged;
     }
 
-    /** @param array<string, mixed> $ranges */
+    /**
+     * @param array<string, mixed> $ranges
+     * @return list<array{from_version: string, from_inclusive: bool, to_version: string, to_inclusive: bool}>
+     */
     private static function normalizeRanges(array $ranges): array
     {
         $normalized = [];

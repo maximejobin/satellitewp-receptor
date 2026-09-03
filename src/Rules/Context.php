@@ -48,7 +48,11 @@ final readonly class Context
         return $value ?? $default;
     }
 
-    /** The "data" section of a probe, or null when the probe did not run. */
+    /**
+     * The "data" section of a probe, or null when the probe did not run.
+     *
+     * @return array<string, mixed>|null
+     */
     public function probeData(string $name): ?array
     {
         $envelope = $this->probes[$name] ?? null;

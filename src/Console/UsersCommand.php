@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Console;
 
 use SatelliteWP\Xtractor\App;
+use SatelliteWP\Xtractor\Storage\UserStore;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;
@@ -30,21 +31,24 @@ final class UsersCommand extends Command
 
     protected function configure(): void
     {
-        $this->addArgument('email', InputArgument::OPTIONAL, 'Address to allow; omit to list current users');
+        $this
+            ->addArgument('email', InputArgument::OPTIONAL, 'Address to allow; omit to list current users')
+            ->addArgument('role', InputArgument::OPTIONAL, 'Role to assign (see config/roles.php)', UserStore::DEFAULT_ROLE);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $users = $this->app->userStore();
         $email = (string) ($input->getArgument('email') ?? '');
+        $role  = (string) $input->getArgument('role');
 
         if ($email !== '') {
-            if (!$users->add($email)) {
-                $output->writeln("<error>Refusé : adresse invalide ou déjà présente ({$email}).</error>");
+            if (!$users->add($email, $role)) {
+                $output->writeln("<error>Refusé : adresse invalide, rôle inconnu, ou déjà présente ({$email}).</error>");
 
                 return Command::FAILURE;
             }
-            $output->writeln("<info>{$email}</info> peut maintenant se connecter.");
+            $output->writeln("<info>{$email}</info> ({$role}) peut maintenant se connecter.");
         }
 
         if ($users->isEmpty()) {
@@ -54,9 +58,9 @@ final class UsersCommand extends Command
         }
 
         $table = new Table($output);
-        $table->setHeaders(['email', 'rôle']);
+        $table->setHeaders(['email', 'rôle', 'statut']);
         foreach ($users->all() as $user) {
-            $table->addRow([$user, $users->isAdmin($user) ? 'administrateur' : 'utilisateur']);
+            $table->addRow([$user['email'], $user['role'], $user['status']]);
         }
         $table->render();
 

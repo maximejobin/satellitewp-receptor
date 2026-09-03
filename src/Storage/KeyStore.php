@@ -29,7 +29,6 @@ final class KeyStore
     public function addKey(
         string $siteId,
         ?string $apiKey = null,
-        ?string $label = null,
         ?string $origin = null,
     ): string {
         $apiKey ??= bin2hex(random_bytes(32));
@@ -37,7 +36,6 @@ final class KeyStore
         $keys          = $this->all();
         $keys[$siteId] = [
             'api_key'    => $apiKey,
-            'label'      => $label,
             'origin'     => $origin,
             'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
             'revoked'    => false,
@@ -75,6 +73,47 @@ final class KeyStore
 
         $keys[$siteId]['origin']      = $origin;
         $keys[$siteId]['rebound_at']  = gmdate('Y-m-d\TH:i:s\Z');
+        $this->save($keys);
+
+        return true;
+    }
+
+    /**
+     * HTTP Basic Auth credentials this server should send when probing the
+     * site directly (HttpProbe) — needed when the whole site sits behind
+     * Basic Auth (a staging environment, an IP-restriction bypass, …).
+     * Without this, a 401 challenge on every probed path was silently read
+     * as "checked, nothing found" instead of "couldn't check" — a site that
+     * isn't public at all looked identical to one that is public and clean.
+     * Configurable per site (2026-08-30, user: "ça doit être paramétrable
+     * au niveau du site") rather than a single global credential, since
+     * different client sites behind Basic Auth use different logins.
+     *
+     * @return array{username: string, password: string}|null
+     */
+    public function getHttpAuth(string $siteId): ?array
+    {
+        $auth = $this->all()[$siteId]['http_auth'] ?? null;
+        if (!is_array($auth) || !isset($auth['username'], $auth['password'])) {
+            return null;
+        }
+
+        return ['username' => (string) $auth['username'], 'password' => (string) $auth['password']];
+    }
+
+    /** Set this site's Basic Auth credentials for probing, or clear them (empty/null username). */
+    public function setHttpAuth(string $siteId, ?string $username, ?string $password): bool
+    {
+        $keys = $this->all();
+        if (!isset($keys[$siteId])) {
+            return false;
+        }
+
+        if ($username === null || $username === '') {
+            unset($keys[$siteId]['http_auth']);
+        } else {
+            $keys[$siteId]['http_auth'] = ['username' => $username, 'password' => (string) $password];
+        }
         $this->save($keys);
 
         return true;

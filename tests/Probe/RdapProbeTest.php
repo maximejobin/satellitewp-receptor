@@ -14,7 +14,10 @@ final class RdapProbeTest extends TestCase
         $data = RdapProbe::parseRdapResponse([
             'events' => [
                 ['eventAction' => 'registration', 'eventDate' => '2010-05-01T00:00:00Z'],
+                ['eventAction' => 'last changed', 'eventDate' => '2025-03-15T00:00:00Z'],
                 ['eventAction' => 'expiration', 'eventDate' => '2027-05-01T00:00:00Z'],
+                // Must not be mistaken for the domain's own "last changed".
+                ['eventAction' => 'last update of RDAP database', 'eventDate' => '2026-08-01T00:00:00Z'],
             ],
             'entities' => [
                 [
@@ -36,6 +39,7 @@ final class RdapProbeTest extends TestCase
         $this->assertSame('Example Registrar Inc.', $data['registrar']);
         $this->assertSame('2010-05-01T00:00:00Z', $data['created_at']);
         $this->assertSame('2027-05-01T00:00:00Z', $data['expires_at']);
+        $this->assertSame('2025-03-15T00:00:00Z', $data['updated_at']);
         $this->assertGreaterThan(200, $data['days_to_expiry']);
         $this->assertSame(['client transfer prohibited'], $data['statuses']);
         $this->assertSame(['ns1.example.net', 'ns2.example.net'], $data['nameservers']);
@@ -47,6 +51,7 @@ final class RdapProbeTest extends TestCase
             Domain Name: EXAMPLE.COM
                Registrar: Example Registrar, LLC
                Creation Date: 2010-05-01T00:00:00Z
+               Updated Date: 2025-03-15T00:00:00Z
                Registry Expiry Date: 2027-05-01T00:00:00Z
                Domain Status: clientTransferProhibited https://icann.org/epp
                Name Server: NS1.EXAMPLE.NET
@@ -59,6 +64,7 @@ final class RdapProbeTest extends TestCase
         $this->assertSame('Example Registrar, LLC', $data['registrar']);
         $this->assertSame('2010-05-01T00:00:00Z', $data['created_at']);
         $this->assertSame('2027-05-01T00:00:00Z', $data['expires_at']);
+        $this->assertSame('2025-03-15T00:00:00Z', $data['updated_at']);
         $this->assertSame(['clientTransferProhibited'], $data['statuses']);
         $this->assertSame(['ns1.example.net', 'ns2.example.net'], $data['nameservers']);
     }
@@ -69,6 +75,7 @@ final class RdapProbeTest extends TestCase
 
         $this->assertNull($data['registrar']);
         $this->assertNull($data['expires_at']);
+        $this->assertNull($data['updated_at']);
         $this->assertNull($data['days_to_expiry']);
         $this->assertSame([], $data['nameservers']);
     }

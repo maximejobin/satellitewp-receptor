@@ -1,0 +1,15 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+        - bin
+    # Templates receive their variables via extract($vars, EXTR_SKIP) in
+    # Router::render() — a deliberate, reviewed pattern (see CLAUDE.md), not
+    # something PHPStan can trace. Without this exclusion every template
+    # variable reads as "might not be defined", drowning out real findings.
+    excludePaths:
+        - src/Web/templates/*
+    tmpDir: .phpstan.cache

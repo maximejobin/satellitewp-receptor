@@ -25,7 +25,7 @@ final class RuleEngineTest extends TestCase
             'id'       => $id,
             'category' => Category::PHP,
             'source'   => 'DATA',
-            'severity' => Severity::Moyenne,
+            'severity' => Severity::Medium,
             'check'    => $check,
         ], $overrides));
     }
@@ -62,8 +62,8 @@ final class RuleEngineTest extends TestCase
         $engine = new RuleEngine([
             $this->rule('B', static fn () => Check::pass()),
             $this->rule('C', static fn () => Check::fail(1), ['severity' => Severity::Info]),
-            $this->rule('A', static fn () => Check::fail(1), ['severity' => Severity::Critique]),
-            $this->rule('D', static fn () => Check::fail(1), ['severity' => Severity::Critique]),
+            $this->rule('A', static fn () => Check::fail(1), ['severity' => Severity::Critical]),
+            $this->rule('D', static fn () => Check::fail(1), ['severity' => Severity::Critical]),
         ]);
 
         $ids = array_column($engine->evaluate(new Context([]))['findings'], 'id');
@@ -89,7 +89,7 @@ final class RuleEngineTest extends TestCase
     public function testCheckSeverityOverrideWins(): void
     {
         $engine = new RuleEngine([
-            $this->rule('G', static fn () => Check::fail(3, [], Severity::Critique)),
+            $this->rule('G', static fn () => Check::fail(3, [], Severity::Critical)),
         ]);
 
         $result  = $engine->evaluate(new Context([]));
@@ -103,10 +103,10 @@ final class RuleEngineTest extends TestCase
 
     public function testGradedThresholdsPickTheFirstMatchingLevel(): void
     {
-        $levels = [[15.0, Severity::Elevee], [30.0, Severity::Moyenne]];
+        $levels = [[15.0, Severity::High], [30.0, Severity::Medium]];
 
-        $this->assertSame(Severity::Elevee, Check::graded(10.0, $levels)->severity);
-        $this->assertSame(Severity::Moyenne, Check::graded(20.0, $levels)->severity);
+        $this->assertSame(Severity::High, Check::graded(10.0, $levels)->severity);
+        $this->assertSame(Severity::Medium, Check::graded(20.0, $levels)->severity);
         $this->assertSame(Status::Pass, Check::graded(45.0, $levels)->status);
         $this->assertSame(Status::Unknown, Check::graded(null, $levels)->status);
     }

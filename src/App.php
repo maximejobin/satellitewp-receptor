@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor;
 
 use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
+use SatelliteWP\Xtractor\Crm\ClientsDb;
+use SatelliteWP\Xtractor\Crm\ClientsRepository;
 use SatelliteWP\Xtractor\Http\GoogleAuth;
+use SatelliteWP\Xtractor\Http\LoginLockout;
 use SatelliteWP\Xtractor\Http\PayloadValidator;
 use SatelliteWP\Xtractor\Http\Receptor;
+use SatelliteWP\Xtractor\Http\ReplayCache;
 use SatelliteWP\Xtractor\Http\SignatureVerifier;
 use SatelliteWP\Xtractor\Integration\BlogVaultClient;
 use SatelliteWP\Xtractor\Integration\WordfenceClient;
@@ -22,12 +26,14 @@ use SatelliteWP\Xtractor\Probe\TlsProbe;
 use SatelliteWP\Xtractor\Probe\WordfenceProbe;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordfenceIndex;
+use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Rules\Translator;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Xtractor\Storage\RoleCapabilities;
 use SatelliteWP\Xtractor\Storage\UserStore;
 use SatelliteWP\Xtractor\Support\ErrorLog;
 
@@ -64,6 +70,14 @@ final class App
         );
     }
 
+    /** Failed-Basic-Auth-attempt tracker for the admin UI (Router::authenticate()). */
+    public function loginLockout(): LoginLockout
+    {
+        return $this->services[LoginLockout::class] ??= new LoginLockout(
+            (string) $this->config->get('data_dir') . '/login-lockout.json'
+        );
+    }
+
     /** Where every HTTP 500 is written. Same logs/ the front controllers use. */
     public function errorLog(): ErrorLog
     {
@@ -75,7 +89,8 @@ final class App
         return $this->services[SignatureVerifier::class] ??= new SignatureVerifier(
             $this->keyStore(),
             (int) $this->config->get('replay_window_seconds', 300),
-            (bool) $this->config->get('allow_unsigned', false)
+            (bool) $this->config->get('allow_unsigned', false),
+            new ReplayCache((string) $this->config->get('data_dir') . '/replay-cache.json')
         );
     }
 
@@ -183,7 +198,16 @@ final class App
     public function userStore(): UserStore
     {
         return $this->services[UserStore::class] ??= new UserStore(
-            (string) $this->config->get('auth.users_file', (string) $this->config->get('data_dir') . '/users.json')
+            (string) $this->config->get('auth.users_file', (string) $this->config->get('data_dir') . '/users.json'),
+            $this->roleCapabilities()->roles()
+        );
+    }
+
+    /** Role -> capability lookup (config/roles.php). Not yet used to gate anything. */
+    public function roleCapabilities(): RoleCapabilities
+    {
+        return $this->services[RoleCapabilities::class] ??= RoleCapabilities::load(
+            (string) $this->config->get('roles.catalog', dirname(__DIR__) . '/config/roles.php')
         );
     }
 
@@ -205,6 +229,13 @@ final class App
     {
         return $this->services[EndOfLife::class] ??= new EndOfLife(
             (string) $this->config->get('data_dir') . '/reference'
+        );
+    }
+
+    public function wordPressVersions(): WordPressVersions
+    {
+        return $this->services[WordPressVersions::class] ??= new WordPressVersions(
+            (string) $this->config->get('data_dir') . '/reference/wordpress-versions.json'
         );
     }
 
@@ -240,6 +271,27 @@ final class App
         return ['eol' => $this->endOfLife()];
     }
 
+    public function crmDb(): ClientsDb
+    {
+        return $this->services[ClientsDb::class] ??= ClientsDb::fromConfig(
+            (array) $this->config->get('crm_db', [])
+        );
+    }
+
+    /**
+     * Null when crm_db is not configured yet — every CRM page (clients,
+     * websites, products, items: see Router::withCrmRepository()) must check
+     * this.
+     */
+    public function crmRepository(): ?ClientsRepository
+    {
+        if (!$this->crmDb()->isConfigured()) {
+            return null;
+        }
+
+        return $this->services[ClientsRepository::class] ??= new ClientsRepository($this->crmDb()->pdo());
+    }
+
     public function pipeline(): Pipeline
     {
         return $this->services[Pipeline::class] ??= new Pipeline(
@@ -248,7 +300,8 @@ final class App
             $this->index(),
             $this->ruleEngine(),
             $this->referenceData(),
-            $this->softwareCatalog()
+            $this->softwareCatalog(),
+            $this->keyStore()
         );
     }
 }

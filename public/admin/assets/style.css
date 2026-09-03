@@ -1,7 +1,8 @@
 /* ============================================================
    SatelliteWP Xtractor — application styles
-   Cool-slate neutrals + one warm accent (#f26f2b). Light default,
-   full dark theme. Semantic pastilles stay separate from the accent.
+   Cool-slate neutrals + one warm accent (#f26f2b). Light only —
+   dark mode was removed (2026-08-29). Semantic pastilles stay
+   separate from the accent.
    ============================================================ */
 
 :root {
@@ -16,43 +17,18 @@
     --accent:     #f26f2b;
     --accent-2:   #d95c1c;
     --accent-weak:#fdece1;
+    --secondary:  #475569; /* dark slate — secondary/neutral button, e.g. the Services filter bar's "Filter" */
 
     --ok:    #1f9d57;  --ok-bg:   #e6f5ec;
     --warn:  #c8820f;  --warn-bg: #fbf0d8;
     --error: #d6453f;  --error-bg:#fbe5e4;
+    --error-2: #7a1f1c; /* darker red — CVSS "critical", distinct from "high" (--error) */
     --info:  #2f7fe0;  --info-bg: #e6f0fc;
 
     --shadow: 0 1px 2px rgba(20,35,50,.05), 0 6px 20px -12px rgba(20,35,50,.18);
     --radius: 12px;
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg:#0e141a; --surface:#161f27; --surface-2:#1b262f; --border:#27333d;
-        --text:#e6ecf1; --muted:#8fa0b0; --faint:#5f7180;
-        --accent:#f8894e; --accent-2:#fba774; --accent-weak:#2a1a10;
-        --ok:#37b56d; --ok-bg:#10281b; --warn:#e0a53a; --warn-bg:#2e2410;
-        --error:#f0655f; --error-bg:#301715; --info:#5aa0f2; --info-bg:#10233c;
-        --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -14px rgba(0,0,0,.6);
-    }
-}
-:root[data-theme="light"] {
-    --bg:#eef1f4; --surface:#fff; --surface-2:#f5f7f9; --border:#dde3e9;
-    --text:#182430; --muted:#64748b; --faint:#93a2b3;
-    --accent:#f26f2b; --accent-2:#d95c1c; --accent-weak:#fdece1;
-    --ok:#1f9d57; --ok-bg:#e6f5ec; --warn:#c8820f; --warn-bg:#fbf0d8;
-    --error:#d6453f; --error-bg:#fbe5e4; --info:#2f7fe0; --info-bg:#e6f0fc;
-    --shadow:0 1px 2px rgba(20,35,50,.05),0 6px 20px -12px rgba(20,35,50,.18);
-}
-:root[data-theme="dark"] {
-    --bg:#0e141a; --surface:#161f27; --surface-2:#1b262f; --border:#27333d;
-    --text:#e6ecf1; --muted:#8fa0b0; --faint:#5f7180;
-    --accent:#f8894e; --accent-2:#fba774; --accent-weak:#2a1a10;
-    --ok:#37b56d; --ok-bg:#10281b; --warn:#e0a53a; --warn-bg:#2e2410;
-    --error:#f0655f; --error-bg:#301715; --info:#5aa0f2; --info-bg:#10233c;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -14px rgba(0,0,0,.6);
 }
 
 * { box-sizing: border-box; }
@@ -86,28 +62,14 @@ body { margin: 0; }
 .nav-item.active { background: var(--accent-weak); color: var(--accent-2); font-weight: 600; }
 .side-foot { margin-top: auto; padding: .6rem; color: var(--faint); font-size: .72rem; }
 
-/* ---------- main / topbar ---------- */
+/* ---------- main ---------- */
 .main { min-width: 0; display: flex; flex-direction: column; }
-.topbar {
-    display: flex; align-items: center; gap: 1rem;
-    padding: .7rem 1.5rem; border-bottom: 1px solid var(--border);
-    background: var(--surface); position: sticky; top: 0; z-index: 5;
-}
-.topbar .spacer { flex: 1; }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.seg a { font-size: .8rem; text-decoration: none; color: var(--muted); padding: .3rem .7rem; }
-.seg a.on { background: var(--accent); color: #fff; }
-.theme-btn { font: inherit; font-size: 1rem; line-height: 1; border: 1px solid var(--border); background: var(--surface); color: var(--muted); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; }
-.theme-btn:hover { color: var(--text); border-color: var(--accent); }
 
 main.content, .content { max-width: 1180px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.4rem; }
 
 h1 { font-size: 1.5rem; margin: 0.3rem 0; letter-spacing: -.01em; text-wrap: balance; }
 h2 { font-size: 1.12rem; margin: 1.4rem 0 .2rem; }
 a { color: var(--accent-2); }
-.breadcrumb { color: var(--muted); font-size: .88rem; }
-.breadcrumb a { text-decoration: none; color: var(--muted); }
-.breadcrumb a:hover { color: var(--text); }
 .mono { font-family: var(--mono); font-size: .86em; }
 .muted { color: var(--muted); font-size: .9em; }
 .empty { color: var(--muted); font-style: italic; }
@@ -125,7 +87,40 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 .badge-ok { color: var(--ok); background: var(--ok-bg); }
 .badge-warn { color: var(--warn); background: var(--warn-bg); }
 .badge-error { color: var(--error); background: var(--error-bg); }
+.badge-critical { color: #fff; background: var(--error-2, #7a1f1c); }
 .badge-muted { color: var(--muted); background: var(--surface-2); }
+
+/* A colored dot + colored text — a lighter-weight status label than .badge's
+   solid pill above, modeled after a reference design the user shared for the
+   "Services" table on /clients/{id} (2026-09-02). Not a replacement for
+   .badge, which every other status column in the app still uses — kept as
+   its own component so adopting it in one place doesn't restyle badge()
+   everywhere else. */
+.status-dot { display: inline-flex; align-items: center; gap: .4rem; font-weight: 600; font-size: .85rem; }
+.status-dot::before { content: ''; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; flex: none; }
+.status-dot-ok    { color: var(--ok); }
+.status-dot-warn  { color: var(--warn); }
+.status-dot-error { color: var(--error); }
+.status-dot-muted { color: var(--muted); }
+
+/* ---------- notice (page-level alert banner) ----------
+   Distinct from .badge above: a badge is a small inline pill for a value,
+   a notice is a block-level banner meant to be seen before anything else on
+   the page — info (blue), warning (orange), critical (red). */
+.notice {
+    display: flex; align-items: flex-start; gap: .65rem;
+    padding: .75rem 1rem; border-radius: 8px; border: 1px solid;
+    font-size: .92rem; line-height: 1.45;
+}
+.notice .notice-icon { flex: none; font-size: 1.05rem; line-height: 1.45; }
+.notice a { font-weight: 600; }
+.notice-info     { background: var(--info-bg);  border-color: var(--info);  color: var(--text); }
+.notice-warning  { background: var(--warn-bg);  border-color: var(--warn);  color: var(--text); }
+.notice-critical { background: var(--error-bg); border-color: var(--error); color: var(--text); }
+
+/* A very pale wash over an inactive plugin/theme row — a glance should tell
+   it apart from an active one without reading the Status column. */
+tr.row-inactive { background: var(--error-bg); }
 
 /* ---------- pastilles ---------- */
 .pastille { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; font-size: .82rem; }
@@ -138,6 +133,8 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 
 /* ---------- cards / kv ---------- */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.1rem; align-items: start; }
+.cards-full { grid-template-columns: 1fr; }
+.card-full { grid-column: 1 / -1; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card > h3 { margin: 0; padding: .8rem 1.1rem; font-size: .95rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: .5rem; }
 .card .raw-link { margin-left: auto; font-weight: 400; font-size: .8rem; }
@@ -217,14 +214,50 @@ table.kv td { text-align: right; word-break: break-word; font-variant-numeric: t
 .lic-form select.lic-free { border-color: var(--ok); color: var(--ok); }
 .lic-form select.lic-premium, .lic-form select.lic-mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
 .lic-form select.lic-unknown { border-color: var(--border); color: var(--muted); }
+.lic-form select.lic-custom { border-color: var(--info); color: var(--info); }
+.lic-form select.lic-saved { box-shadow: 0 0 0 2px var(--ok-bg), 0 0 0 3px var(--ok); }
+.lic-form select:disabled { opacity: .6; cursor: wait; }
 tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
 /* ---------- misc ---------- */
 .search { margin: .3rem 0; display: flex; gap: .5rem; }
-.search input { flex: 1; max-width: 420px; padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--surface); color: var(--text); }
-.search button { padding: .45rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+.search input[type="search"], .search input[type="text"] { flex: 1; max-width: 420px; padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--surface); color: var(--text); }
+.search select:not(.select2-hidden-accessible) { padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; background: var(--surface); color: var(--text); cursor: pointer; }
+.search button, .search .btn { padding: .45rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
 .filters a { text-decoration: none; } .filters a.active { font-weight: 700; }
-.probe-chip { margin-right: .5rem; white-space: nowrap; }
+
+/* ---------- pill filter bar ----------
+   Modeled after a reference design the user shared (2026-09-02) for the
+   "Services" table filter bar on /clients/{id} — icon-in-field search,
+   chevron selects — but squared off (8px, this app's usual input radius)
+   rather than the reference's full pill shape, per follow-up feedback
+   ("moins rond... plus carré"). A visual variant of the plain .search rules
+   above, not a replacement — those still style every other page's filter
+   form. */
+/* Wraps a .pill-bar together with the table it filters, as one flex child of
+   .content, so the two sit close together (2026-09-02, user: "plus
+   'collés'") instead of getting .content's full 1.4rem inter-block gap. */
+.pill-bar-group { display: flex; flex-direction: column; gap: .6rem; }
+.pill-bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+/* One explicit height shared by the search field, the select and the
+   button (2026-09-02: padding alone didn't keep them pixel-identical — a
+   <button>/<input>/<select> don't resolve padding+line-height into the same
+   box height the same way across browsers — so this pins all three
+   directly instead of trying to reconcile their padding by hand). */
+.pill-bar input[type="search"], .pill-bar select, .pill-bar .btn { height: 2.15rem; box-sizing: border-box; }
+.pill-bar input[type="search"] {
+    padding: 0 .9rem 0 2.15rem; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat .75rem center;
+    font-size: .85rem; color: var(--text); min-width: 200px;
+}
+.pill-bar select {
+    padding: 0 1.9rem 0 1rem; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right .85rem center;
+    font-size: .85rem; color: var(--text); cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.pill-bar .btn { margin-top: 0; padding: 0 .9rem; border-radius: 8px; border: 1px solid transparent; font-size: .85rem; }
+.pill-bar .pill-reset { color: var(--muted); text-decoration: none; font-size: .88rem; }
+.pill-bar .pill-reset:hover { color: var(--text); text-decoration: underline; }
 .error-line { color: var(--error); background: var(--error-bg); border-radius: 6px; padding: .35rem .6rem; font-size: .86em; }
 details { margin-top: .6rem; } details summary { cursor: pointer; color: var(--accent-2); }
 pre { background: #10161d; color: #dce7f5; border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; font-size: .82rem; max-height: 460px; }
@@ -258,3 +291,88 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 }
 .btn:hover { filter: brightness(1.07); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Secondary/neutral button — dark slate instead of the accent orange, for an
+   action that isn't the page's primary call to action (e.g. the Services
+   filter bar's "Filter", 2026-09-02). */
+.btn-secondary { background: var(--secondary); }
+.btn-secondary:focus-visible { outline-color: var(--secondary); }
+
+/* Select2 (vendored, /assets/vendor/select2/) — retheme its default blue to
+   this app's accent + neutrals rather than leave the two palettes clashing. */
+.select2-container--default .select2-selection--single {
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    height: auto;
+    padding: .32rem .4rem;
+    background: var(--surface);
+    font-family: var(--sans);
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text);
+    line-height: 1.3;
+    padding-left: .2rem;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow { height: 100%; }
+.select2-container--default.select2-container--open .select2-selection--single,
+.select2-container--default .select2-selection--single:focus {
+    border-color: var(--accent);
+}
+.select2-dropdown { border-color: var(--border); border-radius: 7px; overflow: hidden; }
+.select2-search--dropdown .select2-search__field {
+    border: 1px solid var(--border); border-radius: 6px; font: inherit;
+}
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background: var(--accent); color: #fff;
+}
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background: var(--accent-weak); color: var(--text);
+}
+
+/* Inline "copy to clipboard" / "edit" buttons next to a value (helpers.php's
+   copy_button(), subscription_website_form()'s .wf-edit-btn, users.php's
+   .row-edit-btn — same look, deliberately separate classes from the JS
+   toggle they each wire into, so a shared style rule can't accidentally
+   make one button match the other's click handler too). */
+.copy-btn, .wf-edit-btn, .row-edit-btn {
+    border: 0; background: none; color: var(--faint); cursor: pointer;
+    font-size: .95em; padding: 0 .2rem; line-height: 1; vertical-align: middle;
+}
+.copy-btn:hover, .wf-edit-btn:hover, .row-edit-btn:hover { color: var(--accent); }
+.copy-btn.copied { color: var(--ok); }
+/* subscription_website_form()'s edit pencil: bigger and mirrored (2026-09-02,
+   user: "le crayon pour éditer devrait être de l'autre sens, et plus gros"). */
+.wf-edit-btn { font-size: 1.35em; display: inline-block; transform: scaleX(-1); }
+
+/* Two-column key/value layout for a compact info card (2026-09-02, client
+   detail — "prendre moins d'espace"). A real CSS Grid of two explicit
+   <table class="kv"> elements, one per column — NOT CSS multi-column
+   (column-count) over a single table: a browser treats <table> as an
+   unfragmentable box for column-breaking purposes, so column-count silently
+   dumped the whole table into column 2 with the card title stranded alone in
+   column 1 (reported live, 2026-09-02, on /clients/262). Grid also matches
+   what was actually asked for — literal "column 1 has these fields, column 2
+   has those" — rather than leaving it to the browser's auto-balancing, which
+   is what produced the wrong split to begin with. Falls back to one column
+   narrow. */
+.kv-cols-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; }
+@media (max-width: 700px) { .kv-cols-2 { grid-template-columns: 1fr; } }
+/* Values left-aligned and the key column shrunk to fit its own text (2026-09-02,
+   user, on the Client card specifically — the plain single-column .kv table
+   used everywhere else, e.g. the extraction report and /site/{id}, keeps its
+   right-aligned values and 44%-wide key column untouched). `width: 1%` with
+   `white-space: nowrap` is the standard auto-table-layout trick: the browser
+   sizes that column to its own content instead of the fixed 44%, and the
+   value column absorbs whatever space is left. */
+.kv-cols-2 table.kv th { width: 1%; white-space: nowrap; }
+.kv-cols-2 table.kv td { text-align: left; }
+
+/* Every Datatable's explicit-search replacement (helpers.php's dt_search_box())
+   — same visual language as .search above, since the native box it replaces
+   isn't rendered any more (`dom` option). */
+.xt-dt-search { padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--surface); color: var(--text); min-width: 16rem; }
+.xt-dt-search-btn { margin: 0; }
+
+/* Bottom bar (length + info + pagination — `dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>'`
+   moves "entries per page" here unconditionally, 2026-09-02). */
+.xt-dt-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; margin-top: .6rem; font-size: .9rem; }
+.xt-dt-bottom .dataTables_paginate { margin: 0; }

@@ -6,6 +6,7 @@ namespace SatelliteWP\Xtractor\Probe;
 
 use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
+use SatelliteWP\Xtractor\Support\HostGuard;
 
 /**
  * TLS certificate and protocol support: issuer, SAN coverage, validity,
@@ -39,6 +40,10 @@ final class TlsProbe extends AbstractProbe
         $host = $site->host;
         if ($host === '') {
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['No host in site context']];
+        }
+
+        if (!HostGuard::isPubliclyRoutable($host)) {
+            return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['Host does not resolve to a public address — refusing to connect (SSRF guard)']];
         }
 
         // Full handshake with verification, capturing the certificate.

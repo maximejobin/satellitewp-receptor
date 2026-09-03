@@ -110,6 +110,7 @@ final class RdapProbe extends AbstractProbe
     {
         $createdAt = null;
         $expiresAt = null;
+        $updatedAt = null;
         foreach ((array) ($rdap['events'] ?? []) as $event) {
             $action = $event['eventAction'] ?? '';
             $date   = $event['eventDate'] ?? null;
@@ -117,6 +118,11 @@ final class RdapProbe extends AbstractProbe
                 $createdAt = $date;
             } elseif ($action === 'expiration') {
                 $expiresAt = $date;
+            } elseif ($action === 'last changed') {
+                // Domain-level "last changed" — distinct from "last update of
+                // RDAP database", which is about the registry's database, not
+                // this domain, and must not be mistaken for it.
+                $updatedAt = $date;
             }
         }
 
@@ -146,6 +152,7 @@ final class RdapProbe extends AbstractProbe
             'registrar'      => $registrar,
             'created_at'     => self::toIso($createdAt),
             'expires_at'     => self::toIso($expiresAt),
+            'updated_at'     => self::toIso($updatedAt),
             'days_to_expiry' => self::daysUntil($expiresAt),
             'statuses'       => array_values((array) ($rdap['status'] ?? [])),
             'nameservers'    => $nameservers,
@@ -205,6 +212,11 @@ final class RdapProbe extends AbstractProbe
             $expiresAt = $m[1];
         }
 
+        $updatedAt = null;
+        if (preg_match('/^\s*(?:Updated Date|Last Updated On|Last Modified):\s*(\S+)/mi', $raw, $m)) {
+            $updatedAt = $m[1];
+        }
+
         $statuses = [];
         if (preg_match_all('/^\s*Domain Status:\s*(\S+)/mi', $raw, $m)) {
             $statuses = array_values(array_unique($m[1]));
@@ -220,6 +232,7 @@ final class RdapProbe extends AbstractProbe
             'registrar'      => $registrar,
             'created_at'     => self::toIso($createdAt),
             'expires_at'     => self::toIso($expiresAt),
+            'updated_at'     => self::toIso($updatedAt),
             'days_to_expiry' => self::daysUntil($expiresAt),
             'statuses'       => $statuses,
             'nameservers'    => $nameservers,

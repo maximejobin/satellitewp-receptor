@@ -14,7 +14,7 @@ final class ContextTest extends TestCase
         return new Context(
             ['php' => ['version' => '8.3.11', 'memory_limit' => '256M'], 'is_ssl' => true, 'plugins' => [1, 2, 3]],
             [
-                'http' => ['status' => 'warn', 'data' => ['ttfb_ms' => 42, 'redirects' => ['forces_https' => false]]],
+                'http' => ['status' => 'warn', 'data' => ['status_code' => 42, 'redirects' => ['forces_https' => false]]],
                 'tls'  => ['status' => 'error', 'data' => []],
             ]
         );
@@ -25,7 +25,7 @@ final class ContextTest extends TestCase
         $c = $this->context();
 
         $this->assertSame('8.3.11', $c->string('payload.php.version'));
-        $this->assertSame(42.0, $c->number('probe.http.ttfb_ms'));
+        $this->assertSame(42.0, $c->number('probe.http.status_code'));
         $this->assertFalse($c->bool('probe.http.redirects.forces_https'));
         $this->assertSame(3, $c->count('payload.plugins'));
     }

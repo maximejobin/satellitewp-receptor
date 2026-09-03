@@ -212,7 +212,7 @@ final class RuleCatalogTest extends TestCase
         );
 
         // No probe data at all — external rules must not claim a failure.
-        foreach (['A1', 'A10', 'B1', 'C6', 'D1', 'W1'] as $id) {
+        foreach (['A1', 'A10', 'B1', 'C5', 'D1', 'W1'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} without probes");
         }
     }

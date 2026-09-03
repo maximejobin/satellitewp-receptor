@@ -33,7 +33,7 @@ enum Pastille: string
             // Evaluated Info-severity rules are informational — always blue.
             $severity === Severity::Info => self::Blue,
             $status === Status::Pass     => self::Green,
-            default                      => in_array($severity, [Severity::Critique, Severity::Elevee], true)
+            default                      => in_array($severity, [Severity::Critical, Severity::High], true)
                 ? self::Red   // fail, critical/high
                 : self::Orange, // fail, medium
         };

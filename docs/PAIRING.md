@@ -20,14 +20,21 @@ du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
 1. **Sur le site WordPress** — Réglages → SatelliteWP, relever l'« Identifiant de
    site ». C'est l'UUID que le plugin enverra dans `X-SWP-Site`.
 
-2. **Sur le serveur Xtractor** — créer la clé :
+2. **Sur le serveur Xtractor** — créer la clé, en CLI :
 
    ```bash
-   bin/xtractor keys:add <uuid> --label "nom du site"
+   bin/xtractor keys:add <uuid>
    ```
 
-   La clé (64 caractères hexadécimaux) n'est affichée **qu'une fois**. Elle est
-   stockée dans `data/keys.json`, en clair, en `0600`.
+   ou depuis l'interface web : sur la page **Sites** (`/`), déplier « Pair a
+   new site » et coller le même UUID (et, en option, l'origine). Les deux font
+   exactement la même chose sur le même `data/keys.json` — l'UI est pratique
+   pour un appairage ponctuel, la CLI pour un script. La clé nouvellement créée
+   s'affiche ensuite sur la page du site (`/site/<uuid>`), qui existe déjà à ce
+   stade même si aucune extraction n'est encore arrivée.
+
+   La clé (64 caractères hexadécimaux) n'est affichée **qu'une fois**, CLI comme
+   UI. Elle est stockée dans `data/keys.json`, en clair, en `0600`.
 
 3. **Retour sur le site**, coller la clé dans **Réglages → SatelliteWP → Appairage**.
    Elle est écrite dans `.satellitewp-maintenance.php`, à la racine WordPress, à côté
@@ -66,7 +73,7 @@ la clé à l'adresse annoncée ; ensuite, toute extraction venant d'une autre ad
 refusée avec un `409`. Pour lier explicitement dès la création :
 
 ```bash
-bin/xtractor keys:add <uuid> --label "nom du site" --origin https://example.com
+bin/xtractor keys:add <uuid> --origin https://example.com
 ```
 
 Les adresses sont comparées **sans le protocole, sans le `www.` de tête et sans la barre
@@ -91,6 +98,13 @@ bin/xtractor keys:list            # aperçu : 6 caractères + statut
 bin/xtractor keys:revoke <uuid>   # marque revoked, ne supprime pas l'entrée
 bin/xtractor keys:add <uuid>      # remplace l'entrée et remet revoked à false
 ```
+
+Même chose depuis la page du site (`/site/<uuid>`) : elle affiche le statut de
+la clé, un bouton « Revoke » et un formulaire « Rebind », et le même
+formulaire de création sert à rotationner une clé (recréer sur un `site_id`
+déjà présent la remplace et remet `revoked` à `false`). Il n'y a plus de
+tableau listant toutes les clés à part — la gestion se fait site par site, là
+où le reste de son historique vit déjà.
 
 Une clé révoquée se comporte exactement comme une clé absente : un push signé
 reçoit `401 No API key registered for this site`. Après une rotation, mettre à jour la

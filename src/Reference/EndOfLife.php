@@ -134,6 +134,15 @@ final class EndOfLife
         return implode('.', array_slice(explode('.', $version), 0, 2));
     }
 
+    /** When this product's cache was last written, or null if it never has been. */
+    public function refreshedAt(string $product): ?string
+    {
+        $file = $this->cacheFile($product);
+        $time = is_file($file) ? filemtime($file) : false;
+
+        return $time !== false ? gmdate('Y-m-d\TH:i:s\Z', $time) : null;
+    }
+
     private function cacheFile(string $product): string
     {
         return $this->cacheDir . '/' . preg_replace('/[^a-z0-9._-]/i', '', $product) . '.json';

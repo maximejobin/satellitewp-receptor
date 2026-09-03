@@ -29,6 +29,72 @@ final class RouterTest extends TestCase
         $this->assertSame('not_found', Router::matchRoute('/catalog/extra')['route']);
     }
 
+    public function testKeysHasNoGetPage(): void
+    {
+        // Key management lives on /site/{id} now; /keys is a POST-only
+        // mutation target handled ad-hoc in handlePost(), like /users,
+        // /catalog and /subscriptions — none of those have a GET route either.
+        $this->assertSame('not_found', Router::matchRoute('/keys')['route']);
+    }
+
+    public function testSubscriptionsHasNoGetPage(): void
+    {
+        // Changing a subscription's linked website lives on /clients/{id}
+        // and /websites/{id}; /subscriptions is a POST-only mutation target.
+        $this->assertSame('not_found', Router::matchRoute('/subscriptions')['route']);
+    }
+
+    public function testDataRoutes(): void
+    {
+        $this->assertSame('data_wp_versions', Router::matchRoute('/data/wp-versions')['route']);
+        $this->assertSame('data_php_versions', Router::matchRoute('/data/php-versions')['route']);
+        $this->assertSame('data_databases', Router::matchRoute('/data/databases')['route']);
+        $this->assertSame('data_vulnerabilities', Router::matchRoute('/data/vulnerabilities')['route']);
+        $this->assertSame('data_vulnerabilities_search', Router::matchRoute('/data/vulnerabilities/search')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/data/nope')['route']);
+    }
+
+    public function testCrmRoutesAreFlatSiblingsNotNestedUnderClients(): void
+    {
+        $this->assertSame('crm_clients', Router::matchRoute('/clients')['route']);
+        $this->assertSame('crm_websites', Router::matchRoute('/websites')['route']);
+        $this->assertSame('crm_products', Router::matchRoute('/products')['route']);
+        $this->assertSame('crm_items', Router::matchRoute('/items')['route']);
+        $this->assertSame('crm_items_search', Router::matchRoute('/items/search')['route']);
+
+        // The old nested shape must not resolve to anything.
+        $this->assertSame('not_found', Router::matchRoute('/clients/websites')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/clients/products')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/clients/items')['route']);
+
+        $client = Router::matchRoute('/clients/42');
+        $this->assertSame('crm_client', $client['route']);
+        $this->assertSame('42', $client['params']['id']);
+
+        $website = Router::matchRoute('/websites/7');
+        $this->assertSame('crm_website', $website['route']);
+        $this->assertSame('7', $website['params']['id']);
+    }
+
+    public function testCrmSelect2AjaxSearchRoutes(): void
+    {
+        $this->assertSame('crm_clients_search', Router::matchRoute('/clients/search')['route']);
+        $this->assertSame('crm_websites_search', Router::matchRoute('/websites/search')['route']);
+        $this->assertSame('crm_tags_search', Router::matchRoute('/websites/tags/search')['route']);
+
+        // 'search' is not numeric, so it never gets misread as a client/website id.
+        $this->assertNotSame('crm_client', Router::matchRoute('/clients/search')['route']);
+        $this->assertNotSame('crm_website', Router::matchRoute('/websites/search')['route']);
+    }
+
+    public function testCrmRoutesRejectNonNumericIds(): void
+    {
+        $this->assertSame('not_found', Router::matchRoute('/clients/not-a-number')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/websites/not-a-number')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/clients/42/extra')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/websites/7/extra')['route']);
+    }
+
     public function testSafeReturnRejectsOffsiteRedirects(): void
     {
         // Same-site relative paths pass through.

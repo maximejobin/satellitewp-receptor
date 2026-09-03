@@ -54,7 +54,7 @@
         "DISALLOW_FILE_EDIT": true,
         "DISALLOW_FILE_MODS": "N/A",
         "FORCE_SSL_ADMIN": true,
-        "FORCE_SSL_LOGIN": "N/A",
+        "FORCE_SSL_LOGIN": true,
         "WP_MEMORY_LIMIT": "256M",
         "WP_MAX_MEMORY_LIMIT": "512M",
         "WP_CONTENT_DIR": "/var/www/html/wp-content",
@@ -176,7 +176,7 @@
             "none": 0
         }
     },
-    "administrators": [{ "id": 1, "login": "maxadmin" }],
+    "administrators": [{ "id": 1, "login": "maxadmin", "email": "max@example.com" }],
     "super_admins": [],
     "posts_count": {
         "publish": "1200",

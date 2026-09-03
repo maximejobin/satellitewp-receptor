@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Tests\Storage;
 
+use PDO;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Tests\TestCase;
@@ -24,11 +25,13 @@ final class IndexTest extends TestCase
     /** @param array<string, mixed> $extra */
     private function seedExtraction(string $siteId, string $id, array $extra = [], string $status = 'pending'): void
     {
-        $this->index->upsertSite($siteId, ['site_url' => "https://{$siteId}.test", 'site_title' => 'T'], '2026-07-22T10:00:00Z');
+        $this->index->upsertSite($siteId, ['site_url' => "https://{$siteId}.test", 'site_title' => 'T']);
         $this->index->insertExtraction($siteId, $id, $extra['received_at'] ?? '2026-07-22T10:00:00Z', [
-            'schema_version' => '1.0',
-            'wp_version'     => $extra['wp'] ?? '6.8.1',
-            'php'            => ['version' => $extra['php'] ?? '8.3.11'],
+            'schema_version'   => '1.0',
+            'wp_version'       => $extra['wp'] ?? '6.8.1',
+            'php'              => ['version' => $extra['php'] ?? '8.3.11'],
+            'database_type'    => $extra['db_type'] ?? 'mysql',
+            'database_version' => $extra['db_version'] ?? '8.0.35',
         ], $status);
     }
 
@@ -40,6 +43,8 @@ final class IndexTest extends TestCase
 
         $this->assertSame('6.8.1', $row['wp_version']);
         $this->assertSame('8.3.11', $row['php_version']);
+        $this->assertSame('mysql', $row['database_type']);
+        $this->assertSame('8.0.35', $row['database_version']);
         $this->assertSame('pending', $row['status']);
         $this->assertNull($this->index->getExtraction(self::SITE_A, 'nope'));
     }
@@ -56,6 +61,21 @@ final class IndexTest extends TestCase
         // Last by received_at is the pending 2026-07-23 one.
         $this->assertSame('pending', $sites[self::SITE_A]['last_extraction_status']);
         $this->assertSame('20260723T100000Z', $sites[self::SITE_A]['last_extraction_id']);
+        $this->assertSame('2026-07-23T10:00:00Z', $sites[self::SITE_A]['last_extraction_received_at']);
+    }
+
+    public function testListSitesOrdersByMostRecentExtractionNullsLast(): void
+    {
+        $this->seedExtraction(self::SITE_A, '20260722T100000Z', ['received_at' => '2026-07-22T10:00:00Z']);
+        $this->seedExtraction(self::SITE_B, '20260725T100000Z', ['received_at' => '2026-07-25T10:00:00Z']);
+        // A paired site with no extraction yet — upsertSite alone, nothing inserted into extractions.
+        $this->index->upsertSite('cccccccc-dddd-4eee-8fff-000000000000', ['site_url' => 'https://c.test']);
+
+        $sites = $this->index->listSites();
+
+        $this->assertSame(self::SITE_B, $sites[0]['site_id'], 'most recently received first');
+        $this->assertSame(self::SITE_A, $sites[1]['site_id']);
+        $this->assertNull($sites[2]['last_extraction_received_at'], 'no extraction yet -> sorts last');
     }
 
     public function testListSitesSearchFilters(): void
@@ -137,6 +157,47 @@ final class IndexTest extends TestCase
 
         $this->assertSame(['20260722T100000Z'], array_column($pending, 'id'));
         $this->assertSame(['20260722T110000Z'], array_column($queued, 'id'));
+    }
+
+
+    /**
+     * An index.sqlite from before 2026-09-01 still has the old NOT NULL
+     * first_seen/last_seen columns. Opening it must drop them in place (same
+     * upgrade-on-open approach as the earlier database_type/database_version
+     * ADD COLUMN) rather than require a manual index:rebuild, and a row
+     * written under the old schema must survive with its real columns intact.
+     */
+    public function testOpeningAPreExistingDatabaseDropsTheOldSeenColumns(): void
+    {
+        $file = $this->tmpDir . '/legacy-index.sqlite';
+        $pdo  = new PDO('sqlite:' . $file);
+        $pdo->exec(<<<'SQL'
+            CREATE TABLE sites (
+                site_id    TEXT PRIMARY KEY,
+                site_url   TEXT,
+                home_url   TEXT,
+                name       TEXT,
+                first_seen TEXT NOT NULL,
+                last_seen  TEXT NOT NULL
+            )
+            SQL);
+        $pdo->prepare('INSERT INTO sites (site_id, site_url, first_seen, last_seen) VALUES (?, ?, ?, ?)')
+            ->execute([self::SITE_A, 'https://legacy.test', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z']);
+        unset($pdo); // release the connection before Index opens its own
+
+        $index   = new Index($file);
+        $columns = array_column($index->pdo()->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
+
+        $this->assertNotContains('first_seen', $columns);
+        $this->assertNotContains('last_seen', $columns);
+
+        $sites = $index->listSites();
+        $this->assertCount(1, $sites);
+        $this->assertSame('https://legacy.test', $sites[0]['site_url'], 'the pre-existing row survived the migration');
+
+        // Still fully usable afterward.
+        $index->upsertSite(self::SITE_B, ['site_url' => 'https://new.test']);
+        $this->assertCount(2, $index->listSites());
     }
 
     public function testRebuildFromDataStore(): void

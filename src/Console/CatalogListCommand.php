@@ -42,7 +42,6 @@ final class CatalogListCommand extends Command
                     : $e['license'],
                 $e['source'],
                 SoftwareCatalog::needsLicense($e) ? '<comment>licence?</comment>' : '',
-                $e['seen_count'],
             ];
         }
 
@@ -53,7 +52,7 @@ final class CatalogListCommand extends Command
         }
 
         (new Table($output))
-            ->setHeaders(['type', 'slug', 'name', 'license', 'source', '', 'seen'])
+            ->setHeaders(['type', 'slug', 'name', 'license', 'source', ''])
             ->setRows($rows)
             ->render();
 
