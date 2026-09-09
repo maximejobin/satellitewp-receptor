@@ -159,6 +159,32 @@ final class IndexTest extends TestCase
         $this->assertSame(['20260722T110000Z'], array_column($queued, 'id'));
     }
 
+    /** The status page's (2026-09-03) extraction counts: pending+queued, running, done in the last 24h, error. */
+    public function testStatusCountsBucketsByStatus(): void
+    {
+        $this->seedExtraction(self::SITE_A, 'e1'); // pending
+        $this->seedExtraction(self::SITE_A, 'e2');
+        $this->index->setExtractionStatus(self::SITE_A, 'e2', Index::STATUS_QUEUED);
+        $this->seedExtraction(self::SITE_A, 'e3');
+        $this->index->setExtractionStatus(self::SITE_A, 'e3', Index::STATUS_RUNNING);
+        $this->seedExtraction(self::SITE_A, 'e4');
+        $this->index->setExtractionStatus(self::SITE_A, 'e4', Index::STATUS_ERROR);
+
+        // Done just now — inside the 24h window.
+        $this->seedExtraction(self::SITE_A, 'e5');
+        $this->index->setExtractionStatus(self::SITE_A, 'e5', Index::STATUS_DONE);
+
+        // Done, but 2 days ago — outside the 24h window, must not be counted.
+        $this->seedExtraction(self::SITE_A, 'e6');
+        $this->index->setExtractionStatus(self::SITE_A, 'e6', Index::STATUS_DONE);
+        $old = gmdate('Y-m-d\TH:i:s\Z', time() - 2 * 86400);
+        $this->index->pdo()->prepare('UPDATE extractions SET processed_at = :t WHERE id = :id')
+            ->execute(['t' => $old, 'id' => 'e6']);
+
+        $counts = $this->index->statusCounts();
+
+        $this->assertSame(['pending' => 2, 'running' => 1, 'done_24h' => 1, 'error' => 1], $counts);
+    }
 
     /**
      * An index.sqlite from before 2026-09-01 still has the old NOT NULL

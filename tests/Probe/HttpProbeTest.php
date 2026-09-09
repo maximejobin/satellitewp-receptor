@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Tests\Probe;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SatelliteWP\Xtractor\Probe\HttpProbe;
 
@@ -49,7 +50,36 @@ final class HttpProbeTest extends TestCase
         $this->assertFalse($data['gzip']);
         $this->assertNull($data['cdn']);
         $this->assertNull($data['cookies']);
+        $this->assertNull($data['alt_svc']);
         $this->assertNull($data['security_headers']['content-security-policy']);
+    }
+
+    public function testParseMainResponseCapturesAltSvc(): void
+    {
+        $data = HttpProbe::parseMainResponse(200, ['alt-svc' => 'h3=":443"; ma=2592000'], []);
+
+        $this->assertSame('h3=":443"; ma=2592000', $data['alt_svc']);
+    }
+
+    #[DataProvider('altSvcProvider')]
+    public function testAltSvcAdvertisesHttp3(?string $header, bool $expected): void
+    {
+        $this->assertSame($expected, HttpProbe::altSvcAdvertisesHttp3($header));
+    }
+
+    public static function altSvcProvider(): array
+    {
+        return [
+            'absent'                     => [null, false],
+            'empty'                      => ['', false],
+            'standard h3'                => ['h3=":443"; ma=2592000', true],
+            'h3 not first entry'         => ['h2=":443", h3=":443"; ma=2592000', true],
+            'older draft id h3-29'       => ['h3-29=":443"; ma=2592000', true],
+            'h2 only, no h3'             => ['h2=":443"; ma=2592000', false],
+            'unrelated protocol id'      => ['clear=":80"; ma=2592000', false],
+            // "h3" must be its own token, not a substring of something else.
+            'lookalike token must not match' => ['h33=":443"', false],
+        ];
     }
 
     public function testExtractFirstAssetPrefersSameOriginStylesheet(): void

@@ -55,9 +55,12 @@ final class Router
 
         match ($match['route']) {
             'sites'                    => $this->sitesPage(),
+            'status'                   => $this->statusPage(),
             'catalog'                  => $this->catalogPage(),
             'catalog_search'           => $this->catalogSearch(),
             'users'                    => $this->usersPage(),
+            'profile'                  => $this->profilePage(),
+            'styleguide'               => $this->styleguidePage(),
             'site'                     => $this->sitePage($params['site_id']),
             'extraction'               => $this->extractionPage($params['site_id'], $params['extraction_id']),
             'raw'                      => $this->rawFile($params['site_id'], $params['extraction_id'], $params['file']),
@@ -99,6 +102,9 @@ final class Router
         return match (true) {
             $segments === []
                 => ['route' => 'sites', 'params' => []],
+
+            $segments === ['status']
+                => ['route' => 'status', 'params' => []],
 
             $segments === ['catalog']
                 => ['route' => 'catalog', 'params' => []],
@@ -151,6 +157,12 @@ final class Router
             $segments === ['users']
                 => ['route' => 'users', 'params' => []],
 
+            $segments === ['profile']
+                => ['route' => 'profile', 'params' => []],
+
+            $segments === ['styleguide']
+                => ['route' => 'styleguide', 'params' => []],
+
             $segments === ['data', 'wp-versions']
                 => ['route' => 'data_wp_versions', 'params' => []],
 
@@ -185,6 +197,106 @@ final class Router
         };
     }
 
+    /**
+     * System status/health dashboard (2026-09-03, user: "je veux une page
+     * Home... une page de statuts"). Route is /status for now — the user
+     * asked for this to become the app's real landing page eventually but
+     * hadn't settled on a name yet ("nom à redéfinir"); swapping what '/'
+     * points to is a bigger, separate change (every internal link/redirect
+     * that assumes '/' is the sites list would need touching), left alone
+     * until that's confirmed.
+     */
+    /**
+     * One entry for the status page's "External sync" list — a source name,
+     * when it last synced, the threshold it's judged against, and whether
+     * it's currently stale. Shared by every source type (a CRM table's
+     * MAX(date_sync), or one of the app's own reference caches) so they can
+     * all land in the same list and the same total/up-to-date/error counts.
+     *
+     * @return array{synced_at: string|null, threshold_seconds: int, stale: bool}
+     */
+    private function syncEntry(?string $syncedAt, int $thresholdSeconds): array
+    {
+        $ageSeconds = $syncedAt !== null ? time() - (int) strtotime($syncedAt) : null;
+
+        return [
+            'synced_at'         => $syncedAt,
+            'threshold_seconds' => $thresholdSeconds,
+            'stale'             => $syncedAt === null || $ageSeconds > $thresholdSeconds,
+        ];
+    }
+
+    private function statusPage(): void
+    {
+        $extractionCounts = $this->app->index()->statusCounts();
+
+        // The app's own reference caches — always checked, regardless of
+        // whether the external CRM database is configured (2026-09-03,
+        // user: "ajoute les données de 'data' qu'on charge dans ta liste" —
+        // the same sources /data/wp-versions, /data/php-versions,
+        // /data/databases and /data/vulnerabilities already show a
+        // "Last refreshed" badge for).
+        $dataFreshness = (int) $this->app->config->get('data_sync_freshness.endoflife_seconds', 2 * 3600);
+        $eol           = $this->app->endOfLife();
+        $syncSources   = [
+            'endoflife: wordpress' => $this->syncEntry($eol->refreshedAt('wordpress'), $dataFreshness),
+            'endoflife: php'       => $this->syncEntry($eol->refreshedAt('php'), $dataFreshness),
+            'endoflife: mysql'     => $this->syncEntry($eol->refreshedAt('mysql'), $dataFreshness),
+            'endoflife: mariadb'   => $this->syncEntry($eol->refreshedAt('mariadb'), $dataFreshness),
+            'wordpress.org versions' => $this->syncEntry(
+                $this->app->wordPressVersions()->refreshedAt(),
+                (int) $this->app->config->get('data_sync_freshness.wordpress_versions_seconds', 2 * 3600)
+            ),
+            'wordfence intelligence' => $this->syncEntry(
+                $this->app->wordfenceIndex()->refreshedAt(),
+                (int) $this->app->config->get('data_sync_freshness.wordfence_seconds', 36 * 3600)
+            ),
+        ];
+
+        $crmRepo = $this->app->crmRepository();
+        $crm     = null;
+        if ($crmRepo !== null) {
+            try {
+                $defaultFreshness = (int) $this->app->config->get('crm_sync_freshness.default_seconds', 86400);
+                $overrides        = (array) $this->app->config->get('crm_sync_freshness.overrides', []);
+
+                foreach ($crmRepo->lastSyncByTable() as $table => $syncedAt) {
+                    $threshold             = (int) ($overrides[$table] ?? $defaultFreshness);
+                    $syncSources[$table]   = $this->syncEntry($syncedAt, $threshold);
+                }
+
+                $crm = [
+                    'unpaidClients'              => $crmRepo->clientsWithUnpaidSubscriptions(),
+                    'emptyCompanyClients'        => $crmRepo->clientsWithEmptyCompany(),
+                    'activeEmptyCompanyClients'  => $crmRepo->clientsActiveWithEmptyCompany(),
+                    'activeNoHubspotClients'     => $crmRepo->clientsActiveWithoutHubspotId(),
+                    'activeNoTeamworkClients'    => $crmRepo->clientsActiveWithoutTeamworkId(),
+                    'orphanSubscriptions'        => $crmRepo->countOrphanSubscriptions(),
+                ];
+            } catch (\PDOException $e) {
+                $ref = $this->app->errorLog()->recordThrowable('crm_db', $e);
+                $crm = ['error' => $ref];
+            }
+        }
+
+        $staleCount = count(array_filter($syncSources, static fn (array $s): bool => $s['stale']));
+
+        $this->render('status', [
+            'title'            => 'Status',
+            'nav'              => 'status',
+            'tooltip'          => true,
+            'extractionCounts' => $extractionCounts,
+            'syncSources'      => $syncSources,
+            'syncTotals'       => [
+                'total'      => count($syncSources),
+                'upToDate'   => count($syncSources) - $staleCount,
+                'stale'      => $staleCount,
+            ],
+            'crmConfigured'    => $crmRepo !== null,
+            'crm'              => $crm,
+        ]);
+    }
+
     private function sitesPage(): void
     {
         $this->render('sites', [
@@ -198,6 +310,10 @@ final class Router
 
     private function catalogPage(): void
     {
+        if (!$this->requireCapability('catalog_view')) {
+            return;
+        }
+
         $this->render('catalog', [
             'title'            => 'Software catalogue',
             'nav'              => 'catalog',
@@ -214,6 +330,10 @@ final class Router
      */
     private function catalogSearch(): void
     {
+        if (!$this->requireCapability('catalog_view')) {
+            return;
+        }
+
         // Unlike dataVulnerabilitiesSearch()/crmItemsSearch() below, this
         // endpoint's rows carry real markup (license_select()'s <form>), not
         // plain scalars — helpers.php isn't loaded on this code path
@@ -276,6 +396,12 @@ final class Router
      */
     private function withCrmRepository(string $title, string $nav, callable $render): void
     {
+        // One check here covers all six CRM pages (list + detail for each of
+        // the four entities) that route through this helper.
+        if (!$this->requireCapability('crm_view')) {
+            return;
+        }
+
         $repo = $this->app->crmRepository();
         if ($repo === null) {
             $this->render('crm-unavailable', [
@@ -311,6 +437,7 @@ final class Router
                 'title'          => 'Clients',
                 'nav'            => 'crm-clients',
                 'dataTables'     => true,
+                'tooltip'        => true,
                 'clients'        => $repo->listClients(
                     $status !== 'all' ? $status : null,
                     $search !== '' ? $search : null,
@@ -342,6 +469,7 @@ final class Router
                 'title'         => ClientsRepository::clientLabel($client),
                 'nav'           => 'crm-clients',
                 'select2'       => true,
+                'tooltip'       => true,
                 'client'        => $client,
                 'subscriptions' => $repo->subscriptionsForClient($id),
                 'csrf'          => $this->csrfToken(),
@@ -427,6 +555,10 @@ final class Router
      */
     private function crmJsonSearch(callable $search): void
     {
+        if (!$this->requireCapability('crm_view')) {
+            return;
+        }
+
         header('Content-Type: application/json; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
 
@@ -511,6 +643,10 @@ final class Router
     /** JSON endpoint consumed by Datatables' server-side mode on /items. */
     private function crmItemsSearch(): void
     {
+        if (!$this->requireCapability('crm_view')) {
+            return;
+        }
+
         $repo = $this->app->crmRepository();
         if ($repo === null) {
             http_response_code(503);
@@ -578,6 +714,10 @@ final class Router
      */
     private function dataWpVersionsPage(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $eol      = $this->app->endOfLife();
         $versions = $this->app->wordPressVersions()->all();
 
@@ -609,6 +749,10 @@ final class Router
     /** Same source and shape as dataDatabasesPage(): the PHP release cycle instead of MySQL/MariaDB. */
     private function dataPhpVersionsPage(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $eol    = $this->app->endOfLife();
         $cycles = $eol->cycles('php');
         usort(
@@ -629,6 +773,10 @@ final class Router
     /** Same source as dataWpVersionsPage(): MySQL and MariaDB release cycles instead of WordPress. */
     private function dataDatabasesPage(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $eol    = $this->app->endOfLife();
         $cycles = [];
         foreach (['mysql', 'mariadb'] as $engine) {
@@ -664,6 +812,10 @@ final class Router
      */
     private function dataVulnerabilitiesPage(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $this->render('data-vulnerabilities', [
             'title'       => 'Vulnerabilities (Wordfence Intelligence)',
             'nav'         => 'data-vulnerabilities',
@@ -684,6 +836,10 @@ final class Router
      */
     private function dataVulnerabilitiesSearch(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $draw   = (int) ($_GET['draw'] ?? 0);
         $start  = max(0, (int) ($_GET['start'] ?? 0));
         $length = (int) ($_GET['length'] ?? 25);
@@ -751,6 +907,10 @@ final class Router
 
     private function extractionPage(string $siteId, string $extractionId): void
     {
+        if (!$this->requireCapability('extraction_view_technical')) {
+            return;
+        }
+
         $store   = $this->app->dataStore();
         $payload = $store->readExtractionPayload($siteId, $extractionId);
 
@@ -792,6 +952,10 @@ final class Router
 
     private function rawFile(string $siteId, string $extractionId, string $name): void
     {
+        if (!$this->requireCapability('extraction_view_technical')) {
+            return;
+        }
+
         $relative = self::resolveRawFile($name);
         if ($relative === null) {
             $this->notFound();
@@ -881,6 +1045,66 @@ final class Router
             'isAdmin' => $me !== null && $users->isAdmin($me),
             'csrf'    => $this->csrfToken(),
             'notice'  => (string) ($_GET['notice'] ?? ''),
+        ]);
+    }
+
+    /**
+     * Self-service "my account" page — a signed-in user editing their own
+     * data/runcloud_api_key/public_ssh_key (2026-09-03), never anyone else's
+     * (there is no email/id param — always the current session's own
+     * record). Identity, role and status are shown read-only here; those
+     * stay admin-only via /users. Not capability-gated: any signed-in user
+     * may edit their own profile, that is what "self-service" means — the
+     * only real gate is having an identity at all, which requires Google
+     * sign-in to be configured (there is no per-user account under Basic
+     * auth/the open dev fallback, so this 404s there, same as /auth/*).
+     */
+    private function profilePage(): void
+    {
+        $me = $this->currentUser();
+        if ($me === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $user = $this->app->userStore()->get($me);
+        if ($user === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $this->render('profile', [
+            'title'  => 'My profile',
+            'nav'    => 'profile',
+            'user'   => $user,
+            'csrf'   => $this->csrfToken(),
+            'notice' => (string) ($_GET['notice'] ?? ''),
+        ]);
+    }
+
+    /**
+     * Design-system reference (2026-09-03, user: "une page de test qui montre
+     * toutes les possibilités de visuel") — every reusable visual component
+     * rendered in isolation with its class name labelled, so a real page can
+     * be diffed against it instead of each new feature inventing its own
+     * inline style. Deliberately a real page in the app (not a static
+     * artifact off to the side): it goes through the same layout.php and
+     * loads the same /assets/style.css every other page does, so it can
+     * never drift out of sync with what actually ships — an exported/copied
+     * reference would start lying the moment style.css next changes. No data,
+     * no capability gate beyond being signed in (same tier as the sites list).
+     */
+    private function styleguidePage(): void
+    {
+        $this->render('styleguide', [
+            'title'      => 'Style guide',
+            'nav'        => 'styleguide',
+            'dataTables' => true,
+            'select2'    => true,
+            'tooltip'    => true,
+            'csrf'       => $this->csrfToken(),
         ]);
     }
 
@@ -1055,9 +1279,10 @@ final class Router
     {
         http_response_code($message === '' ? 401 : 403);
         $this->render('login', [
-            'title'   => 'Connexion',
-            'nav'     => '',
-            'message' => $message,
+            'title'    => 'Connexion',
+            'nav'      => '',
+            'bare'     => true,
+            'message'  => $message,
             'firstRun' => $this->app->userStore()->isEmpty(),
         ]);
     }
@@ -1102,6 +1327,41 @@ final class Router
             'name'       => (string) ($match['title'] ?? $match['url'] ?? $host),
             'id'         => (string) ($match['id'] ?? ''),
         ];
+    }
+
+    /**
+     * Gate one action/page behind a named capability (config/roles.php) —
+     * writes a 403 and returns false when it isn't held, so a call site can
+     * just do `if (!$this->requireCapability('catalog_edit')) { return; }`.
+     *
+     * With Google sign-in configured, authenticate() already guarantees
+     * currentUser() is non-null by the time this runs, so this checks that
+     * identity's role. Without Google configured (Basic auth / the open dev
+     * fallback) there is no per-user role to check anything against — this
+     * permits, same as every capability-gated action's behaviour before
+     * capabilities existed. /users mutations are the one exception: Router
+     * checks a real identity there directly, before capability, and stays
+     * blocked (not promoted to full access) under Basic auth/open — see
+     * config/roles.php's docblock.
+     */
+    private function requireCapability(string $capability): bool
+    {
+        if (!$this->app->googleAuth()->isConfigured()) {
+            return true;
+        }
+
+        $me   = $this->currentUser();
+        $role = $me !== null ? $this->app->userStore()->roleOf($me) : null;
+
+        if ($role === null || !$this->app->roleCapabilities()->can($role, $capability)) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'You do not have permission to do this.';
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1213,6 +1473,10 @@ final class Router
             && $segments[2] === 'extraction' && self::isExtractionId($segments[3])
             && $segments[4] === 'run'
         ) {
+            if (!$this->requireCapability('extraction_run')) {
+                return;
+            }
+
             $this->app->index()->setExtractionStatus($segments[1], $segments[3], Index::STATUS_QUEUED);
             $this->redirect(self::safeReturn(
                 $_POST['return'] ?? "/site/{$segments[1]}/extraction/{$segments[3]}"
@@ -1222,19 +1486,39 @@ final class Router
         }
 
         if ($segments === ['users']) {
-            $users = $this->app->userStore();
-            $me    = $this->currentUser();
+            $users  = $this->app->userStore();
+            $me     = $this->currentUser();
+            $action = (string) ($_POST['action'] ?? '');
 
-            // Only the admin may change the list, and only when sign-in is on:
-            // with Basic auth there is no identity to check against.
-            if ($me === null || !$users->isAdmin($me)) {
+            // A real Google-signed-in identity is required outright, before
+            // any capability check — unchanged from before capabilities
+            // existed. Under Basic auth/the open dev fallback there is no
+            // per-user roster to check a capability against, and this list
+            // is sensitive enough that it stays blocked there rather than
+            // being promoted to full access (see config/roles.php).
+            if ($me === null) {
                 http_response_code(403);
-                echo 'Only the administrator can manage users.';
+                echo 'Only a signed-in administrator can manage users.';
 
                 return;
             }
 
-            $notice = match ((string) ($_POST['action'] ?? '')) {
+            $capability = match ($action) {
+                'add'                  => 'user_add',
+                'edit'                 => 'user_edit',
+                'suspend', 'reactivate' => 'user_suspend',
+                'remove'               => 'user_remove',
+                default                => null,
+            };
+            $role = $users->roleOf($me);
+            if ($capability === null || $role === null || !$this->app->roleCapabilities()->can($role, $capability)) {
+                http_response_code(403);
+                echo 'You do not have permission to do this.';
+
+                return;
+            }
+
+            $notice = match ($action) {
                 'add'    => $users->add(
                     (string) ($_POST['email'] ?? ''),
                     (string) ($_POST['role'] ?? UserStore::DEFAULT_ROLE),
@@ -1254,10 +1538,49 @@ final class Router
                     ? 'reactivated' : 'reactivate-failed',
                 'remove' => $users->remove((string) ($_POST['email'] ?? ''))
                     ? 'removed' : 'remove-failed',
-                default  => '',
+                // No default: $capability being non-null above already
+                // proved $action is one of exactly these five values.
             };
 
-            $this->redirect('/users' . ($notice !== '' ? '?notice=' . $notice : ''));
+            $this->redirect('/users?notice=' . $notice);
+
+            return;
+        }
+
+        // Self-service profile save — always the current session's own
+        // record (no email/id in the request), never gated by capability:
+        // any signed-in user may edit their own data/runcloud_api_key/
+        // public_ssh_key. Under Basic auth/open dev there is no session
+        // identity to save against at all.
+        if ($segments === ['profile']) {
+            $me = $this->currentUser();
+            if ($me === null) {
+                http_response_code(403);
+                echo 'You must be signed in to edit a profile.';
+
+                return;
+            }
+
+            $rawData = trim((string) ($_POST['data'] ?? ''));
+            $data    = null;
+            if ($rawData !== '') {
+                $decoded = json_decode($rawData, true);
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+                    $this->redirect('/profile?notice=invalid-json');
+
+                    return;
+                }
+                $data = $decoded;
+            }
+
+            $this->app->userStore()->updateProfile(
+                $me,
+                $data,
+                (string) ($_POST['runcloud_api_key'] ?? ''),
+                (string) ($_POST['public_ssh_key'] ?? '')
+            );
+
+            $this->redirect('/profile?notice=saved');
 
             return;
         }
@@ -1274,6 +1597,22 @@ final class Router
             if (!PayloadValidator::isUuid($siteId)) {
                 $this->redirect('/?notice=invalid-uuid');
 
+                return;
+            }
+
+            // An unrecognized action falls through uncapability-checked to
+            // the elseif chain below, which matches nothing and just
+            // redirects — the same harmless no-op as before capabilities
+            // existed, not a bare blocked response for something that was
+            // never going to do anything anyway.
+            $capability = match ($action) {
+                'add'                            => 'site_key_add',
+                'revoke'                         => 'site_key_revoke',
+                'rebind'                         => 'site_key_rebind',
+                'http_auth', 'http_auth_clear'   => 'site_http_auth_edit',
+                default                          => null,
+            };
+            if ($capability !== null && !$this->requireCapability($capability)) {
                 return;
             }
 
@@ -1316,6 +1655,10 @@ final class Router
         }
 
         if ($segments === ['catalog']) {
+            if (!$this->requireCapability('catalog_edit')) {
+                return;
+            }
+
             $type = (string) ($_POST['type'] ?? '');
             $saved = in_array($type, ['plugin', 'theme'], true)
                 && $this->app->softwareCatalog()->setLicense(
@@ -1349,6 +1692,10 @@ final class Router
         // real billing/service relationship, not a low-stakes local
         // classification.
         if ($segments === ['subscriptions']) {
+            if (!$this->requireCapability('crm_subscription_edit')) {
+                return;
+            }
+
             $repo = $this->app->crmRepository();
             $subscriptionId = (int) ($_POST['subscription_id'] ?? 0);
             $websiteIdRaw   = trim((string) ($_POST['website_id'] ?? ''));

@@ -16,12 +16,14 @@
         (<span class="mono">bin/xtractor wordfence:refresh</span>).</p>
 <?php else: ?>
     <p><?= fmt_refreshed($refreshedAt, 36 * 3600) ?></p>
-    <p><?= dt_search_box('wf-vulnerabilities', 'Search slug, title or CVE…') ?></p>
+    <div class="search-group">
+    <p class="search"><?= dt_search_box('wf-vulnerabilities', 'Search slug, title or CVE…') ?></p>
     <table id="wf-vulnerabilities" class="display" style="width:100%">
         <thead>
         <tr><th>Slug</th><th>Type</th><th>CVE</th><th>Title</th><th>CVSS</th><th>Patched version</th></tr>
         </thead>
     </table>
+    </div>
     <script>
       $(function () {
         var dt = $('#wf-vulnerabilities').DataTable({

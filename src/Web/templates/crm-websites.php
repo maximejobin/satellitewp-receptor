@@ -11,7 +11,7 @@
 <h1>Websites</h1>
 <p class="muted">From the external CRM/billing database. Filter by tag, client or connection below.</p>
 
-<form method="get" class="search" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+<form method="get" class="search">
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="URL or host…">
     <?php // select2 AJAX: only the *selected* option(s), if any, are ever rendered here —
           // every other tag/client is fetched from the search endpoints below as the
@@ -27,21 +27,22 @@
             <option value="<?= (int) $selectedClientId ?>" selected><?= e($selectedClientLabel ?? ('#' . $selectedClientId)) ?></option>
         <?php endif; ?>
     </select>
-    <select name="connection">
+    <select name="connection" class="js-filter-dropdown" data-label="Connection">
         <option value="">Any connection</option>
         <option value="CONNECTED" <?= $selectedConnection === 'CONNECTED' ? 'selected' : '' ?>>Connected</option>
         <option value="DISCONNECTED" <?= $selectedConnection === 'DISCONNECTED' ? 'selected' : '' ?>>Disconnected</option>
     </select>
-    <button type="submit" class="btn">Filter</button>
+    <button type="submit" class="btn btn-secondary">Filter</button>
     <?php if ($selectedTags !== [] || $selectedClientId !== null || $selectedConnection !== '' || $search !== ''): ?>
-        <a href="/websites" class="muted">Clear</a>
+        <a href="/websites" class="search-reset">Reset filter</a>
     <?php endif; ?>
 </form>
 
 <?php if ($websites === []): ?>
     <p class="empty">No website matches these filters.</p>
 <?php else: ?>
-    <p><?= dt_search_box('websites-table', 'Search within these results…') ?></p>
+    <div class="search-group">
+    <p class="search"><?= dt_search_box('websites-table', 'Search within these results…') ?></p>
     <table id="websites-table" class="display" style="width:100%">
         <thead>
         <tr><th>URL</th><th>WordPress</th><th>Tags</th><th>Connection</th></tr>
@@ -58,6 +59,7 @@
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <script>
       $(function () {
         var dt = $('#websites-table').DataTable({ pageLength: 50, dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>' });

@@ -113,7 +113,9 @@ if ($status !== 'done'):
     <p class="muted">
         <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
-        · <?= badge($row['status'] ?? null) ?>
+        <?php if (!in_array($status, ['queued', 'running'], true)): ?>
+            · <?= badge($row['status'] ?? null) ?>
+        <?php endif; ?>
     </p>
     <!-- Analysis not done: pre-flight + the manual trigger, or a status message.
          No data section below renders until status is "done" — an analyst
@@ -121,9 +123,18 @@ if ($status !== 'done'):
     <section class="section">
         <h2>Analysis</h2>
         <div style="padding:0 1.1rem 1.1rem">
-        <?php if ($status === 'running'): ?>
-            <p><span class="badge badge-ok">Running</span>
-               The analysis is running. Refresh the page in a moment.</p>
+        <?php if ($status === 'queued' || $status === 'running'): ?>
+            <!-- Queued and running share one box: a spinning-icon "in progress"
+                 notice (was two separate ad hoc badges before, each also
+                 duplicating the badge() already shown above — reported live as
+                 "2 fois le même tag dans 2 couleurs, ça ne fait pas de sens",
+                 2026-09-07). The page refreshes itself every few seconds so the
+                 analyst never has to remember to come back and reload by hand. -->
+            <?= notice('progress', ($status === 'running'
+                ? 'The analysis is running.'
+                : 'Queued — waiting for the worker (cron <span class="mono">ingest:process</span>, every minute).')
+                . ' This page will refresh automatically once it\'s done.') ?>
+            <script>setTimeout(function () { location.reload(); }, 5000);</script>
         <?php elseif ($status === 'error'): ?>
             <p><span class="badge badge-error">Error</span>
                The last analysis failed. Check the worker logs if needed, then retry.</p>
@@ -132,10 +143,6 @@ if ($status !== 'done'):
                 <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
                 <button type="submit" class="btn">Retry analysis</button>
             </form>
-        <?php elseif ($status === 'queued'): ?>
-            <p><span class="badge badge-ok">Queued</span>
-               Waiting for the worker (cron <span class="mono">ingest:process</span>,
-               every minute). Refresh the page in a moment.</p>
         <?php else: ?>
             <p class="muted">This extraction was received but <b>not analysed yet</b>.
                No probe has run, no quota has been spent.</p>
@@ -665,6 +672,14 @@ if ($status !== 'done'):
                     . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null, null, 'probe.http.http_version')
                     . field('Compression (HTML)', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) ? 'ok' : 'warn', 'probe.http.content_encoding')
                     . field('Compression (asset)', ($http['asset']['content_encoding'] ?? null) ?? (($http['asset']['checked'] ?? false) ? 'none' : 'n/a'), null, 'probe.http.asset.content_encoding')
+                    // Dedicated one-encoding-at-a-time requests (B1/B2) — distinct
+                    // from "Compression (HTML)" above, which reflects what the
+                    // server PREFERS when both gzip and br are on offer together,
+                    // not which ones it can actually produce.
+                    . field('Gzip capability', $http['compression']['gzip'] ?? null, ($http['compression']['gzip'] ?? null) === false ? 'warn' : (($http['compression']['gzip'] ?? null) === true ? 'ok' : null), 'probe.http.compression.gzip')
+                    . field('Brotli capability', $http['compression']['brotli'] ?? null, ($http['compression']['brotli'] ?? null) === false ? 'warn' : (($http['compression']['brotli'] ?? null) === true ? 'ok' : null), 'probe.http.compression.brotli')
+                    . field('HTTP/1.1 supported', $http['protocols']['http1_1'] ?? null, ($http['protocols']['http1_1'] ?? null) === false ? 'warn' : (($http['protocols']['http1_1'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http1_1')
+                    . field('HTTP/3 advertised', $http['protocols']['http3_advertised'] ?? null, null, 'probe.http.protocols.http3_advertised')
                     . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn', 'probe.http.redirects.forces_https')
                     . field('Redirects', $http['redirects']['hops'] ?? null, null, 'probe.http.redirects.hops')
                     . field('CDN', $http['cdn'] ?? '—', null, 'probe.http.cdn')
@@ -764,7 +779,7 @@ if ($status !== 'done'):
                 // unrelated (and less alarming) reason, like the soft-404 skip.
                 if (($exp['auth_required'] ?? false) === true) {
                     echo '<div class="card card-full"><h3>Exposure</h3><div style="padding:1rem 1.1rem">'
-                        . '<div class="pending-note" style="border-color:var(--warn);background:var(--warn-bg)">'
+                        . '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">'
                         . '<b>Site not public — checks below could not run.</b> The homepage itself answered '
                         . '<span class="mono">HTTP 401</span> (HTTP Basic Auth required), so every request below '
                         . 'would also 401 regardless of what it is testing for — that is not the same thing as '

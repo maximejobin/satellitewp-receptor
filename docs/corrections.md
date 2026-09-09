@@ -75,3 +75,19 @@ Subscriptions :
 - La colonne et données "repo" ne fait aucun sens. À retirer.
 - Retirer la directive en lien avec le CLI dans le bas de la page.
 - Convertir cette liste en liste AJAX via Datatables. Rapidement, nous aurons des milliers d'entrées.
+
+
+
+
+
+Puis, ensuite, tu vas me créer, dans un website, un bouton "Create DEV environment" . À partir de ce site, cela va ouvrir une nouvelle interface pour que je puisse choisir quel backup de ce site (à partir de la liste des backups de blogvault), je voudrais déployer sur un environnement. La liste des backups dépendra du site. Puis, en fonction de ma clé d'API, tu iras chercher tous les serveurs auquel j'ai accès sur Runcloud. Selon le serveur, tu me proposera les versions de PHP disponible (en présélectionnant celle du site que je veux créer... si elle existe). Puis, je devrai fournir le "user" ssh pour mon application. Idem pour le nom de la base de données, le user, le password. Je devrai fournir le public path, une case à cocher pour avoir un SSL, le host, le user/password pour un basic auth. Puis
+
+----
+Concernant l'analyse : 20260907T130728Z.
+Les commentaires suivants sont pour ajuster les règles.
+F2 => On donne Critical quand ça aurait dû être Attention. La version n'est pas vulnérable (critical), elle est désuète (attention). On met vert quand c'est "à jour"
+B3 => Le site supporte http2
+K2 => WP_DEBUG_DISPLAY n'a pas d'importance (et est fausse) si WP_DEBUG est à false. La même chose s'applique pour WP_DEBUG_LOG.
+F1 => Cette règle doit devenir : est-ce que la version majeure de WP est 4 versions majeures en retard ou plus. Si oui: rouge. Autrement, vert.
+K4 => C'est positif quand la règle est à true. true = vert. false = attention
+--

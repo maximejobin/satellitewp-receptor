@@ -18,7 +18,9 @@ $console->addCommands([
     new Console\ProbeRunCommand($app),
     new Console\ProbeListCommand($app),
     new Console\RulesEvaluateCommand($app),
+    new Console\RulesReevaluateCommand($app),
     new Console\RulesListCommand($app),
+    new Console\RulesDocCommand($app),
     new Console\ReferenceRefreshCommand($app),
     new Console\WordfenceRefreshCommand($app),
     new Console\CatalogListCommand($app),
@@ -31,6 +33,7 @@ $console->addCommands([
     new Console\KeysRevokeCommand($app),
     new Console\KeysRebindCommand($app),
     new Console\UsersCommand($app),
+    new Console\UsersSetRoleCommand($app),
     new Console\IndexRebuildCommand($app),
 ]);
 $console->run();

@@ -232,6 +232,40 @@ final class Index
         return $stmt->rowCount();
     }
 
+    /**
+     * Extraction status counts for the status page (2026-09-03) — "waiting
+     * to run" (pending + queued, the same two states pendingExtractions()/
+     * queuedExtractions() list individually), "running" right now, "done"
+     * in the last 24h, and "error" (added on top of what was actually
+     * asked for: a run that failed is exactly the kind of thing a status
+     * page exists to surface, same reasoning as the other three).
+     *
+     * @return array{pending: int, running: int, done_24h: int, error: int}
+     */
+    public function statusCounts(): array
+    {
+        $pdo    = $this->pdo();
+        $cutoff = gmdate('Y-m-d\TH:i:s\Z', time() - 86400);
+
+        $pending = (int) $pdo->query(
+            "SELECT COUNT(*) FROM extractions WHERE status IN ('pending', 'queued')"
+        )->fetchColumn();
+        $running = (int) $pdo->query(
+            "SELECT COUNT(*) FROM extractions WHERE status = 'running'"
+        )->fetchColumn();
+        $error = (int) $pdo->query(
+            "SELECT COUNT(*) FROM extractions WHERE status = 'error'"
+        )->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM extractions WHERE status = 'done' AND COALESCE(processed_at, received_at) >= :cutoff"
+        );
+        $stmt->execute(['cutoff' => $cutoff]);
+        $done24h = (int) $stmt->fetchColumn();
+
+        return ['pending' => $pending, 'running' => $running, 'done_24h' => $done24h, 'error' => $error];
+    }
+
     /** @return list<array<string, mixed>> */
     public function listSites(?string $search = null): array
     {

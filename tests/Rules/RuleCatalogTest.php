@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Tests\Rules;
 
+use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Rules\Context;
 use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
@@ -80,9 +81,24 @@ final class RuleCatalogTest extends TestCase
         $payload['filesystem']['core_writable'] = false;
         // plugins/themes arrive keyed by plugin file / stylesheet, never as lists.
         $payload['plugins']['woocommerce/woocommerce.php']['new_version'] = '';
+        // Fixture default (512000) sits at I1's new 500 KB boundary
+        // (2026-09-05: banded, green is strictly under 500 KB) — make it
+        // unambiguously healthy rather than relying on it landing on a line.
+        $payload['autoload']['total_bytes'] = 400_000;
+
+        // F1 (2026-09-07: counts major branches behind, not point releases —
+        // see WordPressVersionsTest) needs its own reference data now,
+        // unlike the plain core_update signal it replaced. The fixture's own
+        // wp_version (6.8.1) marked "latest" here means zero branches behind.
+        mkdir($this->tmpDir . '/reference', 0775, true);
+        file_put_contents(
+            $this->tmpDir . '/reference/wordpress-versions.json',
+            (string) json_encode(['6.8.1' => 'latest'])
+        );
+        $wpVersions = new WordPressVersions($this->tmpDir . '/reference/wordpress-versions.json');
 
         $findings = array_column(
-            $this->engine()->evaluate(new Context($payload))['findings'],
+            $this->engine()->evaluate(new Context($payload, [], ['wordpress_versions' => $wpVersions]))['findings'],
             null,
             'id'
         );
@@ -164,13 +180,18 @@ final class RuleCatalogTest extends TestCase
 
     public function testThresholdOverrideIsApplied(): void
     {
-        $payload = $this->fixtureArray('extraction-valid.json'); // autoload = 512000
+        // I1 used to be the id exercised here, but it's banded now (2026-09-05
+        // — fixed 500 KB / 2 MB boundaries, no longer driven by $rule->threshold)
+        // so overriding its config threshold no longer changes its outcome.
+        // H5 (expired transients, still a plain atMost($rule->threshold)) is
+        // still a real test of the override mechanism itself.
+        $payload = $this->fixtureArray('extraction-valid.json'); // transients.expired = 14
 
-        $strict   = $this->engine(['I1' => 100_000])->evaluate(new Context($payload));
+        $strict   = $this->engine(['H5' => 5])->evaluate(new Context($payload));
         $findings = array_column($strict['findings'], null, 'id');
 
-        $this->assertSame(Status::Fail->value, $findings['I1']['status']);
-        $this->assertSame(100_000, $findings['I1']['threshold']);
+        $this->assertSame(Status::Fail->value, $findings['H5']['status']);
+        $this->assertSame(5, $findings['H5']['threshold']);
     }
 
     public function testEolRulesUseInjectedReferenceData(): void
@@ -201,6 +222,60 @@ final class RuleCatalogTest extends TestCase
         // The EOL date rides along as neutral data (for later interpolation).
         $this->assertSame('2025-12-02', $findings['F2']['data']['eol_date']);
         $this->assertSame(Status::Fail->value, $findings['H1']['status'], 'MySQL 8.0 is EOL');
+    }
+
+    /**
+     * F1 (rewritten 2026-09-07) fails only on a 4+ major-branch gap, not on
+     * "a newer point release exists" — that narrower signal is F2/core_update
+     * now. See WordPressVersionsTest for majorVersionsBehind() itself.
+     */
+    public function testF1FailsOnlyFourOrMoreMajorBranchesBehind(): void
+    {
+        mkdir($this->tmpDir . '/reference', 0775, true);
+        file_put_contents($this->tmpDir . '/reference/wordpress-versions.json', (string) json_encode([
+            '6.4' => '', '6.5' => '', '6.6' => '', '6.7' => '', '6.8' => 'latest',
+        ]));
+        $wpVersions = new WordPressVersions($this->tmpDir . '/reference/wordpress-versions.json');
+
+        $payload = $this->fixtureArray('extraction-valid.json'); // wp_version 6.8.1 in the base fixture
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload, [], ['wordpress_versions' => $wpVersions]))['findings'],
+            null,
+            'id'
+        );
+        $this->assertSame(Status::Pass->value, $findings['F1']['status'], 'on the latest branch');
+
+        $payload['wp_version'] = '6.4.9'; // 4 branches behind 6.8
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload, [], ['wordpress_versions' => $wpVersions]))['findings'],
+            null,
+            'id'
+        );
+        $this->assertSame(Status::Fail->value, $findings['F1']['status'], '4 branches behind');
+        $this->assertSame(4, $findings['F1']['data']['major_versions_behind']);
+    }
+
+    /**
+     * WP_DEBUG_DISPLAY / WP_DEBUG_LOG have no real effect while WP_DEBUG
+     * itself is off (2026-09-07, user: "n'a pas d'importance ... si WP_DEBUG
+     * est à false") — K2/K3 must not fail on a stray true left over in
+     * wp-config.php in that case.
+     */
+    public function testK2AndK3IgnoreOwnValueWhenWpDebugIsOff(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $payload['constants']['WP_DEBUG']         = false;
+        $payload['constants']['WP_DEBUG_DISPLAY'] = true;
+        $payload['constants']['WP_DEBUG_LOG']     = true;
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        $this->assertSame(Status::Pass->value, $findings['K2']['status']);
+        $this->assertSame(Status::NotApplicable->value, $findings['K3']['status']);
     }
 
     public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void

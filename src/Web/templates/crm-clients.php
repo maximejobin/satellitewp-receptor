@@ -19,21 +19,22 @@ use SatelliteWP\Xtractor\Crm\ClientsRepository;
         . ($orphanCount === 1 ? 'it' : 'them') . '</a>.') ?>
 <?php endif; ?>
 
-<form method="get" class="search" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+<div class="search-group">
+<form method="get" class="search">
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="Company, contact or email…">
-    <select name="status">
+    <select name="status" class="js-filter-dropdown" data-label="Status" data-empty-value="all">
         <option value="all" <?= $selectedStatus === 'all' ? 'selected' : '' ?>>All</option>
         <option value="active" <?= $selectedStatus === 'active' ? 'selected' : '' ?>>Active</option>
         <option value="inactive" <?= $selectedStatus === 'inactive' ? 'selected' : '' ?>>Inactive</option>
     </select>
-    <select name="subscriptions">
+    <select name="subscriptions" class="js-filter-dropdown" data-label="Subscriptions" data-empty-value="all">
         <option value="all" <?= $selectedSubscriptions === 'all' ? 'selected' : '' ?>>All</option>
         <option value="have_unassigned" <?= $selectedSubscriptions === 'have_unassigned' ? 'selected' : '' ?>>Have unassigned</option>
         <option value="no_unassigned" <?= $selectedSubscriptions === 'no_unassigned' ? 'selected' : '' ?>>Do not have unassigned</option>
     </select>
-    <button type="submit" class="btn">Search</button>
+    <button type="submit" class="btn btn-secondary">Filter</button>
     <?php if ($selectedStatus !== 'active' || $selectedSubscriptions !== 'all' || $search !== ''): ?>
-        <a href="/clients" class="muted">Reset to default</a>
+        <a href="/clients" class="search-reset">Reset filter</a>
     <?php endif; ?>
 </form>
 
@@ -73,3 +74,4 @@ use SatelliteWP\Xtractor\Crm\ClientsRepository;
       });
     </script>
 <?php endif; ?>
+</div>

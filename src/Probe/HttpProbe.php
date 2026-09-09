@@ -127,6 +127,26 @@ final class HttpProbe extends AbstractProbe
         //    enumeration, browsable uploads dir, common backup files, TRACE.
         $exposure = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
 
+        // 7. Compression CAPABILITY — offered one encoding at a time. The main
+        // request above offers "gzip, br" together, which only reveals which
+        // encoding the server PREFERS when it has a choice, not which ones it
+        // can actually produce (2026-09-04, user: "je ne cherche pas à savoir
+        // si c'est le comportement par défaut"). A server that prefers br but
+        // still supports gzip would otherwise read as "gzip: false".
+        $compression = $this->compressionSupportCheck($client, $finalUrl);
+
+        // 8. Protocol support, isolated per version rather than the old
+        // ">= 2" threshold (which silently counted HTTP/3 as "passing" the
+        // HTTP/2 check too). HTTP/2 reuses the main request's own negotiated
+        // version — that request already prefers h2 via ALPN, so a second
+        // identical negotiation would tell us nothing new. HTTP/1.1 gets its
+        // own request, forced. HTTP/3 has no live signal available: this
+        // server's libcurl has no QUIC support to actually negotiate one, so
+        // it reads the Alt-Svc header the site itself advertises instead —
+        // the same passive signal a browser uses to decide whether to try
+        // QUIC, not proof a handshake would succeed.
+        $protocols = $this->protocolSupportCheck($client, $finalUrl, $main['http_version'] ?? null, $main['alt_svc'] ?? null);
+
         $data = [
             'redirects'        => $redirects,
             'final_url'        => $finalUrl,
@@ -134,6 +154,8 @@ final class HttpProbe extends AbstractProbe
             'asset'            => $asset,
             'robots'           => $robots,
             'exposure'         => $exposure,
+            'compression'      => $compression,
+            'protocols'        => $protocols,
             'auth'             => [
                 'required'   => $authRequired,
                 'configured' => $site->httpAuth !== null,
@@ -235,6 +257,18 @@ final class HttpProbe extends AbstractProbe
                 ],
                 'decode_content' => false,
                 'version'        => 2.0, // negotiate HTTP/2 when available
+                // followRedirects() above already opened a plain HEAD
+                // connection to this same host (http:// first, then the
+                // https:// final hop, neither forcing a version). Confirmed
+                // live: libcurl happily reuses that pooled HTTP/1.1
+                // connection here even though this request asks for 2.0,
+                // silently keeping the whole exchange on 1.1 and never
+                // attempting the ALPN h2 negotiation at all — B3 read
+                // "false" against a site verified separately (plain curl,
+                // same host) to serve HTTP/2 (2026-09-07). FRESH_CONNECT
+                // forces a brand-new connection so the version option
+                // actually gets a real negotiation.
+                'curl'           => [\CURLOPT_FRESH_CONNECT => true],
                 'on_stats'       => static function (TransferStats $s) use (&$stats): void {
                     $stats = $s->getHandlerStats();
                 },
@@ -294,6 +328,7 @@ final class HttpProbe extends AbstractProbe
             'content_encoding' => $headers['content-encoding'] ?? null,
             'gzip'             => ($headers['content-encoding'] ?? '') === 'gzip',
             'brotli'           => ($headers['content-encoding'] ?? '') === 'br',
+            'alt_svc'          => $headers['alt-svc'] ?? null,
             'cache_headers'    => [
                 'cache-control' => $headers['cache-control'] ?? null,
                 'expires'       => $headers['expires'] ?? null,
@@ -312,6 +347,95 @@ final class HttpProbe extends AbstractProbe
                 'samesite' => str_contains(strtolower($setCookie), 'samesite'),
             ],
         ];
+    }
+
+    /**
+     * Requests gzip and brotli ONE AT A TIME — each its own request offering
+     * only that encoding — so a "false" means the server genuinely cannot
+     * produce it, not merely that it prefers the other one when both are on
+     * offer (see the main request above, which offers "gzip, br" together
+     * and reflects the server's own preference, not its full capability).
+     *
+     * @return array{gzip: bool|null, brotli: bool|null} null when the request itself failed
+     */
+    private function compressionSupportCheck(Client $client, string $url): array
+    {
+        return [
+            'gzip'   => $this->offeredEncodingIsHonoured($client, $url, 'gzip', 'gzip'),
+            'brotli' => $this->offeredEncodingIsHonoured($client, $url, 'br', 'br'),
+        ];
+    }
+
+    private function offeredEncodingIsHonoured(Client $client, string $url, string $offer, string $expect): ?bool
+    {
+        try {
+            $response = $client->get($url, [
+                'headers'        => ['Accept-Encoding' => $offer],
+                'decode_content' => false,
+            ]);
+        } catch (GuzzleException) {
+            return null; // inconclusive, not a "no" — the request itself never completed
+        }
+
+        return strtolower($response->getHeaderLine('Content-Encoding')) === $expect;
+    }
+
+    /**
+     * Protocol support, isolated per version. HTTP/2 reuses the main
+     * request's own negotiated version (that request already prefers h2 via
+     * ALPN, so re-negotiating would just repeat it); HTTP/1.1 gets a
+     * dedicated request forcing that version; HTTP/3 has no live signal
+     * available in this environment (see altSvcAdvertisesHttp3()) and reads
+     * the Alt-Svc header instead.
+     *
+     * @return array{http1_1: bool|null, http2: bool|null, http3_advertised: bool|null}
+     */
+    private function protocolSupportCheck(Client $client, string $url, ?string $negotiatedMainVersion, ?string $altSvc): array
+    {
+        $stats = null;
+        $http1_1 = null;
+        try {
+            $client->get($url, [
+                'version'  => '1.1',
+                // Same FRESH_CONNECT reasoning as mainRequest() above, the
+                // other direction: without it, this request could silently
+                // reuse whatever connection the (now correctly negotiated)
+                // HTTP/2 main request just opened, making a server that
+                // supports HTTP/1.1 fine read as "false" here.
+                'curl'     => [\CURLOPT_FRESH_CONNECT => true],
+                'on_stats' => static function (TransferStats $s) use (&$stats): void {
+                    $stats = $s->getHandlerStats();
+                },
+            ]);
+            $http1_1 = (int) ($stats['http_version'] ?? 0) === CURL_HTTP_VERSION_1_1;
+        } catch (GuzzleException) {
+            // leave null — inconclusive, not a "no"
+        }
+
+        return [
+            'http2'            => $negotiatedMainVersion === null ? null : $negotiatedMainVersion === '2',
+            'http1_1'          => $http1_1,
+            'http3_advertised' => $altSvc === null ? null : self::altSvcAdvertisesHttp3($altSvc),
+        ];
+    }
+
+    /**
+     * Whether an Alt-Svc header advertises HTTP/3 — the standardized "h3"
+     * protocol id, or an older "h3-XX" draft id some servers still send.
+     * Pure and testable without a live QUIC handshake, which is the point:
+     * this server's own libcurl build has no HTTP/3 support to actually
+     * negotiate one (confirmed: no HTTP3 feature in `curl -V`), so Alt-Svc —
+     * the same passive signal a browser reads before it decides to try QUIC
+     * — is the only signal available here. A "true" here is what the site
+     * advertises, not proof a handshake would succeed.
+     */
+    public static function altSvcAdvertisesHttp3(?string $altSvc): bool
+    {
+        if ($altSvc === null || $altSvc === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/(?:^|,)\s*h3(?:-\d+)?\s*=/i', $altSvc);
     }
 
     /**

@@ -63,12 +63,14 @@ final class RoleCapabilitiesTest extends TestCase
         $roles = RoleCapabilities::load(dirname(__DIR__, 2) . '/config/roles.php');
 
         $this->assertSame(['admin', 'maintenance', 'coordinator', 'sale'], $roles->roles());
-        $this->assertTrue($roles->can('admin', 'manage_users'));
-        $this->assertTrue($roles->can('maintenance', 'view_technical'));
-        $this->assertFalse($roles->can('maintenance', 'manage_users'));
-        $this->assertTrue($roles->can('coordinator', 'view_technical'));
-        $this->assertFalse($roles->can('coordinator', 'run_analysis'));
-        $this->assertTrue($roles->can('sale', 'view_catalog'));
-        $this->assertFalse($roles->can('sale', 'view_technical'));
+        $this->assertTrue($roles->can('admin', 'user_add'));
+        $this->assertTrue($roles->can('maintenance', 'extraction_view_technical'));
+        $this->assertFalse($roles->can('maintenance', 'user_add'));
+        $this->assertTrue($roles->can('coordinator', 'extraction_view_technical'));
+        $this->assertFalse($roles->can('coordinator', 'extraction_run'));
+        $this->assertTrue($roles->can('sale', 'catalog_view'));
+        $this->assertFalse($roles->can('sale', 'extraction_view_technical'));
+        $this->assertTrue($roles->can('sale', 'crm_view'));
+        $this->assertFalse($roles->can('sale', 'crm_subscription_edit'));
     }
 }

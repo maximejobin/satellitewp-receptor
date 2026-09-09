@@ -30,7 +30,7 @@ function site_display(mixed $url): string
 function dt_search_box(string $tableId, string $placeholder = 'Search…'): string
 {
     return '<input type="search" class="xt-dt-search" data-table="#' . e($tableId) . '" placeholder="' . e($placeholder) . '">'
-        . '<button type="button" class="btn xt-dt-search-btn" data-table="#' . e($tableId) . '">Search</button>';
+        . '<button type="button" class="btn btn-secondary xt-dt-search-btn" data-table="#' . e($tableId) . '">Search</button>';
 }
 
 /** Human-readable bytes. */
@@ -87,20 +87,40 @@ function status_dot(?string $status): string
 }
 
 /**
- * A page-level alert banner — info (blue), warning (orange/yellow), or
- * critical (red). Unlike badge(), a small inline pill for one value, this is
- * a block-level box meant to surface something the analyst should notice
+ * A page-level alert banner — info (blue), warning (orange/yellow), critical
+ * (red), or progress (blue, spinning ring icon — a job is under way and the
+ * page expects to move on its own; see extraction.php's queued/running
+ * state). Unlike badge(), a small inline pill for one value, this is a
+ * block-level box meant to surface something the analyst should notice
  * before reading the rest of the page (e.g. "N subscriptions not linked to
  * a website"). $html is trusted, pre-rendered HTML (so a notice can carry a
  * link), same convention as field_raw() vs field().
  */
 function notice(string $level, string $html): string
 {
-    $level = in_array($level, ['info', 'warning', 'critical'], true) ? $level : 'info';
-    $icon  = match ($level) {
-        'warning'  => '⚠',
-        'critical' => '⛔',
-        default    => 'ⓘ',
+    $level = in_array($level, ['info', 'warning', 'critical', 'progress'], true) ? $level : 'info';
+    // Small hand-drawn inline SVGs (stroke, currentColor) — same convention
+    // as report_icon() in this file: no icon font/library (2026-09-03, user
+    // asked whether to load Font Awesome for this; the project already has a
+    // deliberate no-CDN, no-icon-library rule for exactly this reason).
+    $icon = match ($level) {
+        'warning'  => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
+            . 'stroke-linecap="round" stroke-linejoin="round"><path d="M8.18 2.6 1.4 14.2A1.4 1.4 0 0 0 '
+            . '2.62 16.3h12.76a1.4 1.4 0 0 0 1.22-2.1L9.82 2.6a1.4 1.4 0 0 0-2.64 0Z"/>'
+            . '<line x1="9" y1="7" x2="9" y2="10.6"/><circle cx="9" cy="13.1" r=".2" fill="currentColor"/></svg>',
+        'critical' => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
+            . 'stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/>'
+            . '<line x1="6.6" y1="6.6" x2="11.4" y2="11.4"/><line x1="11.4" y1="6.6" x2="6.6" y2="11.4"/></svg>',
+        // A faint full ring plus one bright quarter-arc — CSS spins the
+        // whole <svg> (.notice-progress .notice-icon svg, style.css), which
+        // is what makes the arc read as a loading spinner instead of a
+        // static "C".
+        'progress' => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" '
+            . 'stroke-linecap="round"><circle cx="9" cy="9" r="7.1" stroke-opacity=".25"/>'
+            . '<path d="M16.1 9a7.1 7.1 0 0 0-7.1-7.1"/></svg>',
+        default    => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
+            . 'stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/>'
+            . '<line x1="9" y1="8.3" x2="9" y2="13"/><circle cx="9" cy="5.6" r=".2" fill="currentColor"/></svg>',
     };
 
     return '<div class="notice notice-' . $level . '"><span class="notice-icon">' . $icon . '</span>'
@@ -135,7 +155,8 @@ function external_link(?string $pattern, mixed $id, string $label): string
 
     $url = str_replace('{id}', rawurlencode($idString), $pattern);
 
-    return '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer">' . e($label) . '</a>';
+    return '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer" class="ext-link">'
+        . e($label) . ' <span class="icon">' . icon_external_link() . '</span></a>';
 }
 
 /**
@@ -155,7 +176,32 @@ function external_link_button(?string $pattern, mixed $id, string $label): strin
     $url = str_replace('{id}', rawurlencode($idString), $pattern);
 
     return '<a class="btn" style="margin:0;padding:.25rem .6rem;font-size:.8rem" href="' . e($url) . '" '
-        . 'target="_blank" rel="noopener noreferrer">' . e($label) . '</a>';
+        . 'target="_blank" rel="noopener noreferrer">' . e($label) . ' <span class="icon">' . icon_external_link() . '</span></a>';
+}
+
+/**
+ * Two small hand-drawn icons proposed on the style guide (2026-09-03, not
+ * wired into any real page yet — every existing edit affordance still uses
+ * the plain "✎" character, every external link is still plain text/an
+ * unmarked <a>). Same convention as report_icon(): inline SVG primitives,
+ * stroke="currentColor" so each one follows whatever text colour it's
+ * dropped into, no icon font/library. Deliberately separate functions
+ * rather than folding these into report_icon(), which is scoped to the
+ * extraction report's own design system.
+ */
+function icon_edit(): string
+{
+    return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" '
+        . 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        . '<path d="M11.5 2.5l4 4L6 16H2v-4l9.5-9.5z"/><line x1="10" y1="4" x2="14" y2="8"/></svg>';
+}
+
+function icon_external_link(): string
+{
+    return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" '
+        . 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        . '<path d="M8 3H4a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 15h9a1.5 1.5 0 0 0 1.5-1.5V9.5"/>'
+        . '<path d="M10.5 2.5H15v4.5"/><line x1="7.5" y1="10.5" x2="14.5" y2="3.5"/></svg>';
 }
 
 /**
@@ -240,7 +286,7 @@ function subscription_website_form(array $subscription, string $csrf, string $re
             // (2026-09-02, user: "Unassigned en rouge").
             : '<span class="val-error">Unassigned</span>')
         . ' <button type="button" class="wf-edit-btn" data-wf-id="' . $subId . '" '
-        . 'title="Change linked website" aria-label="Change linked website">✎</button>'
+        . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
         . '</span>';
 
     $options = '<option value=""></option>';
@@ -256,7 +302,7 @@ function subscription_website_form(array $subscription, string $csrf, string $re
         . '<select name="website_id" class="wf-select" data-ajax-url="/websites/search" data-placeholder="— None —">'
         . $options . '</select>'
         . '<button type="submit" class="btn" style="padding:.25rem .6rem">Save</button>'
-        . '<button type="button" class="btn wf-cancel-btn" style="padding:.25rem .6rem;background:var(--surface-2);color:var(--text)">Cancel</button>'
+        . '<button type="button" class="btn btn-muted wf-cancel-btn" style="padding:.25rem .6rem">Cancel</button>'
         . '</form>';
 
     return $display . $form;
@@ -285,7 +331,7 @@ function health_score(array $counts): int
     return (int) round(100 * (0.9 ** $red) * (0.97 ** $orange));
 }
 
-/** Semantic colour for a health score: green ≥80, orange ≥50, red below. */
+/** Semantic color for a health score: green ≥80, orange ≥50, red below. */
 function health_color(int $score): string
 {
     return $score >= 80 ? 'var(--ok)' : ($score >= 50 ? 'var(--warn)' : 'var(--error)');
@@ -333,7 +379,7 @@ function health_score_breakdown(array $counts): string
         . '"100 − red×8 − orange×3" deduction would.</p></div>';
 }
 
-/** Coloured pastille (green/orange/red/blue/grey) + label — the analyst signal. */
+/** Colored pastille (green/orange/red/blue/grey) + label — the analyst signal. */
 function pastille(string $color, string $label): string
 {
     return '<span class="pastille pastille-' . e($color) . '" title="' . e($label) . '">'
@@ -387,7 +433,7 @@ function wp_count(mixed $value, string ...$keys): ?int
 }
 
 /**
- * One label/value row. $status colours the value: ok (green), warn (orange),
+ * One label/value row. $status colors the value: ok (green), warn (orange),
  * error (red), or null (default). Booleans are rendered yes/no. $source, when
  * given, appends a small "ⓘ ) info marker (src_note()) naming exactly which
  * dot-path this came from and how Xtractor can vouch for it — "every datum
@@ -650,7 +696,7 @@ function vulnerability_source_badge(array $sources): string
 }
 
 /**
- * CVSS score + rating as one coloured badge: critical (dark red) and high
+ * CVSS score + rating as one colored badge: critical (dark red) and high
  * (red) are visually distinct from each other, not just from medium
  * (orange) — a page full of "High" and "Critical" rows in the same shade
  * hides exactly the distinction that matters most.
@@ -717,9 +763,15 @@ function fmt_refreshed(?string $isoDate, int $maxAgeSeconds): string
 }
 
 /**
- * "50 minutes ago", with the exact timestamp in a native tooltip (2026-09-02,
- * user: "je veux '50 minutes ago' et un tooltip contenant la date") — quick
- * to scan, never lossy: the real date is always one hover away.
+ * "50 minutes ago", pale-grey italic, with the exact timestamp in a real
+ * tooltip widget (2026-09-02: a native title="" attribute; 2026-09-03:
+ * upgraded to Tippy.js — see .text-subtle/data-tippy-content in the style
+ * guide) — quick to scan, never lossy: the real date is always one hover
+ * away. Callers need `'tooltip' => true` on their render() call for the
+ * widget to actually be loaded; the native title="" a browser gives every
+ * element for free is not there as a fallback, so without that flag this
+ * renders a plain unhoverable span — deliberately, so a missing flag is
+ * obvious (blank hover) rather than silently degrading.
  */
 function fmt_relative_time(?string $isoDate): string
 {
@@ -745,7 +797,7 @@ function fmt_relative_time(?string $isoDate): string
         default           => $unit(intdiv($abs, 86400 * 30), 'month'),
     };
 
-    return '<span title="' . e($isoDate) . '">' . e($label) . '</span>';
+    return '<span class="text-subtle" data-tippy-content="' . e($isoDate) . '">' . e($label) . '</span>';
 }
 
 /**

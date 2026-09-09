@@ -48,7 +48,10 @@ final class UserStoreTest extends TestCase
 
         $raw = json_decode((string) file_get_contents($this->tmpDir . '/users.json'), true);
         $this->assertSame(
-            ['email' => 'boss@example.com', 'role' => 'admin', 'first_name' => '', 'last_name' => '', 'status' => 'active'],
+            [
+                'email' => 'boss@example.com', 'role' => 'admin', 'first_name' => '', 'last_name' => '', 'status' => 'active',
+                'data' => null, 'runcloud_api_key' => null, 'public_ssh_key' => null,
+            ],
             $raw[0]
         );
     }
@@ -173,6 +176,19 @@ final class UserStoreTest extends TestCase
         $this->assertSame('sale', $store->roleOf('dev@example.com'));
     }
 
+    public function testUpdateUserPreservesProfileFields(): void
+    {
+        $store = $this->store(['boss@example.com', 'dev@example.com']);
+        $store->updateProfile('dev@example.com', ['env' => 'staging'], 'rc-key', 'ssh-ed25519 AAAA...');
+
+        $this->assertTrue($store->updateUser('dev@example.com', 'dev@example.com', 'Dev', 'Oper', 'coordinator'));
+
+        $updated = $store->all()[1];
+        $this->assertSame(['env' => 'staging'], $updated['data'], 'an admin editing name/role must not wipe the profile fields');
+        $this->assertSame('rc-key', $updated['runcloud_api_key']);
+        $this->assertSame('ssh-ed25519 AAAA...', $updated['public_ssh_key']);
+    }
+
     public function testUpdateUserProtectsTheLastActiveAdmin(): void
     {
         $store = $this->store(['boss@example.com', 'dev@example.com']);
@@ -235,5 +251,52 @@ final class UserStoreTest extends TestCase
         file_put_contents($this->tmpDir . '/users.json', 'not json at all');
 
         $this->assertSame([], (new UserStore($this->tmpDir . '/users.json'))->all());
+    }
+
+    // ---- Self-service profile (data / runcloud_api_key / public_ssh_key) ----
+
+    public function testUpdateProfileSetsAllThreeFields(): void
+    {
+        $store = $this->store(['boss@example.com']);
+
+        $this->assertTrue($store->updateProfile('boss@example.com', ['tz' => 'UTC'], 'rc-abc123', 'ssh-ed25519 AAAA...'));
+
+        $user = $store->all()[0];
+        $this->assertSame(['tz' => 'UTC'], $user['data']);
+        $this->assertSame('rc-abc123', $user['runcloud_api_key']);
+        $this->assertSame('ssh-ed25519 AAAA...', $user['public_ssh_key']);
+    }
+
+    public function testUpdateProfileClearsFieldsBackToNull(): void
+    {
+        $store = $this->store(['boss@example.com']);
+        $store->updateProfile('boss@example.com', ['tz' => 'UTC'], 'rc-abc123', 'ssh-ed25519 AAAA...');
+
+        $this->assertTrue($store->updateProfile('boss@example.com', null, '', '   '));
+
+        $user = $store->all()[0];
+        $this->assertNull($user['data']);
+        $this->assertNull($user['runcloud_api_key'], 'an empty string clears the key back to null');
+        $this->assertNull($user['public_ssh_key'], 'whitespace-only also clears it');
+    }
+
+    public function testUpdateProfileDoesNotTouchIdentityRoleOrStatus(): void
+    {
+        $store = $this->store(['boss@example.com', 'dev@example.com']);
+        $store->setStatus('dev@example.com', UserStore::STATUS_SUSPENDED);
+
+        $store->updateProfile('dev@example.com', ['x' => 1], 'key', 'ssh-key');
+
+        $user = $store->all()[1];
+        $this->assertSame('dev@example.com', $user['email']);
+        $this->assertSame('maintenance', $user['role']);
+        $this->assertSame(UserStore::STATUS_SUSPENDED, $user['status'], 'a self-edit must not silently reactivate a suspended account');
+    }
+
+    public function testUpdateProfileRejectsUnknownEmail(): void
+    {
+        $store = $this->store(['boss@example.com']);
+
+        $this->assertFalse($store->updateProfile('nobody@example.com', null, null, null));
     }
 }

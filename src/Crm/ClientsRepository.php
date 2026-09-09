@@ -148,6 +148,117 @@ final class ClientsRepository
             SQL)->fetchColumn();
     }
 
+    /**
+     * Every swp_ table that carries its own date_sync column, and the most
+     * recent value in it — the status page's per-table sync freshness check.
+     * swp_subscriptions_websites is deliberately absent: it has
+     * date_added/date_updated instead of date_sync (confirmed live,
+     * 2026-09-03), so there is nothing to check there.
+     *
+     * @return array<string, string|null> table name => most recent date_sync, or null if the table is empty
+     */
+    public function lastSyncByTable(): array
+    {
+        $tables = [
+            'swp_clients', 'swp_products', 'swp_licenses', 'swp_maintenance_plans',
+            'swp_subscriptions', 'swp_websites', 'swp_website_items', 'swp_website_tags',
+        ];
+
+        $result = [];
+        foreach ($tables as $table) {
+            $value            = $this->pdo->query("SELECT MAX(date_sync) FROM {$table}")->fetchColumn();
+            $result[$table]   = is_string($value) && $value !== '' ? $value : null;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Clients with at least one subscription in 'on-hold' status — the one
+     * non-active/non-pending status this schema has, and (confirmed live
+     * against the real data, 2026-09-03) the WooCommerce Subscriptions
+     * convention this schema follows: "on-hold" is specifically a payment
+     * problem (a failed/awaiting renewal), not a generic pause. There is no
+     * separate payment-status column to check instead.
+     *
+     * @return list<array<string, mixed>> client rows (id, label fields), one per matching client
+     */
+    public function clientsWithUnpaidSubscriptions(): array
+    {
+        return $this->pdo->query(<<<'SQL'
+            SELECT DISTINCT c.* FROM swp_clients c
+            JOIN swp_subscriptions s ON s.client_id = c.id
+            WHERE s.subscription_status = 'on-hold'
+            ORDER BY c.company, c.last_name, c.first_name
+            SQL)->fetchAll();
+    }
+
+    /**
+     * Clients with no company name recorded — a data-quality gap the status
+     * page flags so it gets filled in, not a business-logic filter.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function clientsWithEmptyCompany(): array
+    {
+        return $this->pdo->query(<<<'SQL'
+            SELECT * FROM swp_clients
+            WHERE company IS NULL OR TRIM(company) = ''
+            ORDER BY last_name, first_name, email
+            SQL)->fetchAll();
+    }
+
+    /**
+     * Active clients (>=1 subscription with subscription_status = 'active' —
+     * same "active" definition as listClients()'s service filter) with no
+     * company name recorded. A subset of clientsWithEmptyCompany() above,
+     * kept as its own query rather than filtered in PHP so the status page
+     * can show both counts independently without fetching every client.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function clientsActiveWithEmptyCompany(): array
+    {
+        return $this->pdo->query(<<<'SQL'
+            SELECT c.* FROM swp_clients c
+            WHERE (c.company IS NULL OR TRIM(c.company) = '')
+              AND EXISTS (SELECT 1 FROM swp_subscriptions s WHERE s.client_id = c.id AND s.subscription_status = 'active')
+            ORDER BY c.last_name, c.first_name, c.email
+            SQL)->fetchAll();
+    }
+
+    /**
+     * Active clients with no HubSpot id recorded — same "active" definition
+     * as clientsActiveWithEmptyCompany() above.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function clientsActiveWithoutHubspotId(): array
+    {
+        return $this->pdo->query(<<<'SQL'
+            SELECT c.* FROM swp_clients c
+            WHERE (c.hubspot_id IS NULL OR TRIM(c.hubspot_id) = '')
+              AND EXISTS (SELECT 1 FROM swp_subscriptions s WHERE s.client_id = c.id AND s.subscription_status = 'active')
+            ORDER BY c.company, c.last_name, c.first_name
+            SQL)->fetchAll();
+    }
+
+    /**
+     * Active clients with no Teamwork id recorded — same "active" definition
+     * as clientsActiveWithEmptyCompany() above.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function clientsActiveWithoutTeamworkId(): array
+    {
+        return $this->pdo->query(<<<'SQL'
+            SELECT c.* FROM swp_clients c
+            WHERE (c.teamwork_id IS NULL OR TRIM(c.teamwork_id) = '')
+              AND EXISTS (SELECT 1 FROM swp_subscriptions s WHERE s.client_id = c.id AND s.subscription_status = 'active')
+            ORDER BY c.company, c.last_name, c.first_name
+            SQL)->fetchAll();
+    }
+
     /** @return array<string, mixed>|null */
     public function getClient(int $id): ?array
     {

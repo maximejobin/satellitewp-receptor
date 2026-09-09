@@ -16,14 +16,18 @@
 
     --accent:     #f26f2b;
     --accent-2:   #d95c1c;
-    --accent-weak:#fdece1;
-    --secondary:  #475569; /* dark slate — secondary/neutral button, e.g. the Services filter bar's "Filter" */
+    --bg-accent:  #fdece1;
 
-    --ok:    #1f9d57;  --ok-bg:   #e6f5ec;
-    --warn:  #c8820f;  --warn-bg: #fbf0d8;
-    --error: #d6453f;  --error-bg:#fbe5e4;
-    --error-2: #7a1f1c; /* darker red — CVSS "critical", distinct from "high" (--error) */
-    --info:  #2f7fe0;  --info-bg: #e6f0fc;
+    /* 2026-09-03 design-review pass: --warn pushed more orange (was too
+       amber/gold, low contrast); --bg-ok darkened/saturated slightly — it
+       was nearly the same lightness as --bg, so a badge/notice sitting
+       directly on the page background barely showed an edge; --error-2
+       pushed toward red (was reading brown, not "critical"). */
+    --ok:    #1f9d57;  --bg-ok:   #cdefda;
+    --warn:  #e07a1c;  --bg-warn: #fbf0d8;
+    --error: #d6453f;  --bg-error:#fbe5e4;
+    --error-2: #8f1214; /* CVSS "critical", distinct from "high" (--error) — deliberately more red than brown */
+    --info:  #2f7fe0;  --bg-info: #e6f0fc;
 
     --shadow: 0 1px 2px rgba(20,35,50,.05), 0 6px 20px -12px rgba(20,35,50,.18);
     --radius: 12px;
@@ -46,6 +50,52 @@ body { margin: 0; }
     -webkit-font-smoothing: antialiased;
 }
 
+/* Same base look as .app (font/background/color) but no sidebar grid — the
+   login page (2026-09-03: must not show the app menu), rendered via
+   layout.php's `bare` flag. flex + centering here is also what fixes a
+   plain-CSS wrinkle: without it, the <h1> inside .login-card below margin-
+   collapses straight through this element to <body>, leaving a sliver of
+   the browser's default white showing above the actual background (reported
+   live as "la barre blanche en haut") — a flex container never lets a
+   child's margin collapse through it, so centering this way fixes both at
+   once rather than needing a separate padding/overflow hack for the second. */
+.app-bare {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+/* The login page's own card — a plain .card (same border/radius/shadow
+   language as every other card in the app) instead of bare text floating on
+   the background. */
+.login-card { max-width: 26rem; width: 100%; padding: 2.25rem 2rem; text-align: center; }
+
+/* "Sign in with Google" styled to resemble Google's own button (their
+   Identity branding guidelines: white surface, thin grey border, small
+   corner radius, the four-color "G" mark) — not this app's orange .btn,
+   which would look like an in-house action rather than a real Google
+   sign-in affordance. */
+/* Same box model as .btn (padding/border/line-height) so it lines up exactly
+   next to other buttons — it used to carry its own fixed height and font-size,
+   reported live as "n'est pas aligné avec les autres" next to a plain .btn. */
+.google-btn {
+    display: inline-flex; align-items: center; gap: .65rem;
+    padding: .5rem .9rem; border-radius: 4px;
+    border: 1px solid #dadce0; background: #fff; color: #3c4043;
+    font: inherit; font-weight: 500; text-decoration: none;
+    box-shadow: 0 1px 2px rgba(60, 64, 67, .3);
+}
+.google-btn:hover { background: #f8f9fa; box-shadow: 0 1px 3px rgba(60, 64, 67, .45); }
+.google-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ---------- sidebar ---------- */
 .side {
     background: var(--surface);
@@ -59,7 +109,7 @@ body { margin: 0; }
 .nav-label { text-transform: uppercase; letter-spacing: .09em; font-size: .66rem; color: var(--faint); padding: .9rem .6rem .35rem; font-weight: 700; }
 .nav-item { display: flex; align-items: center; gap: .6rem; padding: .5rem .65rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: .9rem; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
-.nav-item.active { background: var(--accent-weak); color: var(--accent-2); font-weight: 600; }
+.nav-item.active { background: var(--bg-accent); color: var(--accent-2); font-weight: 600; }
 .side-foot { margin-top: auto; padding: .6rem; color: var(--faint); font-size: .72rem; }
 
 /* ---------- main ---------- */
@@ -68,6 +118,11 @@ body { margin: 0; }
 main.content, .content { max-width: 1180px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.4rem; }
 
 h1 { font-size: 1.5rem; margin: 0.3rem 0; letter-spacing: -.01em; text-wrap: balance; }
+/* The one-line subtitle every page puts right under its <h1> — .content's own
+   flex `gap` already spaces it from the title; the paragraph's own default
+   top margin used to stack on top of that gap too, reported live as "trop
+   d'espace" (2026-09-03). */
+h1 + p.muted { margin-top: 0; }
 h2 { font-size: 1.12rem; margin: 1.4rem 0 .2rem; }
 a { color: var(--accent-2); }
 .mono { font-family: var(--mono); font-size: .86em; }
@@ -84,10 +139,10 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 
 /* ---------- badges ---------- */
 .badge { display: inline-block; padding: .08rem .55rem; border-radius: 999px; font-size: .76rem; font-weight: 600; }
-.badge-ok { color: var(--ok); background: var(--ok-bg); }
-.badge-warn { color: var(--warn); background: var(--warn-bg); }
-.badge-error { color: var(--error); background: var(--error-bg); }
-.badge-critical { color: #fff; background: var(--error-2, #7a1f1c); }
+.badge-ok { color: var(--ok); background: var(--bg-ok); }
+.badge-warn { color: var(--warn); background: var(--bg-warn); }
+.badge-error { color: var(--error); background: var(--bg-error); }
+.badge-critical { color: #fff; background: var(--error-2, #8f1214); }
 .badge-muted { color: var(--muted); background: var(--surface-2); }
 
 /* A colored dot + colored text — a lighter-weight status label than .badge's
@@ -107,20 +162,35 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
    Distinct from .badge above: a badge is a small inline pill for a value,
    a notice is a block-level banner meant to be seen before anything else on
    the page — info (blue), warning (orange), critical (red). */
+/* 2026-09-03 design-review pass: a colored left accent bar instead of a
+   full-perimeter border of the same weight (reads as more deliberate, less
+   "just a box"), the icon as an inline SVG using currentColor (was a plain
+   unicode glyph — disliked, and font-fallback-dependent) sized explicitly
+   instead of via font-size, and the body text tinted a dark shade of the
+   notice's own color instead of flat --text — a notice with no color in
+   its text read as an afterthought next to its own colored border. */
 .notice {
     display: flex; align-items: flex-start; gap: .65rem;
-    padding: .75rem 1rem; border-radius: 8px; border: 1px solid;
+    padding: .75rem 1rem; border-radius: 8px;
+    border: 1px solid; border-left-width: 4px;
     font-size: .92rem; line-height: 1.45;
 }
-.notice .notice-icon { flex: none; font-size: 1.05rem; line-height: 1.45; }
+.notice .notice-icon { flex: none; width: 1.1rem; height: 1.1rem; margin-top: .1rem; }
+.notice .notice-icon svg { display: block; width: 100%; height: 100%; }
 .notice a { font-weight: 600; }
-.notice-info     { background: var(--info-bg);  border-color: var(--info);  color: var(--text); }
-.notice-warning  { background: var(--warn-bg);  border-color: var(--warn);  color: var(--text); }
-.notice-critical { background: var(--error-bg); border-color: var(--error); color: var(--text); }
+.notice-info     { background: var(--bg-info);  border-color: var(--info);  color: #1a4d85; }
+.notice-warning  { background: var(--bg-warn);  border-color: var(--warn);  color: #8f4a06; }
+.notice-critical { background: var(--bg-error); border-color: var(--error); color: #8a2320; }
+.notice-progress { background: var(--bg-info);  border-color: var(--info);  color: #1a4d85; }
+/* The progress icon is a faint ring + one bright arc (see notice() in
+   helpers.php) — spinning the whole <svg> is what turns that static arc
+   into a loading spinner. */
+.notice-progress .notice-icon svg { animation: xt-spin .8s linear infinite; transform-origin: 50% 50%; }
+@keyframes xt-spin { to { transform: rotate(360deg); } }
 
 /* A very pale wash over an inactive plugin/theme row — a glance should tell
    it apart from an active one without reading the Status column. */
-tr.row-inactive { background: var(--error-bg); }
+tr.row-inactive { background: var(--bg-error); }
 
 /* ---------- pastilles ---------- */
 .pastille { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; font-size: .82rem; }
@@ -143,7 +213,10 @@ table.kv { border: none; border-radius: 0; background: none; }
 table.kv th, table.kv td { border: none; border-bottom: 1px solid var(--border); padding: .5rem 1.1rem; background: none; text-transform: none; letter-spacing: normal; line-height: 1.45; }
 table.kv tr:last-child th, table.kv tr:last-child td { border-bottom: 0; }
 table.kv th { width: 44%; text-align: left; font-weight: 500; color: var(--muted); font-size: .85rem; vertical-align: top; }
-table.kv td { text-align: right; word-break: break-word; font-variant-numeric: tabular-nums; }
+/* Left-aligned everywhere (2026-09-03 design-review: right-aligned values
+   were "trop difficile à lire" — this used to be the .kv-cols-2-only
+   treatment; it is now the one .kv default, so that override is gone). */
+table.kv td { text-align: left; word-break: break-word; font-variant-numeric: tabular-nums; }
 .val-ok { color: var(--ok); font-weight: 600; } .val-warn { color: var(--warn); font-weight: 600; }
 .val-error { color: var(--error); font-weight: 600; } .val-muted { color: var(--muted); }
 
@@ -215,50 +288,47 @@ table.kv td { text-align: right; word-break: break-word; font-variant-numeric: t
 .lic-form select.lic-premium, .lic-form select.lic-mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
 .lic-form select.lic-unknown { border-color: var(--border); color: var(--muted); }
 .lic-form select.lic-custom { border-color: var(--info); color: var(--info); }
-.lic-form select.lic-saved { box-shadow: 0 0 0 2px var(--ok-bg), 0 0 0 3px var(--ok); }
+.lic-form select.lic-saved { box-shadow: 0 0 0 2px var(--bg-ok), 0 0 0 3px var(--ok); }
 .lic-form select:disabled { opacity: .6; cursor: wait; }
 tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
-/* ---------- misc ---------- */
-.search { margin: .3rem 0; display: flex; gap: .5rem; }
-.search input[type="search"], .search input[type="text"] { flex: 1; max-width: 420px; padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--surface); color: var(--text); }
-.search select:not(.select2-hidden-accessible) { padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; background: var(--surface); color: var(--text); cursor: pointer; }
-.search button, .search .btn { padding: .45rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
-.filters a { text-decoration: none; } .filters a.active { font-weight: 700; }
-
-/* ---------- pill filter bar ----------
-   Modeled after a reference design the user shared (2026-09-02) for the
-   "Services" table filter bar on /clients/{id} — icon-in-field search,
-   chevron selects — but squared off (8px, this app's usual input radius)
-   rather than the reference's full pill shape, per follow-up feedback
-   ("moins rond... plus carré"). A visual variant of the plain .search rules
-   above, not a replacement — those still style every other page's filter
-   form. */
-/* Wraps a .pill-bar together with the table it filters, as one flex child of
-   .content, so the two sit close together (2026-09-02, user: "plus
-   'collés'") instead of getting .content's full 1.4rem inter-block gap. */
-.pill-bar-group { display: flex; flex-direction: column; gap: .6rem; }
-.pill-bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+/* ---------- filter bar ----------
+   The ONE filter-bar treatment (2026-09-03 design-review: two different
+   ones — a plain-input version and a "pill-bar" icon/chevron version —
+   coexisted; the user preferred the pill-bar look, so that visual language
+   wins and is now what .search itself means everywhere). Icon-in-field
+   search, chevron selects, squared corners (8px, this app's usual input
+   radius — not a full pill, per earlier "moins rond... plus carré"
+   feedback). Every filter-bar template can now just say `class="search"`;
+   the flex layout (wrap + vertical centering) lives here instead of being
+   copy-pasted as an inline style on every form. */
+.search { margin: .3rem 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 /* One explicit height shared by the search field, the select and the
-   button (2026-09-02: padding alone didn't keep them pixel-identical — a
+   button — padding alone didn't keep them pixel-identical (a
    <button>/<input>/<select> don't resolve padding+line-height into the same
-   box height the same way across browsers — so this pins all three
-   directly instead of trying to reconcile their padding by hand). */
-.pill-bar input[type="search"], .pill-bar select, .pill-bar .btn { height: 2.15rem; box-sizing: border-box; }
-.pill-bar input[type="search"] {
+   box height the same way across browsers), so this pins all three
+   directly instead of trying to reconcile their padding by hand. */
+.search input[type="search"], .search input[type="text"], .search select, .search .btn { height: 2.15rem; box-sizing: border-box; }
+.search input[type="search"], .search input[type="text"] {
     padding: 0 .9rem 0 2.15rem; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat .75rem center;
     font-size: .85rem; color: var(--text); min-width: 200px;
 }
-.pill-bar select {
+.search select:not(.select2-hidden-accessible) {
     padding: 0 1.9rem 0 1rem; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right .85rem center;
     font-size: .85rem; color: var(--text); cursor: pointer; appearance: none; -webkit-appearance: none;
 }
-.pill-bar .btn { margin-top: 0; padding: 0 .9rem; border-radius: 8px; border: 1px solid transparent; font-size: .85rem; }
-.pill-bar .pill-reset { color: var(--muted); text-decoration: none; font-size: .88rem; }
-.pill-bar .pill-reset:hover { color: var(--text); text-decoration: underline; }
-.error-line { color: var(--error); background: var(--error-bg); border-radius: 6px; padding: .35rem .6rem; font-size: .86em; }
+.search .btn { margin-top: 0; padding: 0 .9rem; font-size: .85rem; }
+.search .search-reset { color: var(--muted); text-decoration: none; font-size: .88rem; }
+.search .search-reset:hover { color: var(--text); text-decoration: underline; }
+.filters a { text-decoration: none; } .filters a.active { font-weight: 700; }
+
+/* Wraps a .search bar together with the table it filters, as one flex child
+   of .content, so the two sit close together (2026-09-02, user: "plus
+   'collés'") instead of getting .content's full 1.4rem inter-block gap. */
+.search-group { display: flex; flex-direction: column; gap: .6rem; }
+.error-line { color: var(--error); background: var(--bg-error); border-radius: 6px; padding: .35rem .6rem; font-size: .86em; }
 details { margin-top: .6rem; } details summary { cursor: pointer; color: var(--accent-2); }
 pre { background: #10161d; color: #dce7f5; border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; font-size: .82rem; max-height: 460px; }
 .lang-switch a { text-decoration: none; }
@@ -278,10 +348,18 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 
 /* Primary action button (e.g. "Lancer l'analyse" on a pending extraction). */
 .btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-top: .6rem;
     padding: .5rem .9rem;
-    border: 0;
+    /* Transparent, not 0 — every variant below keeps the exact same box
+       height whether or not it actually shows a border (2026-09-03: a
+       solid-fill button and a bordered one used to differ by the 2px this
+       reserves, the same "Filter button doesn't line up with the dropdown"
+       bug already fixed once for the filter bar, generalised here so it
+       can't recur for any future button variant). */
+    border: 1px solid transparent;
     border-radius: 7px;
     background: var(--accent);
     color: #fff;
@@ -291,41 +369,132 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 }
 .btn:hover { filter: brightness(1.07); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Secondary/neutral button — dark slate instead of the accent orange, for an
-   action that isn't the page's primary call to action (e.g. the Services
-   filter bar's "Filter", 2026-09-02). */
-.btn-secondary { background: var(--secondary); }
-.btn-secondary:focus-visible { outline-color: var(--secondary); }
+/* Secondary action (Filter/Search — a supporting action, not the page's
+   primary call to action) — an accent-outline button, not a solid fill
+   (2026-09-03: replaced a dark-slate fill the user didn't like; an outline
+   in the app's own accent color reads as "secondary" without introducing a
+   competing color into the palette). */
+.btn-secondary { background: var(--surface); color: var(--accent-2); border-color: var(--accent); }
+.btn-secondary:hover { background: var(--bg-accent); filter: none; }
+.btn-secondary:focus-visible { outline-color: var(--accent); }
+/* Destructive action (Revoke/Remove) — 2026-09-03: this exact background
+   was already being reinvented as an inline style at 4 separate call sites
+   (site.php's Revoke/Remove, users.php's Remove); given one real class here
+   instead of leaving the fifth one-off to write itself. */
+.btn-danger { background: var(--error); }
+.btn-danger:focus-visible { outline-color: var(--error); }
+/* Lowest-emphasis button — Cancel, Suspend (reversible, not destructive) —
+   light surface + a real border, not just a background wash (2026-09-03:
+   the background-only version barely showed an edge against a white card,
+   reported live as "ne contraste pas assez avec le fond"). Distinct from
+   .btn-secondary above (outlined in the accent color, a real if
+   non-primary action like "Filter"): this one reads as "step back", not "do
+   this instead". Same "already three inline copies" story as .btn-danger —
+   Cancel in subscription_website_form() (helpers.php), Cancel and Suspend
+   in users.php all had their own `style="background:var(--surface-2);
+   color:var(--text)"`. */
+.btn-muted { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn-muted:focus-visible { outline-color: var(--border); }
 
 /* Select2 (vendored, /assets/vendor/select2/) — retheme its default blue to
-   this app's accent + neutrals rather than leave the two palettes clashing. */
+   this app's accent + neutrals rather than leave the two palettes clashing.
+   Rewritten 2026-09-03 (design-review: "l'alignement du texte n'est pas
+   bon, la flèche n'a pas le bon style, les options sont en Times New
+   Roman"):
+     - font-family was only ever set on the closed selection box, never on
+       the dropdown/results list — select2 appends that list as a direct
+       child of <body> (dropdownParent), outside anywhere that already
+       inherited this app's font, so it fell back to the browser default
+       serif. Set explicitly here on every select2-generated surface.
+     - the selection box used `height: auto` + padding, which doesn't
+       reliably vertical-center the rendered text against the arrow/border;
+       switched to the same fixed-height + flex-centering approach as every
+       other input in .search.
+     - the arrow was select2's own default CSS-triangle (an unstyled grey
+       wedge) — replaced with the same chevron used on every other <select>
+       in the app. */
+/* !important here is deliberate and narrowly scoped to this vendored
+   library's own generated DOM (never used elsewhere in this file). Two
+   rounds of live testing found two distinct causes, both now pinned
+   directly instead of trusting specificity/inheritance against a
+   stylesheet this app doesn't control the load order of:
+     1. select2's own CSS sets an explicit `font-family: sans-serif` on
+        .select2-search__field and an explicit pixel line-height on
+        .select2-selection__rendered — both *on the element itself*, which
+        blocks ordinary inheritance from a corrected ancestor even once the
+        ancestor's own font is fixed.
+     2. .select2-dropdown is appended straight to <body> (dropdownParent),
+        never inside anything that already carries this app's 14px base —
+        so `font-size: 1em` on its contents (select2's own default) resolved
+        against the browser's 16px default, not this app's, which is what
+        made every select2 dropdown read as visibly larger than a plain
+        <select> right next to it ("les valeurs sont trop grosses").
+   Listing every surface explicitly and pinning both font-family and
+   font-size on each closes both gaps at once, rather than relying on one
+   to cascade into the other. */
+.select2-container,
+.select2-dropdown,
+.select2-selection__rendered,
+.select2-results__option,
+.select2-search__field {
+    font-family: var(--sans) !important;
+    font-size: .85rem !important;
+}
 .select2-container--default .select2-selection--single {
+    display: flex; align-items: center;
     border: 1px solid var(--border);
     border-radius: 7px;
-    height: auto;
-    padding: .32rem .4rem;
+    height: 2.15rem;
+    padding: 0 .6rem;
     background: var(--surface);
-    font-family: var(--sans);
 }
+/* display:flex on the rendered box itself, not just its parent: an empty
+   selection wraps its placeholder text in a nested .select2-selection__placeholder
+   span with its own line-height, decoupled from the parent's flex centering
+   — reported live as text sitting high with dead space below. Centering
+   here too, one level deeper, is robust regardless of what select2 nests
+   inside on any given state (placeholder vs a real selection). */
 .select2-container--default .select2-selection--single .select2-selection__rendered {
-    color: var(--text);
-    line-height: 1.3;
-    padding-left: .2rem;
+    display: flex !important; align-items: center;
+    color: var(--text) !important;
+    line-height: normal !important;
+    padding: 0;
 }
-.select2-container--default .select2-selection--single .select2-selection__arrow { height: 100%; }
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: var(--muted); line-height: normal !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    color: var(--faint); margin-right: .35rem; font-size: 1.05rem;
+}
+.select2-container--default .select2-selection--single .select2-selection__clear:hover { color: var(--muted); }
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    top: 0; right: .5rem; height: 100%; width: 14px;
+}
+/* The default is a CSS border-triangle on this <b> — hidden outright rather
+   than overridden, since select2 flips its border-direction again on open
+   and a partial override kept losing that fight. A ::after on the (already
+   absolutely-positioned, so already a containing block) arrow span draws the
+   real icon instead — a plain new element select2's own CSS has no rule for
+   at all, so there is nothing left to lose specificity/order against. */
+.select2-container--default .select2-selection--single .select2-selection__arrow b { display: none !important; }
+.select2-container--default .select2-selection--single .select2-selection__arrow::after {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    width: 10px; height: 10px; transform: translate(-50%, -50%);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat center / contain;
+}
 .select2-container--default.select2-container--open .select2-selection--single,
 .select2-container--default .select2-selection--single:focus {
     border-color: var(--accent);
 }
 .select2-dropdown { border-color: var(--border); border-radius: 7px; overflow: hidden; }
 .select2-search--dropdown .select2-search__field {
-    border: 1px solid var(--border); border-radius: 6px; font: inherit;
+    border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem;
 }
 .select2-container--default .select2-results__option--highlighted[aria-selected] {
     background: var(--accent); color: #fff;
 }
 .select2-container--default .select2-results__option[aria-selected=true] {
-    background: var(--accent-weak); color: var(--text);
+    background: var(--bg-accent); color: var(--text);
 }
 
 /* Inline "copy to clipboard" / "edit" buttons next to a value (helpers.php's
@@ -339,9 +508,15 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 }
 .copy-btn:hover, .wf-edit-btn:hover, .row-edit-btn:hover { color: var(--accent); }
 .copy-btn.copied { color: var(--ok); }
-/* subscription_website_form()'s edit pencil: bigger and mirrored (2026-09-02,
-   user: "le crayon pour éditer devrait être de l'autre sens, et plus gros"). */
-.wf-edit-btn { font-size: 1.35em; display: inline-block; transform: scaleX(-1); }
+/* 2026-09-03: both now render icon_edit() (helpers.php) — a real inline SVG,
+   not the "✎" character these were originally sized/mirrored to compensate
+   for. Drawn in the intended orientation directly, so no CSS mirror hack is
+   needed any more; sized here the same way every other inline icon is
+   (width/height in em, not font-size, since font-size does nothing to an
+   <svg> with no width/height of its own). */
+.wf-edit-btn, .row-edit-btn { display: inline-block; }
+.wf-edit-btn svg, .row-edit-btn svg { width: 1.1em; height: 1.1em; vertical-align: -0.15em; display: inline-block; }
+.wf-edit-btn svg { width: 1.35em; height: 1.35em; }
 
 /* Two-column key/value layout for a compact info card (2026-09-02, client
    detail — "prendre moins d'espace"). A real CSS Grid of two explicit
@@ -356,23 +531,143 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
    narrow. */
 .kv-cols-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; }
 @media (max-width: 700px) { .kv-cols-2 { grid-template-columns: 1fr; } }
-/* Values left-aligned and the key column shrunk to fit its own text (2026-09-02,
-   user, on the Client card specifically — the plain single-column .kv table
-   used everywhere else, e.g. the extraction report and /site/{id}, keeps its
-   right-aligned values and 44%-wide key column untouched). `width: 1%` with
-   `white-space: nowrap` is the standard auto-table-layout trick: the browser
-   sizes that column to its own content instead of the fixed 44%, and the
-   value column absorbs whatever space is left. */
+/* The key column shrunk to fit its own text (2026-09-02, on the Client card
+   specifically — values are left-aligned everywhere now, see table.kv td
+   above, but the single-column .kv default still keeps a fixed 44%-wide key
+   column; this two-column layout wants the key column no wider than its own
+   text). `width: 1%` with `white-space: nowrap` is the standard
+   auto-table-layout trick: the browser sizes that column to its own content
+   instead of the fixed 44%, and the value column absorbs whatever space is
+   left. */
 .kv-cols-2 table.kv th { width: 1%; white-space: nowrap; }
-.kv-cols-2 table.kv td { text-align: left; }
 
 /* Every Datatable's explicit-search replacement (helpers.php's dt_search_box())
-   — same visual language as .search above, since the native box it replaces
-   isn't rendered any more (`dom` option). */
-.xt-dt-search { padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--surface); color: var(--text); min-width: 16rem; }
+   — always rendered inside a `<p class="search">` wrapper (2026-09-03) so it
+   gets the exact same icon-field/height/.btn-secondary treatment as every
+   other filter bar; these two rules only add what a plain <input>/<button>
+   need beyond that. */
+.xt-dt-search { min-width: 16rem; }
 .xt-dt-search-btn { margin: 0; }
 
 /* Bottom bar (length + info + pagination — `dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>'`
    moves "entries per page" here unconditionally, 2026-09-02). */
 .xt-dt-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; margin-top: .6rem; font-size: .9rem; }
 .xt-dt-bottom .dataTables_paginate { margin: 0; }
+
+/* DataTables' own generated chrome (2026-09-03 design-review: shipped
+   entirely unstyled before — "the 10 entries per page dropdown doesn't have
+   the right style", "pagination clashes" — both are DataTables' native
+   markup, not helpers.php's, so they need their own rules using DataTables'
+   own stable class names rather than anything this app names itself). */
+.dataTables_length select {
+    padding: 0 1.9rem 0 .7rem; height: 1.9rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right .6rem center;
+    font: inherit; font-size: .85rem; color: var(--text); cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.dataTables_info { color: var(--muted); }
+.dataTables_paginate .paginate_button {
+    display: inline-block; margin-left: .25rem; padding: .3rem .65rem;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text) !important;
+    cursor: pointer;
+}
+.dataTables_paginate .paginate_button:first-child { margin-left: 0; }
+.dataTables_paginate .paginate_button.current {
+    background: var(--accent); border-color: var(--accent); color: #fff !important;
+}
+.dataTables_paginate .paginate_button.disabled { color: var(--faint) !important; cursor: default; opacity: .6; }
+.dataTables_paginate .paginate_button:hover:not(.disabled):not(.current) { border-color: var(--accent); }
+.dataTables_paginate .paginate_button.previous, .dataTables_paginate .paginate_button.next { font-weight: 600; }
+
+/* ---------- style guide (/styleguide) ---------- */
+.sg-swatches { display: flex; flex-wrap: wrap; gap: 1rem; }
+.sg-swatch { display: flex; align-items: center; gap: .5rem; font-size: .82rem; }
+.sg-swatch-color { width: 1.6rem; height: 1.6rem; border-radius: 6px; border: 1px solid var(--border); flex: none; }
+.sg-swatch-desc { color: var(--muted); }
+.sg-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.sg-group { margin-bottom: 1.2rem; }
+.sg-group-title { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin-bottom: .5rem; }
+
+/* ---------- style guide proposals (2026-09-03) — none of this is used by
+   any real page yet; every class below only exists inside styleguide.php. ---------- */
+
+/* Icons (icon_edit()/icon_external_link() in helpers.php) — sized via
+   font-size like an icon font would be, but it's inline SVG. */
+.icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em; }
+.icon svg { display: block; width: 100%; height: 100%; }
+
+/* A quiet, secondary fact (e.g. "Last sync: 15 minutes ago") — pale grey
+   italic, meant to sit unobtrusively near a heading/card without competing
+   with real content. Pairs with a data-tippy-content tooltip for the exact
+   timestamp instead of the native title="" attribute. */
+.text-subtle { color: var(--faint); font-style: italic; font-size: .85em; }
+
+/* Toasts — a transient confirmation after an AJAX save, bottom-right,
+   auto-dismissing. Colour lives on a left accent bar, same language as
+   .notice. */
+.toast-container { position: fixed; bottom: 1.25rem; right: 1.25rem; display: flex; flex-direction: column; gap: .6rem; z-index: 1000; }
+.toast {
+    display: flex; align-items: center; gap: .6rem;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ok);
+    border-radius: 8px; padding: .7rem 1rem; box-shadow: var(--shadow);
+    font-size: .88rem; color: var(--text); min-width: 220px; max-width: 340px;
+    animation: sg-toast-in .18s ease-out; transition: opacity .2s ease;
+}
+.toast-error { border-left-color: var(--error); }
+.toast .icon { flex: none; color: var(--ok); }
+.toast-error .icon { color: var(--error); }
+@keyframes sg-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Filter-dropdown-as-tag concept: the button's own label never changes (it
+   always names the filter, e.g. "Status"), a picked value shows up as a
+   removable tag below the search row instead. A real interaction, not a
+   native <select> — those always display the current selection as their
+   own text, which is exactly the behaviour being replaced here. */
+.filter-dropdown { position: relative; display: inline-block; }
+.filter-dropdown-btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    height: 2.15rem; padding: 0 .9rem; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font: inherit; font-size: .85rem; cursor: pointer;
+}
+.filter-dropdown-btn:hover { border-color: var(--accent); }
+.filter-dropdown.open .filter-dropdown-btn { border-color: var(--accent); }
+.filter-dropdown-btn .chevron { width: 10px; height: 10px; flex: none; transition: transform .15s; color: var(--muted); }
+.filter-dropdown.open .filter-dropdown-btn .chevron { transform: rotate(180deg); }
+.filter-dropdown-panel {
+    display: none;
+    position: absolute; top: calc(100% + .3rem); left: 0; min-width: 12rem; z-index: 20;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
+    padding: .3rem;
+}
+.filter-dropdown.open .filter-dropdown-panel { display: block; }
+.filter-dropdown-panel button {
+    display: block; width: 100%; text-align: left; padding: .4rem .6rem; border: 0; background: none;
+    border-radius: 6px; font: inherit; font-size: .85rem; color: var(--text); cursor: pointer;
+}
+.filter-dropdown-panel button:hover { background: var(--bg-accent); color: var(--accent-2); }
+.filter-dropdown-panel button.active { color: var(--accent-2); font-weight: 600; }
+
+/* The tag row itself — sits below the search row, only occupies space once
+   at least one filter is picked (2026-09-03, user: "il faudra augmenter
+   l'espace" — this is that extra space, conditional not fixed). */
+.filter-tags { display: flex; flex-wrap: wrap; gap: .5rem; }
+.filter-tags:empty { display: none; }
+.filter-tag {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .3rem .4rem .3rem .8rem; border-radius: 999px; border: 1px solid var(--accent);
+    background: var(--bg-accent); color: var(--accent-2); font-size: .82rem; font-weight: 600;
+}
+.filter-tag button {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 0; background: rgba(20, 35, 50, .08);
+    color: inherit; cursor: pointer; padding: 0; font-size: .85rem; line-height: 1;
+}
+.filter-tag button:hover { background: rgba(20, 35, 50, .16); }
+
+/* Tippy.js retheme (light-border theme as the base — closest to this app's
+   own card look already) */
+.tippy-box[data-theme~='light-border'] {
+    font-family: var(--sans); font-size: .82rem; color: var(--text);
+    border-color: var(--border); box-shadow: var(--shadow);
+}
+.tippy-box[data-theme~='light-border'] .tippy-arrow { color: var(--surface); }
+.tippy-box[data-theme~='light-border'] .tippy-backdrop { background-color: var(--surface); }

@@ -204,6 +204,87 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertSame('2026-06-15 10:00:00', $this->repo->clientsLastSyncedAt());
     }
 
+    /** The status page's (2026-09-03) per-table sync freshness check. */
+    public function testLastSyncByTableReturnsMaxDateSyncPerTableExcludingSubscriptionsWebsites(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("UPDATE swp_clients SET date_sync = '2026-06-15 10:00:00' WHERE id = 2");
+
+        $result = $this->repo->lastSyncByTable();
+
+        $this->assertSame('2026-06-15 10:00:00', $result['swp_clients']);
+        $this->assertSame('2026-01-01 00:00:00', $result['swp_websites']);
+        $this->assertNull($result['swp_website_items'], 'empty table -> null, not an error');
+        $this->assertArrayNotHasKey(
+            'swp_subscriptions_websites',
+            $result,
+            'that table has no date_sync column (date_added/date_updated instead) so it is never checked'
+        );
+    }
+
+    public function testClientsWithUnpaidSubscriptionsMatchesOnHoldOnly(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->assertSame([], $this->repo->clientsWithUnpaidSubscriptions());
+
+        $this->pdo->exec("UPDATE swp_subscriptions SET subscription_status = 'on-hold' WHERE id = 1000");
+
+        $unpaid = $this->repo->clientsWithUnpaidSubscriptions();
+        $this->assertSame([1], array_column($unpaid, 'id'));
+
+        // 'pending' is a real status too but is not "unpaid" — must not match.
+        $this->pdo->exec("UPDATE swp_subscriptions SET subscription_status = 'pending' WHERE id = 2000");
+        $this->assertSame([1], array_column($this->repo->clientsWithUnpaidSubscriptions(), 'id'));
+    }
+
+    public function testClientsWithEmptyCompanyFindsNullAndBlank(): void
+    {
+        $this->seedBasicPortfolio(); // client 2 has company = NULL
+        $this->pdo->exec("INSERT INTO swp_clients (id, email, company, date_sync) VALUES (3, 'c@example.com', '   ', '2026-01-01 00:00:00')");
+
+        $empty = $this->repo->clientsWithEmptyCompany();
+        $ids   = array_column($empty, 'id');
+        sort($ids);
+
+        $this->assertSame([2, 3], $ids);
+    }
+
+    public function testClientsActiveWithEmptyCompanyOnlyCountsActiveSubscribers(): void
+    {
+        $this->seedBasicPortfolio(); // client 1: company set, active sub. client 2: no company, active sub.
+        // Client 3: no company either, but no subscription at all — must not count as "active".
+        $this->pdo->exec("INSERT INTO swp_clients (id, email, company, date_sync) VALUES (3, 'c@example.com', NULL, '2026-01-01 00:00:00')");
+
+        $this->assertSame([2], array_column($this->repo->clientsActiveWithEmptyCompany(), 'id'));
+    }
+
+    public function testClientsActiveWithoutHubspotIdExcludesClientsWithAnId(): void
+    {
+        $this->seedBasicPortfolio(); // neither client has hubspot_id set
+        $this->assertSame([1, 2], $this->sortedIds($this->repo->clientsActiveWithoutHubspotId()));
+
+        $this->pdo->exec("UPDATE swp_clients SET hubspot_id = 'hs-1' WHERE id = 1");
+        $this->assertSame([2], array_column($this->repo->clientsActiveWithoutHubspotId(), 'id'));
+    }
+
+    public function testClientsActiveWithoutTeamworkIdExcludesClientsWithAnId(): void
+    {
+        $this->seedBasicPortfolio(); // neither client has teamwork_id set
+        $this->assertSame([1, 2], $this->sortedIds($this->repo->clientsActiveWithoutTeamworkId()));
+
+        $this->pdo->exec("UPDATE swp_clients SET teamwork_id = 'tw-1' WHERE id = 1");
+        $this->assertSame([2], array_column($this->repo->clientsActiveWithoutTeamworkId(), 'id'));
+    }
+
+    /** @param list<array<string, mixed>> $rows @return list<int> */
+    private function sortedIds(array $rows): array
+    {
+        $ids = array_column($rows, 'id');
+        sort($ids);
+
+        return $ids;
+    }
+
     public function testGetClientFoundAndNotFound(): void
     {
         $this->seedBasicPortfolio();

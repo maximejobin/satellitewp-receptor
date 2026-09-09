@@ -71,8 +71,8 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
           // below it (2026-09-02, user: "plus 'collés'") — as two direct
           // siblings of .content they'd each get its 1.4rem flex gap, same
           // as every other pair of blocks on the page. ?>
-    <div class="pill-bar-group">
-    <form class="pill-bar" onsubmit="return false">
+    <div class="search-group">
+    <form class="search" onsubmit="return false">
         <input type="search" id="svc-search" placeholder="Search product…">
         <select id="svc-website">
             <option value="">All websites</option>
@@ -81,7 +81,7 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
             <?php endforeach; ?>
         </select>
         <button type="button" class="btn btn-secondary" id="svc-filter-btn">Filter</button>
-        <a href="#" class="pill-reset" id="svc-reset">Reset Filters</a>
+        <a href="#" class="search-reset" id="svc-reset">Reset Filters</a>
     </form>
     <table id="services-table">
         <thead>

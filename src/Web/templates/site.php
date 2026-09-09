@@ -15,7 +15,7 @@
 <?php endif; ?>
 
 <?php if ($createdKey !== null): ?>
-    <div class="pending-note" style="border-style:solid;border-color:var(--ok);background:var(--ok-bg);margin-bottom:.8rem">
+    <div class="pending-note" style="border-style:solid;border-color:var(--ok);background:var(--bg-ok);margin-bottom:.8rem">
         <b>Key created — copy it now, it will never be shown again:</b><br>
         <span class="mono" style="user-select:all;font-size:1rem"><?= e($createdKey['key']) ?></span><br>
         <span class="muted">Paste it into Settings → SatelliteWP → Pairing on the site
@@ -107,7 +107,7 @@
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="action" value="revoke">
                         <input type="hidden" name="site_id" value="<?= e($siteId) ?>">
-                        <button type="submit" class="btn" style="background:var(--error);margin:0;padding:.25rem .6rem">Revoke</button>
+                        <button type="submit" class="btn btn-danger" style="margin:0;padding:.25rem .6rem">Revoke</button>
                     </form>
                 <?php endif; ?>
             </div>
@@ -149,7 +149,7 @@
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                     <input type="hidden" name="action" value="http_auth_clear">
                     <input type="hidden" name="site_id" value="<?= e($siteId) ?>">
-                    <button type="submit" class="btn" style="background:var(--error);padding:.25rem .6rem">Remove</button>
+                    <button type="submit" class="btn btn-danger" style="padding:.25rem .6rem">Remove</button>
                 </form>
             <?php else: ?>
                 <form method="post" action="/keys" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">

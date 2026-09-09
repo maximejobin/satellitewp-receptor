@@ -20,6 +20,7 @@
 declare(strict_types=1);
 
 use SatelliteWP\Xtractor\Reference\EndOfLife;
+use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Rules\Category;
 use SatelliteWP\Xtractor\Rules\Check;
 use SatelliteWP\Xtractor\Rules\Context;
@@ -97,37 +98,35 @@ return [
     //  B. HTTP HEADERS & NETWORK                                   [EXT]
     // ===================================================================
     [
+        // Offers ONLY gzip and checks whether the server actually returns it
+        // — not whether gzip happened to be the encoding a combined
+        // "gzip, br" request came back with (that reflects the server's
+        // preference between the two, not its capability; see
+        // HttpProbe::compressionSupportCheck()).
         'id' => 'B1', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
-                return Check::unknown();
-            }
-            $encoding = $c->string('probe.http.content_encoding');
-
-            return $c->bool('probe.http.gzip') === true ? Check::pass($encoding ?? 'gzip') : Check::fail($encoding ?? 'none');
-        },
+        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.gzip')),
     ],
     [
+        // Same idea as B1, offering ONLY brotli.
         'id' => 'B2', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
-                return Check::unknown();
-            }
-            $encoding = $c->string('probe.http.content_encoding');
-
-            return $encoding === 'br' ? Check::pass('br') : Check::fail($encoding ?? 'none');
-        },
+        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.brotli')),
     ],
     [
-        'id' => 'B3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            $version = $c->string('probe.http.http_version');
-            if ($version === null) {
-                return Check::unknown();
-            }
-
-            return (float) $version >= 2 ? Check::pass($version) : Check::fail($version);
-        },
+        // HTTP/2 only — split from the old ">= 2" threshold (config/rules.php
+        // history) which counted HTTP/3 as a pass here too. See B4/B5 for the
+        // other two versions.
+        'id' => 'B3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http2')),
+    ],
+    [
+        'id' => 'B4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http1_1')),
+    ],
+    [
+        // Advertised via the Alt-Svc header only, not a live QUIC handshake —
+        // see HttpProbe::altSvcAdvertisesHttp3() for why.
+        'id' => 'B5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http3_advertised')),
     ],
     [
         'id' => 'B6', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 86400,
@@ -177,24 +176,22 @@ return [
             ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
+    // B8 (cookie security attributes on the homepage's Set-Cookie) removed
+    // 2026-09-05 — user: "ça ne me semble pas crédible", and rightly so: an
+    // anonymous GET to the homepage never sees the cookies that actually
+    // matter (wordpress_logged_in_*, wordpress_sec_*, the auth cookies —
+    // only set once someone logs in), so this could only ever judge
+    // whatever incidental cookie a caching/consent/commerce plugin happens
+    // to set, if any — most sites show n/a here, and a "pass" never meant
+    // "the real session cookies are safe". The substring match on the raw
+    // Set-Cookie header was also naive: a site setting several cookies could
+    // read as "all present" if the three words appeared anywhere in the
+    // combined text, not necessarily on the same cookie. The raw cookie
+    // flags Xtractor did observe are still visible in the extraction's raw
+    // probe data (probe.http.cookies) — just no longer asserted as a
+    // pass/fail judgement Xtractor cannot actually back up.
     [
-        'id' => 'B8', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            $cookies = $c->get('probe.http.cookies');
-            if ($cookies === null) {
-                return Check::na();
-            }
-            $missing = array_keys(array_filter([
-                'Secure'   => !($cookies['secure'] ?? false),
-                'HttpOnly' => !($cookies['httponly'] ?? false),
-                'SameSite' => !($cookies['samesite'] ?? false),
-            ]));
-
-            return $missing === [] ? Check::pass('all') : Check::fail(implode(', ', $missing));
-        },
-    ],
-    [
-        'id' => 'B9', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
+        'id' => 'B9', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             if (!$c->probeRan('http')) {
                 return Check::unknown();
@@ -215,7 +212,7 @@ return [
     //  C. DNS & AVAILABILITY                                       [EXT]
     // ===================================================================
     [
-        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Info,
+        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             if (!$c->probeRan('dns')) {
                 return Check::unknown();
@@ -258,7 +255,7 @@ return [
         },
     ],
     [
-        'id' => 'C8', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Info,
+        'id' => 'C8', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $soft = $c->get('probe.http.soft_404');
             if (!is_array($soft) || ($soft['checked'] ?? false) !== true) {
@@ -269,23 +266,49 @@ return [
         },
     ],
     [
+        // Presence only — whether robots.txt blocks everything is C9a's job
+        // (2026-09-05, user: "devrait être seulement la validation de la
+        // présence"), so a genuine absence and a full "Disallow: /" no
+        // longer collapse into the same finding.
         'id' => 'C9', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $robots = $c->get('probe.http.robots');
             if (!is_array($robots)) {
                 return Check::unknown();
             }
-            if (($robots['present'] ?? false) !== true) {
-                return Check::fail('absent');
-            }
 
-            return ($robots['disallow_all'] ?? false) === true
-                ? Check::fail('blocked', [], Severity::High)
-                : Check::pass('present');
+            return ($robots['present'] ?? false) === true ? Check::pass('present') : Check::fail('absent');
         },
     ],
     [
-        'id' => 'C10', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Info,
+        // Whether robots.txt blocks ALL crawling ("Disallow: /" for every
+        // user-agent) — split out of C9 above. Purely informational: a
+        // staging/dev site deliberately blocking every crawler is normal, a
+        // production site doing the same by mistake is a real problem, and
+        // Xtractor cannot tell those apart (2026-09-05, user: "on ne sait
+        // pas si c'est voulu") — so this stays Info (always blue, whether
+        // blocked or not) rather than a graded pass/fail judgement. N/A
+        // (not fail/unknown) when there is no robots.txt at all: C9 already
+        // covers that absence, and "does it block everything" doesn't apply
+        // to a file that doesn't exist.
+        'id' => 'C9a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Info,
+        'check' => static function (Context $c) {
+            $robots = $c->get('probe.http.robots');
+            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+                return Check::na();
+            }
+
+            return ($robots['disallow_all'] ?? false) === true ? Check::fail('blocked') : Check::pass('not blocked');
+        },
+    ],
+    [
+        // "No sitemap declared" isn't necessarily wrong either (2026-09-05,
+        // user: "on ne sait pas si c'est voulu") — every fail branch is
+        // pinned to Info severity explicitly (Check::fail()'s 3rd arg), so
+        // it always shows blue, while the rule's own default severity is
+        // Medium so a genuine pass — declared AND reachable — still shows
+        // green rather than also collapsing into blue.
+        'id' => 'C10', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $robots = $c->get('probe.http.robots');
             if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
@@ -293,10 +316,10 @@ return [
             }
             $sitemaps = $robots['sitemaps'] ?? [];
             if ($sitemaps === []) {
-                return Check::fail(0);
+                return Check::fail(0, [], Severity::Info);
             }
             if (($robots['sitemap_reachable'] ?? null) === false) {
-                return Check::fail(count($sitemaps), [], Severity::Medium);
+                return Check::fail(count($sitemaps), [], Severity::Info);
             }
 
             return Check::pass(count($sitemaps));
@@ -360,16 +383,35 @@ return [
     // ===================================================================
     //  PS. PERFORMANCE (Lighthouse — off-catalogue)                [EXT]
     // ===================================================================
+    // Each Lighthouse score now gets a desktop rule AND an "a"-suffixed
+    // mobile rule (2026-09-05, user request), all at the same ≥ 90
+    // threshold, vert/orange. Previously PS1-PS3 covered mobile only (PS1's
+    // own threshold used to be 50, not 90) with no desktop equivalent at
+    // all — desktop scores were fetched by the probe (config pagespeed.
+    // strategy = 'both') but nothing in the catalogue ever read them.
     [
-        'id' => 'PS1', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 50,
+        'id' => 'PS1', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.performance'), (float) $rule->threshold),
+    ],
+    [
+        'id' => 'PS1a', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.performance'), (float) $rule->threshold),
     ],
     [
         'id' => 'PS2', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.accessibility'), (float) $rule->threshold),
+    ],
+    [
+        'id' => 'PS2a', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.accessibility'), (float) $rule->threshold),
     ],
     [
-        'id' => 'PS3', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Info, 'threshold' => 90,
+        // Severity bumped from Info to Medium 2026-09-05 (was always blue).
+        'id' => 'PS3', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.seo'), (float) $rule->threshold),
+    ],
+    [
+        'id' => 'PS3a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.seo'), (float) $rule->threshold),
     ],
     [
@@ -381,28 +423,48 @@ return [
     //  F. VERSIONS, UPDATES & END OF LIFE                         [DATA]
     // ===================================================================
     [
+        // Rewritten 2026-09-07 (user: F1 used to fail on "any newer point
+        // release exists", which is F2's job now — see below). F1 answers a
+        // narrower, blunter question: is this install several *major* (x.y)
+        // release branches behind, the kind of gap that suggests updates
+        // have stopped happening at all rather than "hasn't applied last
+        // week's point release yet". WordPressVersions::majorVersionsBehind()
+        // counts branches, not point releases, against wordpress.org's own
+        // stable-check list (see that method's docblock).
         'id' => 'F1', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) {
-            $available = $c->get('payload.core_update.available_version');
-            $current   = $c->string('payload.wp_version');
-            if ($current === null) {
+            $wpVersions = $c->reference('wordpress_versions');
+            $current    = $c->string('payload.wp_version');
+            if (!$wpVersions instanceof WordPressVersions || $current === null) {
+                return Check::unknown();
+            }
+            $behind = $wpVersions->majorVersionsBehind($current);
+            if ($behind === null) {
                 return Check::unknown();
             }
 
-            return ($available === null || $available === '')
-                ? Check::pass($current)
-                : Check::fail($current, ['available' => (string) $available]);
+            return $behind >= 4
+                ? Check::fail($current, ['major_versions_behind' => $behind])
+                : Check::pass($current, ['major_versions_behind' => $behind]);
         },
     ],
     [
-        'id' => 'F2', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
+        // Capped at Medium/orange 2026-09-07 (user: "on donne Critical quand
+        // ça aurait dû être Attention. La version n'est pas vulnérable
+        // [critical], elle est désuète [attention]") — an EOL WordPress
+        // branch has stopped receiving security patches, which is a real
+        // gap, but F2 has no way to know whether a patchable vulnerability
+        // actually exists for this specific install; that positive claim
+        // belongs to BV2/WF1 (the real vulnerability-database checks), not
+        // to an EOL date alone. Collapsed back to a plain two-tier
+        // pass(green)/fail(orange) rule rather than three severities — "not
+        // EOL but a point release is available" was already Medium, so the
+        // EOL branch is no longer distinguished by severity from it either.
+        'id' => 'F2', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $eol     = $c->reference('eol');
             $version = $c->string('payload.wp_version');
-            if (!$eol instanceof EndOfLife) {
-                return Check::unknown();
-            }
-            if ($version === null) {
+            if (!$eol instanceof EndOfLife || $version === null) {
                 return Check::unknown();
             }
             $status = $eol->eolStatus('wordpress', $version);
@@ -410,8 +472,16 @@ return [
                 return Check::unknown();
             }
             [$isEol, $date] = $status;
+            if ($isEol) {
+                return Check::fail($version, ['eol_date' => $date]); // outdated branch, no longer patched — not a confirmed vulnerability
+            }
 
-            return $isEol ? Check::fail($version, ['eol_date' => $date]) : Check::pass($version);
+            $available = $c->get('payload.core_update.available_version');
+            if ($available !== null && $available !== '') {
+                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $available]);
+            }
+
+            return Check::pass($version, ['eol_date' => $date]);
         },
     ],
     [
@@ -493,15 +563,26 @@ return [
     //  G. PHP & SERVER                                            [DATA]
     // ===================================================================
     [
-        'id' => 'G1', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 268435456,
-        'check' => static function (Context $c, Rule $rule) {
+        // Banded both directions now (2026-09-05, user: "entre 256 et 512:
+        // vert, en bas de 256 et au-dessus de 512: orange, en bas de 64 et
+        // en haut de 1024: rouge") — too little memory is the obvious
+        // problem, but an implausibly high limit is flagged too rather than
+        // read as "even better than passing". No single 'threshold' anymore
+        // (the four boundaries are fixed), so it isn't declared here.
+        'id' => 'G1', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) {
             $bytes = $c->bytes('payload.php.memory_limit');
             if ($bytes === null) {
                 return Check::unknown();
             }
             $shown = $c->string('payload.php.memory_limit');
+            $mb    = $bytes / 1048576;
 
-            return $bytes >= (float) $rule->threshold ? Check::pass($shown) : Check::fail($shown);
+            return match (true) {
+                $mb < 64 || $mb > 1024 => Check::fail($shown, [], Severity::High), // far outside the range
+                $mb < 256 || $mb > 512 => Check::fail($shown),                    // outside the sweet spot, not extreme
+                default                 => Check::pass($shown),                    // 256–512 MB
+            };
         },
     ],
     [
@@ -572,7 +653,8 @@ return [
         },
     ],
     [
-        'id' => 'H4', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 52428800,
+        // Threshold lowered from 50 MB to 10 MB 2026-09-05, user request.
+        'id' => 'H4', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 10485760,
         'check' => static function (Context $c, Rule $rule) {
             $tables = $c->list('payload.database.tables');
             if ($tables === []) {
@@ -584,7 +666,8 @@ return [
         },
     ],
     [
-        'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 500,
+        // Threshold lowered from 500 to 250 2026-09-05, user request.
+        'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
     ],
     [
@@ -600,8 +683,23 @@ return [
     //  I. AUTOLOAD / OBJECT CACHE                                 [DATA]
     // ===================================================================
     [
-        'id' => 'I1', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::High, 'threshold' => 819200,
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.autoload.total_bytes'), (float) $rule->threshold),
+        // Banded 2026-09-05 (user: "vert: sous 500kb, orange sous 2 mo,
+        // autre: rouge") — was a single 800 KB pass/fail threshold. No
+        // single 'threshold' anymore (two fixed boundaries), so it isn't
+        // declared here.
+        'id' => 'I1', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::High,
+        'check' => static function (Context $c) {
+            $bytes = $c->number('payload.autoload.total_bytes');
+            if ($bytes === null) {
+                return Check::unknown();
+            }
+
+            return match (true) {
+                $bytes < 512000   => Check::pass($bytes),                       // < 500 KB
+                $bytes < 2097152  => Check::fail($bytes, [], Severity::Medium), // 500 KB – 2 MB
+                default           => Check::fail($bytes),                      // ≥ 2 MB — red (rule's own default severity)
+            };
+        },
     ],
     [
         'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Medium,
@@ -612,11 +710,36 @@ return [
     //  J. CRON                                                    [DATA]
     // ===================================================================
     [
-        'id' => 'J2', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::High, 'threshold' => 0,
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.cron.overdue_events'), (float) $rule->threshold),
+        // Graded 2026-09-05 (user: "orange => 10 ou moins en retard de 15
+        // minutes ou moins, autrement rouge") — a handful of events a few
+        // minutes late is ordinary WP-Cron jitter under real traffic;
+        // anything worse than that is WP-Cron actually stuck. Needs
+        // payload.cron.overdue_minutes (how late the worst-overdue event
+        // is), added to the plugin's CronCollector the same day — an older
+        // payload without it can't be confirmed mild, so it falls to red,
+        // same as every overdue event did before this change.
+        'id' => 'J2', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::High,
+        'check' => static function (Context $c) {
+            $overdue = $c->number('payload.cron.overdue_events');
+            if ($overdue === null) {
+                return Check::unknown();
+            }
+            if ($overdue <= 0) {
+                return Check::pass(0);
+            }
+            $minutes = $c->number('payload.cron.overdue_minutes');
+            $mild    = $overdue <= 10 && $minutes !== null && $minutes <= 15;
+
+            return $mild
+                ? Check::fail((int) $overdue, ['overdue_minutes' => (int) $minutes], Severity::Medium)
+                : Check::fail((int) $overdue, ['overdue_minutes' => $minutes]); // red: rule's own default severity
+        },
     ],
     [
-        'id' => 'J3', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 100,
+        // Severity bumped from Info to Medium 2026-09-05 (user: "moins de
+        // 100 = vert. Autrement, orange" — flagged by the user themselves as
+        // worth validating in practice before trusting the 100 cutoff).
+        'id' => 'J3', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 100,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.cron.scheduled_events'), (float) $rule->threshold),
     ],
 
@@ -624,12 +747,81 @@ return [
     //  K. CONFIGURATION & HARDENING                               [DATA]
     // ===================================================================
     [
-        'id' => 'K1', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => Check::isFalse($c->constant('WP_DEBUG')),
+        // Capped at orange, never red, 2026-09-05 (user: "orange et non
+        // rouge"). Green even with WP_DEBUG on when the debug log itself is
+        // confirmed NOT publicly reachable: the default WP_DEBUG_LOG path
+        // (wp-content/debug.log) is a well-known, guessable target — the
+        // same one X4's sensitive-files probe already tests — so "on, but
+        // logging somewhere nobody can read" is treated as fine. A custom
+        // WP_DEBUG_LOG path, or no exposure data to check the default path
+        // against, can't be positively confirmed safe, so it stays orange
+        // rather than guessing green. See K3 for a dedicated, narrower
+        // judgement of WP_DEBUG_LOG's own path choice.
+        'id' => 'K1', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) {
+            $debug = $c->constant('WP_DEBUG');
+            if ($debug === null) {
+                return Check::unknown();
+            }
+            if ($debug === false) {
+                return Check::pass(false);
+            }
+
+            $sensitiveFiles        = $c->get('probe.http.exposure.sensitive_files');
+            $loggingToDefaultPath  = $c->get('payload.constants.WP_DEBUG_LOG') === true;
+            $defaultLogNotExposed  = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
+
+            return ($loggingToDefaultPath && $defaultLogNotExposed)
+                ? Check::pass(true, ['debug_log' => 'not public'])
+                : Check::fail(true);
+        },
     ],
     [
+        // Gated on WP_DEBUG itself 2026-09-07 (user: "WP_DEBUG_DISPLAY n'a
+        // pas d'importance [et est fausse] si WP_DEBUG est à false") —
+        // WP_DEBUG_DISPLAY only controls whether PHP errors print to the
+        // page when WP_DEBUG has actually generated something to display;
+        // with WP_DEBUG off there is nothing to show either way, so a stray
+        // WP_DEBUG_DISPLAY = true left over in wp-config.php is harmless and
+        // must not fail this rule on its own.
         'id' => 'K2', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => Check::isFalse($c->constant('WP_DEBUG_DISPLAY')),
+        'check' => static function (Context $c) {
+            $debug = $c->constant('WP_DEBUG');
+            if ($debug === null) {
+                return Check::unknown();
+            }
+
+            return $debug === false ? Check::pass(false) : Check::isFalse($c->constant('WP_DEBUG_DISPLAY'));
+        },
+    ],
+    [
+        // New rule 2026-09-05, user request — WP_DEBUG_LOG's own path
+        // choice, judged on its own regardless of K1's broader WP_DEBUG
+        // verdict above. The default location (WP_DEBUG_LOG === true, i.e.
+        // wp-content/debug.log) is a well-known, guessable target; a custom
+        // path is presumed harder to find. N/A when logging is off
+        // entirely — neither "default path" nor "a custom path" describes
+        // a log that isn't being written at all. Also gated on WP_DEBUG
+        // itself 2026-09-07, same reasoning as K2 above: WP_DEBUG_LOG has no
+        // effect — nothing gets written — while WP_DEBUG is off, whatever
+        // its own value.
+        'id' => 'K3', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High,
+        'check' => static function (Context $c) {
+            $debug = $c->constant('WP_DEBUG');
+            if ($debug === null) {
+                return Check::unknown();
+            }
+            if ($debug === false) {
+                return Check::na();
+            }
+
+            $debugLog = $c->get('payload.constants.WP_DEBUG_LOG');
+            if ($debugLog === null || $debugLog === 'N/A' || $debugLog === false || $debugLog === '') {
+                return Check::na();
+            }
+
+            return $debugLog === true ? Check::fail(true) : Check::pass((string) $debugLog);
+        },
     ],
     [
         'id' => 'K4', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
@@ -644,15 +836,24 @@ return [
     //  L. FILESYSTEM                                              [DATA]
     // ===================================================================
     [
-        'id' => 'L1', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::High, 'threshold' => 10,
-        'check' => static function (Context $c, Rule $rule) {
+        // Orange/blue only now, no green or red (2026-09-05, user: "orange
+        // si moins de 20% ou moins de 2gb. Autrement, bleu.") — the rule's
+        // own default severity is Info so a clean result reads as
+        // informational blue rather than an affirmative green; the low-space
+        // branch overrides to Medium explicitly to still show orange.
+        'id' => 'L1', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Info,
+        'check' => static function (Context $c) {
             $free  = $c->number('payload.filesystem.disk_free_bytes');
             $total = $c->number('payload.filesystem.disk_total_bytes');
             if ($free === null || $total === null || $total <= 0) {
                 return Check::unknown();
             }
+            $percent  = round($free / $total * 100, 1);
+            $lowSpace = $percent < 20 || $free < 2147483648; // 20% or 2 GiB
 
-            return Check::atLeast(round($free / $total * 100, 1), (float) $rule->threshold);
+            return $lowSpace
+                ? Check::fail($percent, ['free_bytes' => $free], Severity::Medium)
+                : Check::pass($percent);
         },
     ],
     [
@@ -668,7 +869,8 @@ return [
     //  M. USERS & ACCESS                                          [DATA]
     // ===================================================================
     [
-        'id' => 'M1', 'category' => Category::USERS, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 5,
+        // Threshold lowered from 5 to 3 administrators, 2026-09-05, user request.
+        'id' => 'M1', 'category' => Category::USERS, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 3,
         'check' => static function (Context $c, Rule $rule) {
             $count = $c->count('payload.administrators');
 
@@ -693,7 +895,7 @@ return [
     ],
 
     // ===================================================================
-    //  BV. BLOGVAULT — VULNERABILITIES, MALWARE, BACKUP            [EXT]
+    //  BV. BLOGVAULT — HACKED STATUS, VULNERABILITIES, 2FA          [EXT]
     // ===================================================================
     // BlogVault is the single agreed source for these (SOURCE 12). Every rule
     // returns unknown when the site is not under BlogVault management, so an
@@ -730,60 +932,24 @@ return [
             return Check::fail((int) $total, ['components' => $components]);
         },
     ],
+    // BV3 (backup recency), BV4 (firewall mode) and BV5 (malware-scan
+    // recency) removed 2026-09-05, user: "à retirer" — and on reflection
+    // these are exactly the "evolving operational status" this project's
+    // own golden rule already excludes elsewhere (see the BlogVault
+    // scanner/firewall/backup fields dropped from §Security & backup,
+    // 2026-08-31): a backup's age or a firewall's mode describes an
+    // ongoing state that belongs to BlogVault's own dashboard, not a fact
+    // about the extraction's snapshot. BV1 (hacked status) stays — "is this
+    // site currently flagged compromised" is a fact worth a finding, not an
+    // evolving operational detail. The underlying probe data
+    // (probe.blogvault.backups.*, .firewall.*, .scanner.last_check_at) is
+    // untouched and still visible in the extraction's raw data — only the
+    // pass/fail judgement on it is gone.
     [
-        'id' => 'BV3', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::High, 'threshold' => 7,
-        'check' => static function (Context $c, Rule $rule) {
-            if ($c->probeData('blogvault') === null || $c->bool('probe.blogvault.linked') !== true) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.blogvault.backups.enabled') !== true) {
-                return Check::fail('disabled');
-            }
-            $status = $c->string('probe.blogvault.backups.latest_snapshot.status');
-            $age    = $c->number('probe.blogvault.backups.latest_snapshot.age_days');
-            if ($status !== 'succeeded' || $age === null) {
-                return Check::fail($status ?? 'none');
-            }
-
-            return $age <= (float) $rule->threshold
-                ? Check::pass((int) $age)
-                : Check::fail((int) $age, ['threshold' => $rule->threshold]);
-        },
-    ],
-    [
-        'id' => 'BV4', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if ($c->probeData('blogvault') === null || $c->bool('probe.blogvault.linked') !== true) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.blogvault.firewall.enabled') !== true) {
-                return Check::fail('disabled');
-            }
-            $mode = $c->string('probe.blogvault.firewall.mode');
-
-            return $mode === 'protect' ? Check::pass($mode) : Check::fail($mode ?? 'unknown');
-        },
-    ],
-    [
-        'id' => 'BV5', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 7,
-        'check' => static function (Context $c, Rule $rule) {
-            $lastCheck = $c->string('probe.blogvault.scanner.last_check_at');
-            if ($lastCheck === null) {
-                return $c->bool('probe.blogvault.linked') === true ? Check::fail('never') : Check::unknown();
-            }
-            $when = strtotime($lastCheck);
-            if ($when === false) {
-                return Check::unknown();
-            }
-            $days = (int) floor((time() - $when) / 86400);
-
-            return $days <= (int) $rule->threshold
-                ? Check::pass($days)
-                : Check::fail($days, ['threshold' => $rule->threshold]);
-        },
-    ],
-    [
-        'id' => 'BV6', 'category' => Category::USERS, 'source' => 'EXT', 'severity' => Severity::Medium,
+        // Was BV6, renumbered to BV3 now that the id is free (2026-09-05,
+        // user request). Capped at vert/rouge (was vert/orange) — an admin
+        // without 2FA is a real compromise vector, not a minor gap.
+        'id' => 'BV3', 'category' => Category::USERS, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) {
             $admins = $c->number('probe.blogvault.users.administrators');
             if ($admins === null) {

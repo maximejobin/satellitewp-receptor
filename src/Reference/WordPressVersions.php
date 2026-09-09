@@ -8,6 +8,8 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
 
+// EndOfLife::branch() (used below) is in this same namespace, no import needed.
+
 /**
  * Every WordPress version core itself considers a real release, straight from
  * wordpress.org's own "stable check" service — the same list core uses to
@@ -71,6 +73,55 @@ final class WordPressVersions
             'latest'   => 'uptodate',
             default    => 'secure',
         };
+    }
+
+    /**
+     * How many major (x.y) release branches $installedVersion trails the
+     * branch currently marked "latest" by — 0 for the latest branch itself,
+     * 1 for one branch behind, etc. Used by rule F1 ("is this install
+     * several major releases out of date", 2026-09-07 — a plain "is a newer
+     * point release available" signal lives in F2/core_update instead,
+     * which already folds branch-support status in too). Reuses
+     * EndOfLife::branch() for the same major.minor extraction EndOfLife
+     * itself uses, rather than a second copy of the same two-line logic.
+     * wordpress.org's stable-check has covered every branch back to 1.0 in
+     * practice (884 entries, no branch-level gaps, confirmed live), so this
+     * does not need to guess at a branch missing from the cache — it only
+     * returns null when the cache itself is empty, no version is marked
+     * "latest", or a branch string couldn't be derived from either version.
+     */
+    public function majorVersionsBehind(string $installedVersion): ?int
+    {
+        $all = $this->all();
+        if ($all === []) {
+            return null;
+        }
+
+        $latestVersion = array_search('latest', $all, true);
+        if ($latestVersion === false) {
+            return null;
+        }
+
+        $latestBranch    = EndOfLife::branch((string) $latestVersion);
+        $installedBranch = EndOfLife::branch($installedVersion);
+        if ($latestBranch === '' || $installedBranch === '') {
+            return null;
+        }
+
+        $branches = [$latestBranch => true, $installedBranch => true];
+        foreach (array_keys($all) as $version) {
+            $branches[EndOfLife::branch($version)] = true;
+        }
+        $branchList = array_keys($branches);
+        usort($branchList, 'version_compare');
+
+        $latestIndex    = array_search($latestBranch, $branchList, true);
+        $installedIndex = array_search($installedBranch, $branchList, true);
+        if ($latestIndex === false || $installedIndex === false) {
+            return null;
+        }
+
+        return max(0, $latestIndex - $installedIndex);
     }
 
     /** When the cache was last written, or null if it never has been. */

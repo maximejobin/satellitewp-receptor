@@ -19,7 +19,8 @@
 <?php if ($rows === []): ?>
     <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
 <?php else: ?>
-    <p><?= dt_search_box('wp-versions', 'Search version…') ?></p>
+    <div class="search-group">
+    <p class="search"><?= dt_search_box('wp-versions', 'Search version…') ?></p>
     <table id="wp-versions" class="display" style="width:100%">
         <thead>
         <tr>
@@ -48,6 +49,7 @@
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <script>
       $(function () {
         var dt = $('#wp-versions').DataTable({

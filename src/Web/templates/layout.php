@@ -23,14 +23,33 @@ $nav = $nav ?? 'sites';
     <link rel="stylesheet" href="/assets/vendor/select2/select2.min.css">
     <script src="/assets/vendor/select2/select2.min.js"></script>
     <?php endif; ?>
+    <?php // Tippy.js (vendored, /assets/vendor/tippy/) — 2026-09-03, style guide
+          // exploration only, not wired into any real page yet. The "bundle"
+          // build includes Popper inline, so this is the one file to load. ?>
+    <?php if (!empty($tooltip)): ?>
+    <link rel="stylesheet" href="/assets/vendor/tippy/tippy.css">
+    <link rel="stylesheet" href="/assets/vendor/tippy/light-border.css">
+    <script src="/assets/vendor/tippy/tippy-bundle.umd.min.js"></script>
+    <?php endif; ?>
     <?php if (!empty($reportAssets)): ?>
     <link rel="stylesheet" href="/assets/report.css">
     <?php endif; ?>
 </head>
 <body>
+<?php if (!empty($bare)): ?>
+<!-- No sidebar/menu on this page (2026-09-03, user: "cette page ne doit pas
+     montrer les menus de l'application") — the login page is reachable by
+     definition before anyone is signed in, so a nav full of links to pages
+     that would just bounce back here is noise at best. -->
+<div class="app-bare">
+    <?php require $templateFile; ?>
+</div>
+<?php else: ?>
 <div class="app">
     <aside class="side">
         <a class="brand" href="/"><b>SatelliteWP</b> Xtractor</a>
+
+        <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status</a>
 
         <!-- No label here on purpose (2026-09-02, user: "Retirer le label
              'CRM'") — these four sibling entities from the external CRM
@@ -65,7 +84,13 @@ $nav = $nav ?? 'sites';
               // nobody is signed in, so it alone stays conditional. ?>
         <div class="nav-label">Management</div>
         <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users">Users</a>
+        <a class="nav-item <?= $nav === 'styleguide' ? 'active' : '' ?>" href="/styleguide">Style guide</a>
+        <?php // Unlike "Users" above, this one genuinely has nothing to show
+              // without an identity (profilePage() 404s — there is no
+              // per-user account under Basic auth/the open dev fallback),
+              // so it stays conditional, same reasoning as "Sign out". ?>
         <?php if (!empty($currentUser)): ?>
+            <a class="nav-item <?= $nav === 'profile' ? 'active' : '' ?>" href="/profile">My profile</a>
             <a class="nav-item" href="/auth/logout">Sign out</a>
         <?php endif; ?>
 
@@ -83,8 +108,27 @@ $nav = $nav ?? 'sites';
         </main>
     </div>
 </div>
+<?php endif; ?>
 
+<div class="toast-container" id="app-toast-container"></div>
 <script>
+  // Toasts (2026-09-03) — a transient confirmation after an AJAX save.
+  // Global on every page (the container above is always present) so any
+  // fetch()-based save anywhere can call this without its own plumbing.
+  function showToast(message, isError) {
+    var checkIcon = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/><polyline points="5.5 9.2 8 11.7 12.7 6.5"/></svg>';
+    var errorIcon = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/><line x1="6.6" y1="6.6" x2="11.4" y2="11.4"/><line x1="11.4" y1="6.6" x2="6.6" y2="11.4"/></svg>';
+    var container = document.getElementById('app-toast-container');
+    var toast = document.createElement('div');
+    toast.className = 'toast' + (isError ? ' toast-error' : '');
+    toast.innerHTML = '<span class="icon">' + (isError ? errorIcon : checkIcon) + '</span><span>' + message + '</span>';
+    container.appendChild(toast);
+    setTimeout(function () {
+      toast.style.opacity = '0';
+      setTimeout(function () { toast.remove(); }, 200);
+    }, 3000);
+  }
+
   (function () {
     var bar = document.querySelector('.filt');
     if (bar) bar.addEventListener('click', function (e) {
@@ -128,14 +172,15 @@ $nav = $nav ?? 'sites';
           if (r.type === 'opaqueredirect' || r.ok) {
             select.classList.add('lic-saved');
             setTimeout(function () { select.classList.remove('lic-saved'); }, 1000);
+            showToast('Licence saved.', false);
           } else {
             select.className = previous;
-            alert('Could not save the licence — try again.');
+            showToast('Could not save the licence — try again.', true);
           }
         })
         .catch(function () {
           if (select) { select.disabled = false; select.className = previous; }
-          alert('Could not save the licence — try again.');
+          showToast('Could not save the licence — try again.', true);
         });
     });
   })();
@@ -195,6 +240,105 @@ $nav = $nav ?? 'sites';
   if (window.jQuery && jQuery.fn.select2) {
     jQuery('.js-select2').each(function () { initSelect2(jQuery(this)); });
   }
+
+  // Tippy.js (2026-09-03, style guide only for now) — any element carrying
+  // data-tippy-content gets a real tooltip widget instead of the native
+  // title="" attribute. No-op on a page that didn't load tippy.
+  if (window.tippy) {
+    tippy('[data-tippy-content]', { theme: 'light-border', animation: 'fade' });
+  }
+
+  // Filter-dropdown-as-tag (2026-09-03) — progressive enhancement over a
+  // plain <select class="js-filter-dropdown" data-label="…">: the select
+  // itself stays in the DOM (just hidden), so whatever already reads its
+  // .value — a server GET submit, or a page's own client-side "Filter"
+  // click handler — needs no changes at all. A picked value shows up as a
+  // removable tag in the nearest following .filter-tags (auto-created if
+  // absent); the button itself always shows data-label, never the picked
+  // value, unlike the native <select> it wraps.
+  // data-empty-value overrides which option value means "no filter" (some
+  // pages use a real "all"/"any" option instead of an empty string).
+  function initFilterDropdown(select) {
+    var label = select.dataset.label || select.name || 'Filter';
+    var emptyValue = select.dataset.emptyValue !== undefined ? select.dataset.emptyValue : '';
+
+    var wrap = document.createElement('div');
+    wrap.className = 'filter-dropdown';
+    select.parentNode.insertBefore(wrap, select);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'filter-dropdown-btn';
+    btn.innerHTML = label + ' <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+      + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    wrap.appendChild(btn);
+
+    var panel = document.createElement('div');
+    panel.className = 'filter-dropdown-panel';
+    Array.prototype.forEach.call(select.options, function (opt) {
+      // The "All"/"Any" option itself isn't a pickable tag — removing the
+      // tag is what already means that.
+      if (opt.value === emptyValue) { return; }
+      var optBtn = document.createElement('button');
+      optBtn.type = 'button';
+      optBtn.textContent = opt.textContent;
+      optBtn.dataset.value = opt.value;
+      panel.appendChild(optBtn);
+    });
+    wrap.appendChild(panel);
+    wrap.appendChild(select);
+    select.style.display = 'none';
+
+    var form = select.closest('form');
+    var tagsContainer = form.parentNode.querySelector('.filter-tags');
+    if (!tagsContainer) {
+      tagsContainer = document.createElement('div');
+      tagsContainer.className = 'filter-tags';
+      form.insertAdjacentElement('afterend', tagsContainer);
+    }
+
+    function syncTag() {
+      var existing = tagsContainer.querySelector('[data-filter="' + select.name + '"]');
+      if (existing) { existing.remove(); }
+      panel.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+      if (select.value === emptyValue) { return; }
+      var chosen = select.options[select.selectedIndex];
+      var picked = panel.querySelector('[data-value="' + select.value + '"]');
+      if (picked) { picked.classList.add('active'); }
+      var tag = document.createElement('span');
+      tag.className = 'filter-tag';
+      tag.dataset.filter = select.name;
+      tag.innerHTML = label + ': ' + (chosen ? chosen.textContent : select.value)
+        + ' <button type="button" aria-label="Remove ' + label + ' filter">&times;</button>';
+      tag.querySelector('button').addEventListener('click', function () {
+        select.value = emptyValue;
+        select.dispatchEvent(new Event('change'));
+        tag.remove();
+      });
+      tagsContainer.appendChild(tag);
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var isOpen = wrap.classList.contains('open');
+      document.querySelectorAll('.filter-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+      wrap.classList.toggle('open', !isOpen);
+    });
+    panel.querySelectorAll('button').forEach(function (optBtn) {
+      optBtn.addEventListener('click', function () {
+        select.value = optBtn.dataset.value;
+        select.dispatchEvent(new Event('change'));
+        syncTag();
+        wrap.classList.remove('open');
+      });
+    });
+
+    syncTag(); // reflect whatever the select's initial value already is (e.g. a preselected ?status=… on load)
+  }
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.filter-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+  });
+  document.querySelectorAll('select.js-filter-dropdown').forEach(initFilterDropdown);
 
   // "Linked website" on a subscription (subscription_website_form()): shown
   // as plain text by default, an edit icon reveals the dropdown (2026-09-02,

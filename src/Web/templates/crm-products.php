@@ -26,7 +26,8 @@ $types = [
 <?php if ($products === []): ?>
     <p class="empty">No product matches this filter.</p>
 <?php else: ?>
-    <p><?= dt_search_box('products-table', 'Search within these results…') ?></p>
+    <div class="search-group">
+    <p class="search"><?= dt_search_box('products-table', 'Search within these results…') ?></p>
     <table id="products-table" class="display" style="width:100%">
         <thead>
         <tr><th>Name</th><th>Type</th><th>Category</th><th>Detail</th><th>Last synced</th></tr>
@@ -51,6 +52,7 @@ $types = [
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <script>
       $(function () {
         var dt = $('#products-table').DataTable({ pageLength: 50, dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>' });

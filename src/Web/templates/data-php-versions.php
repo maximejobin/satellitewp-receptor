@@ -14,7 +14,8 @@
 <?php if ($cycles === []): ?>
     <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
 <?php else: ?>
-    <p><?= dt_search_box('php-versions') ?></p>
+    <div class="search-group">
+    <p class="search"><?= dt_search_box('php-versions') ?></p>
     <table id="php-versions" class="display" style="width:100%">
         <thead>
         <tr>
@@ -50,6 +51,7 @@
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <script>
       $(function () {
         var dt = $('#php-versions').DataTable({ order: [[0, 'desc']], pageLength: 50, dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>' });

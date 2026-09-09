@@ -40,8 +40,11 @@ final class HelpersFmtRelativeTimeTest extends TestCase
 
     public function testTooltipCarriesTheExactDate(): void
     {
+        // 2026-09-03: upgraded from the native title="" attribute to a real
+        // tooltip widget (Tippy.js) — data-tippy-content carries the date now.
         $out = \fmt_relative_time('2026-01-01T12:00:00Z');
-        $this->assertStringContainsString('title="2026-01-01T12:00:00Z"', $out);
+        $this->assertStringContainsString('data-tippy-content="2026-01-01T12:00:00Z"', $out);
+        $this->assertStringContainsString('class="text-subtle"', $out);
     }
 
     public function testUnparsableStringIsEchoedAsIs(): void

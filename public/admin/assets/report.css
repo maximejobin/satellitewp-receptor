@@ -139,7 +139,7 @@
 }
 .xt-nav a .xt-icon { width: 15px; height: 15px; }
 .xt-nav a:hover { background: var(--surface-2); color: var(--text); }
-.xt-nav a.on { background: var(--group-color, var(--accent-weak)); color: #fff; }
+.xt-nav a.on { background: var(--group-color, var(--bg-accent)); color: #fff; }
 
 /* ---------- groups ---------- */
 .xt-group { scroll-margin-top: 100px; display: flex; flex-direction: column; gap: 1rem; }
@@ -166,7 +166,7 @@
 /* Data-provenance marker (src_note() in helpers.php) — every field's "where
    did this come from, and did Xtractor verify it or just relay it" note.
    Native title tooltip: zero JS, works everywhere, keyboard-reachable via
-   tabindex. Deliberately quiet (not another coloured badge) — it should be
+   tabindex. Deliberately quiet (not another colored badge) — it should be
    discoverable, not compete with the actual pass/fail signal on the row. */
 .xt-src {
     display: inline-block; margin-left: .3rem; cursor: help;

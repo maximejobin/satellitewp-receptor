@@ -16,16 +16,16 @@
 <?php if ($cycles === []): ?>
     <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
 <?php else: ?>
-    <p style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+    <div class="search-group">
+    <form class="search" onsubmit="return false">
         <input type="search" id="db-search" placeholder="Search…">
-        <label for="db-engine-filter">Engine: </label>
-        <select id="db-engine-filter">
-            <option value="">All</option>
+        <select id="db-engine-filter" class="js-filter-dropdown" data-label="Engine">
+            <option value="">All engines</option>
             <option value="mysql">MySQL</option>
             <option value="mariadb">MariaDB</option>
         </select>
-        <button type="button" class="btn" id="db-filter-btn">Filter</button>
-    </p>
+        <button type="button" class="btn btn-secondary" id="db-filter-btn">Filter</button>
+    </form>
     <table id="db-versions" class="display" style="width:100%">
         <thead>
         <tr>
@@ -64,6 +64,7 @@
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <script>
       $(function () {
         // One "Filter" button governs the engine dropdown and the text

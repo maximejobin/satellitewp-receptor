@@ -29,6 +29,24 @@ final class RouterTest extends TestCase
         $this->assertSame('not_found', Router::matchRoute('/catalog/extra')['route']);
     }
 
+    public function testProfileRoute(): void
+    {
+        $this->assertSame('profile', Router::matchRoute('/profile')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/profile/extra')['route']);
+    }
+
+    public function testStyleguideRoute(): void
+    {
+        $this->assertSame('styleguide', Router::matchRoute('/styleguide')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/styleguide/extra')['route']);
+    }
+
+    public function testStatusRoute(): void
+    {
+        $this->assertSame('status', Router::matchRoute('/status')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/status/extra')['route']);
+    }
+
     public function testKeysHasNoGetPage(): void
     {
         // Key management lives on /site/{id} now; /keys is a POST-only

@@ -14,10 +14,12 @@ final class HelpersExternalLinkTest extends TestCase
     {
         $out = \external_link('https://example.com/clients/{id}', 42, 'View client');
 
-        $this->assertSame(
-            '<a href="https://example.com/clients/42" target="_blank" rel="noopener noreferrer">View client</a>',
-            $out
-        );
+        $this->assertStringContainsString('href="https://example.com/clients/42"', $out);
+        $this->assertStringContainsString('target="_blank" rel="noopener noreferrer"', $out);
+        $this->assertStringContainsString('>View client', $out);
+        // The external-link icon (2026-09-03) is appended after the label, not baked
+        // into a fixed full-string comparison, so this survives the icon changing shape.
+        $this->assertStringContainsString('<span class="icon">', $out);
     }
 
     public function testPlainTextWhenPatternIsNull(): void
@@ -49,8 +51,10 @@ final class HelpersExternalLinkTest extends TestCase
         $out = \external_link_button('https://example.com/edit/{id}', 7, 'Edit');
 
         $this->assertStringContainsString('href="https://example.com/edit/7"', $out);
-        $this->assertStringContainsString('>Edit</a>', $out);
+        $this->assertStringContainsString('>Edit ', $out);
         $this->assertStringContainsString('class="btn"', $out);
+        // The external-link icon (2026-09-03), appended after the label.
+        $this->assertStringContainsString('<span class="icon">', $out);
     }
 
     public function testButtonIsEmptyStringWhenUnconfigured(): void

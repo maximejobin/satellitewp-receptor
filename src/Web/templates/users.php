@@ -51,7 +51,7 @@ if (isset($notices[$notice])):
         <td><?= $user['status'] === 'suspended' ? '<span class="badge badge-warn">suspended</span>' : '<span class="badge badge-ok">active</span>' ?></td>
         <td>
             <?php if ($isAdmin): ?>
-                <button type="button" class="row-edit-btn" data-row-id="<?= $i ?>" title="Edit">✎</button>
+                <button type="button" class="row-edit-btn" data-row-id="<?= $i ?>" title="Edit"><?= icon_edit() ?></button>
                 <?php if ($user['status'] === 'suspended'): ?>
                     <form method="post" action="/users" style="display:inline;margin:0">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -65,7 +65,7 @@ if (isset($notices[$notice])):
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="action" value="suspend">
                         <input type="hidden" name="email" value="<?= e($user['email']) ?>">
-                        <button type="submit" class="btn" style="padding:.2rem .5rem;font-size:.8rem;background:var(--surface-2);color:var(--text)">Suspend</button>
+                        <button type="submit" class="btn btn-muted" style="padding:.2rem .5rem;font-size:.8rem">Suspend</button>
                     </form>
                 <?php endif; ?>
                 <?php if (!$isLastActiveAdmin): ?>
@@ -74,7 +74,7 @@ if (isset($notices[$notice])):
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="action" value="remove">
                         <input type="hidden" name="email" value="<?= e($user['email']) ?>">
-                        <button type="submit" class="btn" style="padding:.2rem .5rem;font-size:.8rem;background:var(--error)">Remove</button>
+                        <button type="submit" class="btn btn-danger" style="padding:.2rem .5rem;font-size:.8rem">Remove</button>
                     </form>
                 <?php endif; ?>
             <?php endif; ?>
@@ -96,7 +96,7 @@ if (isset($notices[$notice])):
                     <?php endforeach; ?>
                 </select>
                 <button type="submit" class="btn" style="padding:.35rem .7rem">Save</button>
-                <button type="button" class="btn row-cancel-btn" style="padding:.35rem .7rem;background:var(--surface-2);color:var(--text)">Cancel</button>
+                <button type="button" class="btn btn-muted row-cancel-btn" style="padding:.35rem .7rem">Cancel</button>
             </form>
         </td>
     </tr>

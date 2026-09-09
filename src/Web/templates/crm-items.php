@@ -5,26 +5,26 @@
 <p class="muted">Every plugin/theme item across every website in the external CRM database —
     "which sites have which plugins", filterable and searchable (name, slug or site URL).</p>
 
-<p style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+<div class="search-group">
+<form class="search" onsubmit="return false">
     <input type="search" id="items-q" placeholder="Search name, slug or site URL…">
-    <label>Type:
-        <select id="items-type">
-            <option value="">All</option>
-            <?php foreach ($types as $type): ?>
-                <option value="<?= e($type) ?>"><?= e(ucfirst($type)) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </label>
+    <select id="items-type" class="js-filter-dropdown" data-label="Type">
+        <option value="">All types</option>
+        <?php foreach ($types as $type): ?>
+            <option value="<?= e($type) ?>"><?= e(ucfirst($type)) ?></option>
+        <?php endforeach; ?>
+    </select>
     <label><input type="checkbox" id="items-vulnerable"> Vulnerable only</label>
     <label><input type="checkbox" id="items-update"> Update available only</label>
-    <button type="button" class="btn" id="items-filter-btn">Filter</button>
-</p>
+    <button type="button" class="btn btn-secondary" id="items-filter-btn">Filter</button>
+</form>
 
 <table id="items-table" class="display" style="width:100%">
     <thead>
     <tr><th>Type</th><th>Name</th><th>Slug</th><th>Version</th><th>New version</th><th>Vulnerable</th><th>Active</th><th>Website</th></tr>
     </thead>
 </table>
+</div>
 <script>
   $(function () {
     // One "Filter" button governs the text search + every dropdown/checkbox

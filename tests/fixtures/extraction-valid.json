@@ -71,6 +71,7 @@
         "disabled": false,
         "scheduled_events": 18,
         "overdue_events": 0,
+        "overdue_minutes": null,
         "distinct_hooks": 12,
         "next_event_gmt": "2026-07-22 15:00:00"
     },

@@ -159,6 +159,49 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   There is deliberately **no "first sign-in becomes admin" bootstrap** — this UI
   is internet-reachable, so that would let a stranger claim the account; seed it
   from the server with `users:add`.
+- **Capabilities wired throughout the app** (2026-09-03, user: "des capacity
+  avec des noms significatifs... afin de parfaire la sécurité"). `config/
+  roles.php` had carried a role→capability map since 2026-09-02 but nothing
+  actually called `RoleCapabilities::can()` — every mutation route and every
+  data-sensitive GET page was reachable by any signed-in (or, under Basic
+  auth/the open dev fallback, any) user regardless of role. The six old,
+  coarse capability names (`manage_users`, `manage_sites`, `edit_catalog`,
+  `run_analysis`, `view_technical`, `view_catalog`) are replaced with one
+  `<entity>_<verb>` capability per distinct action (`user_add`/`user_edit`/
+  `user_suspend`/`user_remove`, `site_key_add`/`site_key_revoke`/
+  `site_key_rebind`/`site_http_auth_edit`, `extraction_run`, `catalog_view`/
+  `catalog_edit`, `extraction_view_technical`, `data_view`, `crm_view`,
+  `crm_subscription_edit` — full list and role assignments in
+  `config/roles.php`'s docblock). `Router::requireCapability()` is the one
+  gate (writes a 403 and returns `false`): permissive when Google sign-in
+  isn't configured (no per-user role exists to check under Basic auth/open
+  dev — same posture every one of these actions already had before
+  capabilities existed), otherwise checks the signed-in user's role. `/users`
+  mutations keep their own **stricter**, separate check ahead of capability —
+  a real Google identity is required outright, staying blocked (not promoted
+  to full access) under Basic auth/open dev, unchanged from before this pass
+  (see the docblock for why). This is a real behaviour change, not just
+  plumbing: `/keys`, `/catalog` (POST), `/subscriptions` and the CRM/Data/
+  extraction-technical GET pages were previously open to any authenticated
+  user and are now role-restricted per `config/roles.php`'s (tunable)
+  defaults. One known rough edge: `license_select()`'s dropdown on `/catalog`
+  still renders as an interactive control for a role with `catalog_view` but
+  not `catalog_edit` — submitting it 403s server-side (the real boundary),
+  it just isn't visually disabled for that role yet.
+- **Self-service profile** (2026-09-03, same request): `UserStore`'s record
+  gained three fields only the account's own owner can change —
+  `data` (arbitrary JSON, decoded to a PHP array before it reaches
+  `UserStore::updateProfile()`), `runcloud_api_key`, `public_ssh_key` — on a
+  new `/profile` page ("My profile" in the sidebar, visible only when
+  signed in, same conditional as "Sign out"). Deliberately a **separate**
+  method from admin's `updateUser()`: identity/role/status stay admin-only
+  through `/users`, so a self-edit can never double as a privilege
+  escalation — `updateUser()` was also fixed to carry these three fields
+  forward from the existing record instead of silently dropping them, since
+  it rebuilds the row wholesale. Two more older `data/users.json` shapes
+  (pre-role, `{email,role}`-only) already existed; this is the third,
+  read transparently and upgraded (fields default to `null`) on next save,
+  same discipline as the earlier migrations.
 - `src/Probe/`: `ProbeInterface` + Dns/Rdap/Tls/Http/PageSpeed/BlogVault/Wordfence.
   Parsing is a pure static method per probe, unit-tested without network.
   `WordfenceProbe` is the odd one out: it makes **no** network call — see below.
@@ -1064,7 +1107,17 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
 ## CLI (`bin/xtractor`)
 
 `ingest:process` · `pipeline:run` · `probe:run`/`probe:list` ·
-`rules:evaluate [--lang]`/`rules:list` · `reference:refresh [--product=…]`
+`rules:evaluate [--lang]`/`rules:list`/`rules:reevaluate [site_id]` (re-scores
+every stored "done" extraction against the current catalogue, no network —
+prints a before/after pastille-count diff per extraction that moved; this is
+how to see a rules.php edit's real effect across the whole dataset instead of
+one extraction at a time)/`rules:doc` (renders the catalogue as Markdown to
+stdout — `php bin/xtractor rules:doc > docs/rules-catalog.md`, the generated,
+always-accurate replacement for the old hand-maintained HTML catalogue
+artifact, retired 2026-09-07: one entry per rule with category/source/
+severity/threshold, its French pass/fail sentences, and the exact check()
+closure source pulled via reflection — nothing here is retyped by hand, so
+there is nothing to drift out of sync) · `reference:refresh [--product=…]`
 (cron: **hourly** for wordpress/php/mysql/mariadb, feeds `/data/wp-versions`,
 `/data/php-versions` and `/data/databases`) · `wordfence:refresh` (suggested
 cron: **daily**) ·

@@ -3,7 +3,7 @@
 
 <form method="get" class="search">
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="URL, name or site_id…">
-    <button type="submit"><?= e($t->ui('search')) ?></button>
+    <button type="submit" class="btn btn-secondary"><?= e($t->ui('search')) ?></button>
 </form>
 
 <?php

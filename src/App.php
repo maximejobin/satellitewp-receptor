@@ -268,7 +268,7 @@ final class App
      */
     public function referenceData(): array
     {
-        return ['eol' => $this->endOfLife()];
+        return ['eol' => $this->endOfLife(), 'wordpress_versions' => $this->wordPressVersions()];
     }
 
     public function crmDb(): ClientsDb

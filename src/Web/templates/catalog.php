@@ -11,12 +11,14 @@
     <a class="<?= $unclassifiedOnly ? 'active' : '' ?>" href="/catalog?unclassified=1">Not classified</a>
 </p>
 
-<p><?= dt_search_box('catalog-table', 'Search slug or name…') ?></p>
+<div class="search-group">
+<p class="search"><?= dt_search_box('catalog-table', 'Search slug or name…') ?></p>
 <table id="catalog-table" class="display" style="width:100%">
     <thead>
     <tr><th>Type</th><th>Slug</th><th>Name</th><th>Licence</th></tr>
     </thead>
 </table>
+</div>
 <script>
   $(function () {
     // Server-side AJAX (SoftwareCatalog::search()), not a client-side table:
