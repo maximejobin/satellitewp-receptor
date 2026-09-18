@@ -4,31 +4,6 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Support;
 
-/**
- * Refuses to let a probe connect to a private/loopback/link-local/reserved
- * address (2026-08-31 — a known gap flagged in a security review, closed on
- * request).
- *
- * `HttpProbe`/`TlsProbe` target `$site->host`, which comes straight from the
- * extraction payload's `home_url` — a legitimately-paired but compromised or
- * malicious site could point it at an internal address (`127.0.0.1`,
- * `169.254.169.254`, a `10.x`/`192.168.x` box on this server's own network)
- * and get this server to probe it on its behalf. Requires an already-valid
- * signed API key (not an anonymous attack surface), but that is a barrier a
- * compromised site clears by definition.
- *
- * Deliberately simple, not DNS-rebinding-proof: this checks the host's
- * *currently* resolved address once, before a probe run starts, and again on
- * every redirect hop `HttpProbe` follows (a public site could redirect to an
- * internal one). It does **not** pin the connection to that exact resolved
- * IP the way a fully hardened client would (e.g. cURL's `CURLOPT_RESOLVE`),
- * so a sufficiently motivated attacker controlling DNS for the paired
- * domain, with a very low TTL, could in principle swap the answer between
- * this check and the probe's own connection a moment later. Not fixed here
- * — see "Keep it simple" in CLAUDE.md; this closes the straightforward case
- * (a home_url that is simply an internal address, or redirects to one)
- * without taking on a DNS-pinning rewrite of the HTTP client.
- */
 final class HostGuard
 {
     /**

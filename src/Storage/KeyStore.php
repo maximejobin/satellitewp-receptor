@@ -79,16 +79,6 @@ final class KeyStore
     }
 
     /**
-     * HTTP Basic Auth credentials this server should send when probing the
-     * site directly (HttpProbe) — needed when the whole site sits behind
-     * Basic Auth (a staging environment, an IP-restriction bypass, …).
-     * Without this, a 401 challenge on every probed path was silently read
-     * as "checked, nothing found" instead of "couldn't check" — a site that
-     * isn't public at all looked identical to one that is public and clean.
-     * Configurable per site (2026-08-30, user: "ça doit être paramétrable
-     * au niveau du site") rather than a single global credential, since
-     * different client sites behind Basic Auth use different logins.
-     *
      * @return array{username: string, password: string}|null
      */
     public function getHttpAuth(string $siteId): ?array

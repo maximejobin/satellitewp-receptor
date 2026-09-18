@@ -260,12 +260,10 @@ $hex = [
 
 <p class="muted" style="margin-top:1.4rem">Datatable, client-side, with the explicit search box every table uses
     (never a live filter on keystroke), the length dropdown and pagination — all three are DataTables' own
-    generated markup, styled by their stable class names. Button relabelled "Filter" and a "Reset filter"
-    link added here (2026-09-03 proposal) — <span class="mono">dt_search_box()</span> itself is untouched,
-    still says "Search" everywhere it's actually used today.</p>
+    generated markup, styled by their stable class names.</p>
 <div class="search-group">
 <p class="search">
-    <input type="search" class="xt-dt-search" data-table="#sg-table" placeholder="Search within these results…">
+    <input type="search" class="xt-dt-search" data-table="#sg-table" placeholder="Search…">
     <button type="button" class="btn btn-secondary xt-dt-search-btn" data-table="#sg-table">Filter</button>
     <a href="#" class="search-reset" id="sg-table-reset">Reset filter</a>
 </p>

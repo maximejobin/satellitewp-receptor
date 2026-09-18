@@ -2,7 +2,7 @@
 <h1><?= e($t->ui('sites')) ?></h1>
 
 <form method="get" class="search">
-    <input type="search" name="q" value="<?= e($search) ?>" placeholder="URL, name or site_id…">
+    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search…">
     <button type="submit" class="btn btn-secondary"><?= e($t->ui('search')) ?></button>
 </form>
 
@@ -45,7 +45,6 @@ if (isset($notices[$notice ?? ''])):
         <thead>
         <tr>
             <th>Site</th>
-            <th>URL</th>
             <th>Last extraction</th>
             <th><?= e($t->ui('status')) ?></th>
             <th>Extractions</th>
@@ -55,10 +54,9 @@ if (isset($notices[$notice ?? ''])):
         <?php foreach ($sites as $site): ?>
             <tr>
                 <td>
-                    <a href="/site/<?= e($site['site_id']) ?>"><?= e($site['name'] ?: $site['site_id']) ?></a>
+                    <a href="/site/<?= e($site['site_id']) ?>"><?= e(site_display($site['site_url'] ?? '') ?: $site['site_id']) ?></a>
                     <div class="muted mono"><?= e($site['site_id']) ?></div>
                 </td>
-                <td><?= e($site['site_url']) ?></td>
                 <td><?= e($site['last_extraction_received_at'] ?? '—') ?></td>
                 <td><?= badge($site['last_extraction_status']) ?></td>
                 <td><?= e($site['extraction_count']) ?></td>

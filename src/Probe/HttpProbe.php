@@ -102,15 +102,6 @@ final class HttpProbe extends AbstractProbe
         $finalUrl = $redirects['final_url'] ?? ('https://' . $site->host . '/');
         $main     = $this->mainRequest($client, $finalUrl, $errors);
 
-        // A bare 401 on the homepage itself means the site isn't reachable
-        // by an anonymous request at all — every check below would also 401
-        // regardless of what it is actually testing for. That is not the
-        // same fact as "checked, nothing exposed", so it must not be allowed
-        // to look like one (2026-08-30, user: "pour tes vérifications de
-        // fichiers sensibles, tu dis que tout est ok. Ce n'est pas ce que
-        // c'est ok... c'est que le site n'est pas public"). If credentials
-        // are configured and correct, the main request above already
-        // authenticated and this stays false.
         $authRequired = ($main['status_code'] ?? null) === 401;
 
         // 3. Soft-404 detection.
@@ -127,12 +118,6 @@ final class HttpProbe extends AbstractProbe
         //    enumeration, browsable uploads dir, common backup files, TRACE.
         $exposure = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
 
-        // 7. Compression CAPABILITY — offered one encoding at a time. The main
-        // request above offers "gzip, br" together, which only reveals which
-        // encoding the server PREFERS when it has a choice, not which ones it
-        // can actually produce (2026-09-04, user: "je ne cherche pas à savoir
-        // si c'est le comportement par défaut"). A server that prefers br but
-        // still supports gzip would otherwise read as "gzip: false".
         $compression = $this->compressionSupportCheck($client, $finalUrl);
 
         // 8. Protocol support, isolated per version rather than the old
@@ -257,17 +242,6 @@ final class HttpProbe extends AbstractProbe
                 ],
                 'decode_content' => false,
                 'version'        => 2.0, // negotiate HTTP/2 when available
-                // followRedirects() above already opened a plain HEAD
-                // connection to this same host (http:// first, then the
-                // https:// final hop, neither forcing a version). Confirmed
-                // live: libcurl happily reuses that pooled HTTP/1.1
-                // connection here even though this request asks for 2.0,
-                // silently keeping the whole exchange on 1.1 and never
-                // attempting the ALPN h2 negotiation at all — B3 read
-                // "false" against a site verified separately (plain curl,
-                // same host) to serve HTTP/2 (2026-09-07). FRESH_CONNECT
-                // forces a brand-new connection so the version option
-                // actually gets a real negotiation.
                 'curl'           => [\CURLOPT_FRESH_CONNECT => true],
                 'on_stats'       => static function (TransferStats $s) use (&$stats): void {
                     $stats = $s->getHandlerStats();
@@ -284,7 +258,23 @@ final class HttpProbe extends AbstractProbe
             $headers[strtolower($name)] = implode(', ', $values);
         }
 
-        return self::parseMainResponse($response->getStatusCode(), $headers, $stats ?? []);
+        $parsed = self::parseMainResponse($response->getStatusCode(), $headers, $stats ?? []);
+
+        // The exact request this probe made — shown next to the response so
+        // an analyst can re-run the same thing by hand (curl, browser
+        // devtools) to verify a header value themselves, same idea as the
+        // per-check evidence already carried on exposureCheck()'s findings.
+        $parsed['request'] = [
+            'method'  => 'GET',
+            'url'     => $url,
+            'headers' => [
+                'Accept-Encoding' => 'gzip, br',
+                'Accept'          => 'text/html,application/xhtml+xml',
+                'User-Agent'      => $this->userAgent,
+            ],
+        ];
+
+        return $parsed;
     }
 
     /**
@@ -322,6 +312,15 @@ final class HttpProbe extends AbstractProbe
 
         $setCookie = $headers['set-cookie'] ?? null;
 
+        // The full raw response below is for an analyst who wants to check
+        // something the curated fields don't cover — but "full" stops at
+        // Set-Cookie: its value can be an actual session/cart identifier for
+        // the site's own visitors, not metadata about the site itself, and
+        // has no business being written to data/ or shown in the UI. The
+        // boolean-only `cookies` summary below is the safe representation of
+        // the same fact (secure/httponly/samesite present or not).
+        unset($headers['set-cookie']);
+
         return [
             'status_code'      => $statusCode,
             'http_version'     => $httpVersion,
@@ -329,6 +328,11 @@ final class HttpProbe extends AbstractProbe
             'gzip'             => ($headers['content-encoding'] ?? '') === 'gzip',
             'brotli'           => ($headers['content-encoding'] ?? '') === 'br',
             'alt_svc'          => $headers['alt-svc'] ?? null,
+            // Every OTHER response header received, unfiltered —
+            // security_headers below is a curated subset for quick scanning;
+            // this is the full raw response for an analyst who wants to
+            // check something else (Set-Cookie excluded, see above).
+            'headers'          => $headers,
             'cache_headers'    => [
                 'cache-control' => $headers['cache-control'] ?? null,
                 'expires'       => $headers['expires'] ?? null,
@@ -574,15 +578,35 @@ final class HttpProbe extends AbstractProbe
         $parsed['present']     = true;
         $parsed['url']         = $robotsUrl;
 
-        // Verify the first declared sitemap actually resolves.
         $parsed['sitemap_reachable'] = null;
+        $parsed['sitemap_source']    = null;
         if ($parsed['sitemaps'] !== []) {
+            $parsed['sitemap_source'] = 'robots.txt';
             try {
                 $sitemap = $client->head($parsed['sitemaps'][0]);
                 $parsed['sitemap_reachable'] = $sitemap->getStatusCode() >= 200
                     && $sitemap->getStatusCode() < 400;
             } catch (GuzzleException) {
                 $parsed['sitemap_reachable'] = false;
+            }
+        } else {
+            // robots.txt declaring no sitemap is not the same fact as "this
+            // site has no sitemap" — WordPress core itself never adds a
+            // "Sitemap:" line, and not every SEO plugin does either, even
+            // though a real sitemap exists at one of the conventional URLs.
+            // Checked in order; the first one that resolves wins.
+            foreach (['/wp-sitemap.xml', '/sitemap.xml', '/sitemap_index.xml'] as $path) {
+                try {
+                    $candidate = $client->head($origin . $path);
+                } catch (GuzzleException) {
+                    continue;
+                }
+                if ($candidate->getStatusCode() >= 200 && $candidate->getStatusCode() < 400) {
+                    $parsed['sitemaps']          = [$origin . $path];
+                    $parsed['sitemap_reachable'] = true;
+                    $parsed['sitemap_source']    = 'convention';
+                    break;
+                }
             }
         }
 

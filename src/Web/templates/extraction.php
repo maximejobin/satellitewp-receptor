@@ -1,13 +1,5 @@
 <?php
 /**
- * Extraction report — visual/structural redesign (2026-08-29). Same data,
- * same helpers (field()/field_raw()/section()/etc. from helpers.php), all
- * wrapped in a grouped, icon-led, sticky-nav layout instead of ten flat
- * stacked sections. The previous flat-cards layout (`extraction-legacy.php`,
- * kept for a time as a rollback/comparison reference) was removed 2026-08-31
- * — parity had already been verified and the redesign had been live long
- * enough that the comparison copy no longer earned its keep.
- *
  * @var \SatelliteWP\Xtractor\Rules\Translator $t
  */
 use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
@@ -42,6 +34,53 @@ $vulnCell = static function (array $merged): string {
     return '<span class="badge badge-error">' . count($merged) . ' CVE</span>';
 };
 
+/**
+ * Active theme first, its parent right after (forced "active" too — it has
+ * to be loaded for the child to work, even though WordPress itself never
+ * marks it active), everything else after that in its original order.
+ * `parent_slug` (present only on an active child theme) is the same field
+ * WordPress's own theme header exposes — no slug-guessing needed.
+ *
+ * @param array<string, array<string, mixed>> $themes keyed by theme file
+ * @return array<string, array<string, mixed>>
+ */
+$orderThemes = static function (array $themes): array {
+    $activeFile = null;
+    foreach ($themes as $file => $th) {
+        if (!empty($th['active'])) {
+            $activeFile = $file;
+            break;
+        }
+    }
+    if ($activeFile === null) {
+        return $themes;
+    }
+
+    $active = $themes[$activeFile];
+    unset($themes[$activeFile]);
+
+    $parentSlug = strtolower((string) ($active['parent_slug'] ?? ''));
+    $parentFile = null;
+    if ($parentSlug !== '' && $parentSlug !== strtolower((string) ($active['slug'] ?? ''))) {
+        foreach ($themes as $file => $th) {
+            if (strtolower((string) ($th['slug'] ?? '')) === $parentSlug) {
+                $parentFile = $file;
+                break;
+            }
+        }
+    }
+
+    $ordered = [$activeFile => $active];
+    if ($parentFile !== null) {
+        $parent           = $themes[$parentFile];
+        $parent['active'] = true;
+        $ordered[$parentFile] = $parent;
+        unset($themes[$parentFile]);
+    }
+
+    return $ordered + $themes;
+};
+
 $eolPhp = $eol->eolStatus('php', (string) ($p['php']['version'] ?? ''));
 $eolWp  = $eol->eolStatus('wordpress', (string) ($p['wp_version'] ?? ''));
 $dbType = str_contains(strtolower((string) ($p['database_type'] ?? '')), 'maria') ? 'mariadb'
@@ -51,7 +90,6 @@ $eolDb  = $dbType !== null ? $eol->eolStatus($dbType, (string) ($p['database_ver
 $all      = $findings['findings'] ?? [];
 $counts   = $findings['counts'] ?? ['by_pastille' => [], 'total' => 0];
 $byPast   = $counts['by_pastille'] ?? [];
-$score    = health_score($counts);
 
 // category → observation count, for the filter bar
 $catCount = [];
@@ -109,7 +147,12 @@ $status = (string) ($row['status'] ?? '');
 if ($status !== 'done'):
     $bvFound = ($blogVault['found'] ?? false) === true;
 ?>
-    <h1><?= e($site['name'] ?? $siteId) ?></h1>
+    <?= breadcrumb([
+        [$t->ui('sites'), '/extractions'],
+        [site_display($site['site_url'] ?? '') ?: $siteId, '/site/' . $siteId],
+        [$extractionId, null],
+    ]) ?>
+    <h1><?= e(site_display($site['site_url'] ?? '') ?: $siteId) ?></h1>
     <p class="muted">
         <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
@@ -124,12 +167,6 @@ if ($status !== 'done'):
         <h2>Analysis</h2>
         <div style="padding:0 1.1rem 1.1rem">
         <?php if ($status === 'queued' || $status === 'running'): ?>
-            <!-- Queued and running share one box: a spinning-icon "in progress"
-                 notice (was two separate ad hoc badges before, each also
-                 duplicating the badge() already shown above — reported live as
-                 "2 fois le même tag dans 2 couleurs, ça ne fait pas de sens",
-                 2026-09-07). The page refreshes itself every few seconds so the
-                 analyst never has to remember to come back and reload by hand. -->
             <?= notice('progress', ($status === 'running'
                 ? 'The analysis is running.'
                 : 'Queued — waiting for the worker (cron <span class="mono">ingest:process</span>, every minute).')
@@ -143,9 +180,43 @@ if ($status !== 'done'):
                 <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
                 <button type="submit" class="btn">Retry analysis</button>
             </form>
+        <?php elseif ($status === 'aborted'): ?>
+            <p><span class="badge badge-muted">Aborted</span>
+               This extraction was not analysed — an analyst chose to skip it.</p>
         <?php else: ?>
             <p class="muted">This extraction was received but <b>not analysed yet</b>.
                No probe has run, no quota has been spent.</p>
+
+            <?php
+            // Settled before anything else: behind Basic Auth with no
+            // credentials stored, every external probe answers 401 and the
+            // whole report says nothing about the site.
+            // The preflight sends whatever credentials are already stored, so a
+            // 401 here means blocked either way — but "none stored" and "the
+            // stored ones were refused" are different problems for the analyst.
+            $authBlocked = ($httpAuth['required'] ?? false) === true;
+            if ($authBlocked): ?>
+                <?= notice('warning',
+                    '<b>This site is behind HTTP Basic Auth.</b> It answered <span class="mono">HTTP 401</span>, so '
+                    . 'every external check — security headers, exposure, robots/sitemap, PageSpeed — would come back '
+                    . 'empty. '
+                    . (($httpAuth['configured'] ?? false) === true
+                        ? 'Credentials <b>are</b> stored for this site but were not accepted — check them under '
+                        : 'Add this site\'s credentials under ')
+                    . '<a href="/site/' . e($siteId) . '">⚙ Site settings</a>, then reload this page to re-check.'
+                ) ?>
+            <?php elseif (!empty($httpAuth['error'])): ?>
+                <p><span class="badge badge-warn">Site unreachable</span>
+                   <span class="mono"><?= e($httpAuth['error']) ?></span> — external checks may come back empty.</p>
+            <?php elseif (($httpAuth['checked'] ?? false) === true && ($httpAuth['configured'] ?? false) === true): ?>
+                <?php // Credentials were sent, so this says nothing about whether the site needs them. ?>
+                <p><span class="badge badge-ok">Credentials accepted</span>
+                   The site answered <span class="mono">HTTP <?= e($httpAuth['status']) ?></span> with the stored
+                   credentials — external checks will run.</p>
+            <?php elseif (($httpAuth['checked'] ?? false) === true): ?>
+                <p><span class="badge badge-ok">Publicly reachable</span>
+                   The site answered <span class="mono">HTTP <?= e($httpAuth['status']) ?></span> anonymously.</p>
+            <?php endif; ?>
 
             <?php if (($blogVault['configured'] ?? false) !== true): ?>
                 <p><span class="badge badge-muted">BlogVault not configured</span>
@@ -164,12 +235,33 @@ if ($status !== 'done'):
                    Rules <span class="mono">BV1</span>–<span class="mono">BV6</span> will stay indeterminate.</p>
             <?php endif; ?>
 
-            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run"
-                  <?= $bvFound ? '' : 'onsubmit="return confirm(\'This site is not on BlogVault. Run the analysis anyway?\')"' ?>>
-                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-                <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
-                <button type="submit" class="btn"><?= $bvFound ? 'Run analysis' : 'Run analysis anyway' ?></button>
-            </form>
+            <?php
+            $runWarnings = [];
+            if ($authBlocked) {
+                $runWarnings[] = ($httpAuth['configured'] ?? false) === true
+                    ? 'This site answered HTTP 401 even with the stored credentials — every external check will come back empty.'
+                    : 'This site is behind HTTP Basic Auth and no credentials are stored — every external check will come back empty.';
+            }
+            if (!$bvFound) {
+                $runWarnings[] = 'This site is not on BlogVault.';
+            }
+            $confirm = $runWarnings === [] ? '' : 'onsubmit="return confirm('
+                . e(json_encode(implode("\n\n", $runWarnings) . "\n\nRun the analysis anyway?"))
+                . ')"';
+            ?>
+            <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+                <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run" <?= $confirm ?>>
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
+                    <button type="submit" class="btn"><?= $runWarnings === [] ? 'Run analysis' : 'Run analysis anyway' ?></button>
+                </form>
+                <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/abort"
+                      onsubmit="return confirm('Abort this extraction? Its data will not be analysed — you can still run a fresh extraction from the site later.')">
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
+                    <button type="submit" class="btn btn-secondary">Abort</button>
+                </form>
+            </div>
         <?php endif; ?>
         </div>
     </section>
@@ -180,35 +272,22 @@ if ($status !== 'done'):
 
     <!-- Hero -->
     <div class="xt-hero" id="overview">
+        <?= breadcrumb([
+            [$t->ui('sites'), '/extractions'],
+            [site_display($site['site_url'] ?? '') ?: $siteId, '/site/' . $siteId],
+            [$extractionId, null],
+        ]) ?>
         <div class="xt-hero-top">
             <div class="xt-hero-main">
-                <?php if ($findings !== null):
-                    $grade = health_grade($score); ?>
-                    <div class="xt-hero-grade" style="--c:<?= health_color($score) ?>">
-                        <div class="xt-grade-letter"><?= e($grade) ?></div>
-                        <div class="xt-hero-ring" data-score="<?= e($score) ?>" style="--p:0;--c:<?= health_color($score) ?>">
-                            <div class="xt-hero-ring-inner">
-                                <div class="score"><?= e($score) ?></div>
-                                <div class="cap">/ 100</div>
-                            </div>
-                        </div>
-                    </div>
-                <?php endif; ?>
                 <div class="xt-hero-title">
                     <div class="xt-hero-eyebrow">Health &amp; Security Report</div>
-                    <h1><?= e($site['name'] ?? $siteId) ?></h1>
+                    <h1><?= e(site_display($site['site_url'] ?? '') ?: $siteId) ?></h1>
                     <div class="xt-hero-url">
                         <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
                         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
                         · signature <?= !empty($meta['signature_valid']) ? 'valid' : 'absent/unverified' ?>
                         · <?= badge($row['status'] ?? null) ?>
                     </div>
-                    <?php if ($findings !== null): ?>
-                        <details class="xt-hero-explain">
-                            <summary>How is this score calculated?</summary>
-                            <?= health_score_breakdown($counts) ?>
-                        </details>
-                    <?php endif; ?>
                 </div>
             </div>
             <div class="xt-hero-actions">
@@ -328,9 +407,6 @@ if ($status !== 'done'):
                     . field('Source', $rdap['source'] ?? null, null, 'probe.rdap.source')
                 ); ?>
                 <?php // Mail-delivery/authentication records only — CAA and A/AAAA are
-                // general DNS, not email, and live in §Hosting next to SSL/TLS and
-                // the server's IP address instead (2026-08-30, user: "Email et DNS,
-                // ça ne devrait pas être dans la même section... ça n'a rien à voir").
                 echo section('Email',
                     field('SPF', ($dns['spf']['present'] ?? false) ? 'present' : 'absent', ($dns['spf']['present'] ?? false) ? 'ok' : 'warn', 'probe.dns.spf.present')
                     . field_raw('SPF record', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>', null, 'probe.dns.spf.record')
@@ -500,7 +576,7 @@ if ($status !== 'done'):
             <?php if ($themes !== []): ?>
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
                 <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>Status</th><th>Vulnerabilities</th></tr></thead><tbody>
-                <?php foreach ($themes as $file => $th):
+                <?php foreach ($orderThemes($themes) as $file => $th):
                     $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
                         $bvThemesBySlug[$slug]['vulnerabilities'] ?? [],
@@ -613,12 +689,6 @@ if ($status !== 'done'):
             <div class="cards">
                 <?php
                 $admins = is_array($p['administrators'] ?? null) ? $p['administrators'] : [];
-                // "login (email)" for manual review — added 2026-08-31, reframed from
-                // an earlier "flag a login literally named admin" idea: the raw list
-                // lets an analyst judge every account, rather than trust one heuristic.
-                // Falls back to a bare string for an older stored extraction whose
-                // super_admins predates the email field (a plain login-string list
-                // then) — already-completed extractions keep their frozen shape.
                 $adminLabel = static function ($a): string {
                     if (!is_array($a)) {
                         return (string) $a;
@@ -631,8 +701,8 @@ if ($status !== 'done'):
                 echo section('Accounts',
                     field('Total users', wp_count($p['users_count'] ?? null, 'total_users'), null, 'payload.users_count')
                     . field('Administrators', count($admins), count($admins) > 5 ? 'warn' : 'ok', 'payload.administrators')
-                    . field_raw('Admin logins', fmt_list(array_map($adminLabel, $admins)), null, 'payload.administrators')
-                    . field_raw('Super admins (network)', fmt_list(array_map($adminLabel, (array) ($p['super_admins'] ?? []))), null, 'payload.super_admins')
+                    . field_raw('Admin logins', fmt_lines(array_map($adminLabel, $admins)), null, 'payload.administrators')
+                    . field_raw('Super admins (network)', fmt_lines(array_map($adminLabel, (array) ($p['super_admins'] ?? []))), null, 'payload.super_admins')
                 );
                 ?>
             </div>
@@ -640,7 +710,7 @@ if ($status !== 'done'):
     </section>
 
     <!-- ============================== QUALITY & SECURITY ============================== -->
-    <!-- Performance · SEO & analytics · Security & backup -->
+    <!-- Performance · SEO & analytics · Security -->
     <section class="xt-group" id="quality-security" data-nav-target="quality-security" style="--group-color:var(--group-quality)">
         <header class="xt-group-head">
             <span class="xt-icon-badge"><?= report_icon('performance') ?></span>
@@ -653,7 +723,7 @@ if ($status !== 'done'):
             <?php if ($ps !== []): ?>
                 <table><thead><tr><th>Strategy</th>
                     <?php foreach (array_keys(($mobilePs['scores'] ?? [])) as $c): ?><th><?= e(ucfirst(str_replace('-', ' ', $c))) ?></th><?php endforeach; ?>
-                    <th>LCP</th><th>CLS</th><th>Field</th></tr></thead><tbody>
+                    <th>LCP</th><th>CLS</th><th title="Real-world Chrome usage data (CrUX) for this page, not the simulated Lighthouse run in the columns to the left">Field data (CrUX)</th></tr></thead><tbody>
                 <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
                     <tr><td><strong><?= e($strat) ?></strong></td>
                         <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
@@ -661,7 +731,7 @@ if ($status !== 'done'):
                         <?php endforeach; ?>
                         <td class="num"><?= isset($r['lab']['lcp']['value']) ? e(round((float) $r['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
                         <td class="num"><?= e($r['lab']['cls']['display'] ?? '—') ?></td>
-                        <td><?= e($r['field']['overall_category'] ?? '—') ?></td></tr>
+                        <td><?php $fc = $r['field']['overall_category'] ?? null; ?><?= $fc ? e(ucfirst(strtolower((string) $fc))) : '<span class="val-muted">no field data</span>' ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
@@ -678,6 +748,7 @@ if ($status !== 'done'):
                     // not which ones it can actually produce.
                     . field('Gzip capability', $http['compression']['gzip'] ?? null, ($http['compression']['gzip'] ?? null) === false ? 'warn' : (($http['compression']['gzip'] ?? null) === true ? 'ok' : null), 'probe.http.compression.gzip')
                     . field('Brotli capability', $http['compression']['brotli'] ?? null, ($http['compression']['brotli'] ?? null) === false ? 'warn' : (($http['compression']['brotli'] ?? null) === true ? 'ok' : null), 'probe.http.compression.brotli')
+                    . field('HTTP/2 supported', $http['protocols']['http2'] ?? null, ($http['protocols']['http2'] ?? null) === false ? 'warn' : (($http['protocols']['http2'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http2')
                     . field('HTTP/1.1 supported', $http['protocols']['http1_1'] ?? null, ($http['protocols']['http1_1'] ?? null) === false ? 'warn' : (($http['protocols']['http1_1'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http1_1')
                     . field('HTTP/3 advertised', $http['protocols']['http3_advertised'] ?? null, null, 'probe.http.protocols.http3_advertised')
                     . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn', 'probe.http.redirects.forces_https')
@@ -687,14 +758,6 @@ if ($status !== 'done'):
                 <?php echo section('Cache',
                     field_raw('Autoload', fmt_bytes($p['autoload']['total_bytes'] ?? null) . ' <span class="val-muted">(' . e($p['autoload']['count'] ?? '?') . ' options)</span>', null, 'payload.autoload.total_bytes')
                     . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn', 'payload.object_cache.external')
-                    // Confirmed against the plugin's actual collector source
-                    // (2026-08-30): this is isset($dropins['advanced-cache.php'])
-                    // — file presence only, via WordPress's own get_dropins(),
-                    // never a check of the WP_CACHE constant. A stale drop-in
-                    // left behind by a deactivated caching plugin reads
-                    // "present" exactly the same as one actually in use — the
-                    // label says what was actually measured, not "is caching
-                    // active right now".
                     . field('Page cache drop-in', ($p['object_cache']['page_cache'] ?? false) ? 'present' : 'absent', null, 'payload.object_cache.page_cache')
                 ); ?>
             </div>
@@ -705,26 +768,35 @@ if ($status !== 'done'):
             <div class="cards">
                 <?php
                 $robots = $http['robots'] ?? [];
+                $sitemapSourceLabel = match ($robots['sitemap_source'] ?? null) {
+                    'robots.txt' => 'Declared in robots.txt',
+                    'convention' => 'Found at its default URL — not declared in robots.txt',
+                    default      => null,
+                };
                 echo section('SEO',
                     field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? 'ok' : 'warn', 'probe.http.robots.present')
                     . field('Blocks whole site', ($robots['disallow_all'] ?? false) ? 'yes' : 'no', ($robots['disallow_all'] ?? false) ? 'error' : 'ok', 'probe.http.robots.disallow_all')
                     . field_raw('Sitemaps', fmt_list($robots['sitemaps'] ?? []), null, 'probe.http.robots.sitemaps')
                     . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—', null, 'probe.http.robots.sitemap_reachable')
-                    . field('SEO score (mobile)', $mobilePs['scores']['seo'] ?? null, null, 'probe.pagespeed.scores.seo')
+                    . ($sitemapSourceLabel !== null ? field('Sitemap source', $sitemapSourceLabel, null, 'probe.http.robots.sitemap_source') : '')
                 );
                 ?>
             </div>
         </div>
 
         <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('security') ?><h3>Security &amp; backup</h3></div>
+            <div class="xt-subsection-head"><?= report_icon('security') ?><h3>Security</h3></div>
             <div class="cards">
                 <?php
                 $const = $p['constants'] ?? [];
                 $constRows = '';
                 foreach ($const as $name => $value) {
                     $bad = in_array($name, ['WP_DEBUG', 'WP_DEBUG_DISPLAY'], true) && $value === true;
-                    $constRows .= field($name, $value, $bad ? 'error' : null, 'payload.constants.' . $name);
+                    // The literal constant value, not field()'s usual yes/no
+                    // humanization — this card shows exactly what WordPress
+                    // itself reports for each PHP constant, true/false as-is.
+                    $display = is_bool($value) ? ($value ? 'true' : 'false') : (string) ($value ?? '—');
+                    $constRows .= field_raw($name, e($display), $bad ? 'error' : null, 'payload.constants.' . $name);
                 }
                 echo section('Hardening (constants)', $constRows ?: field('constants', null), class: 'card-full');
                 ?>
@@ -733,10 +805,10 @@ if ($status !== 'done'):
                 echo section('Security headers',
                     field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.x-content-type-options')
                     . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', null, 'probe.http.security_headers.x-frame-options')
-                    . field('Content-Security-Policy', ($sec['content-security-policy'] ?? null) ? 'present' : 'missing', ($sec['content-security-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.content-security-policy')
-                    . field('Referrer-Policy', ($sec['referrer-policy'] ?? null) ? 'present' : 'missing', null, 'probe.http.security_headers.referrer-policy')
-                    . field('Permissions-Policy', ($sec['permissions-policy'] ?? null) ? 'present' : 'missing', null, 'probe.http.security_headers.permissions-policy')
-                    . field('HSTS', ($sec['strict-transport-security'] ?? null) ? 'present' : 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.strict-transport-security')
+                    . field('Content-Security-Policy', $sec['content-security-policy'] ?? 'missing', ($sec['content-security-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.content-security-policy')
+                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', null, 'probe.http.security_headers.referrer-policy')
+                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', null, 'probe.http.security_headers.permissions-policy')
+                    . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.strict-transport-security')
                 ); ?>
                 <?php
                 $fs = $p['filesystem'] ?? [];
@@ -745,6 +817,19 @@ if ($status !== 'done'):
                     . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : 'ok', 'payload.filesystem.core_writable')
                     . field('Uploads writable', $fs['uploads_writable'] ?? null, null, 'payload.filesystem.uploads_writable')
                 ); ?>
+                <?php
+                $bvFiles = $bv['backups']['files'] ?? [];
+                $bvDb    = $bv['backups']['database'] ?? [];
+                if ($bvFiles !== [] || $bvDb !== []) {
+                    echo section('Backup size (BlogVault)',
+                        field_raw('Database size', fmt_bytes($bvDb['size']['total'] ?? null), null, 'probe.blogvault.backups.database')
+                        . field_raw('Files size', fmt_bytes($bvFiles['size']['total'] ?? null), null, 'probe.blogvault.backups.files')
+                        . field('Files — total', $bvFiles['count']['total'] ?? null, null, 'probe.blogvault.backups.files')
+                        . field('Files — synced', $bvFiles['count']['synced'] ?? null, null, 'probe.blogvault.backups.files')
+                        . field('Files — ignored', $bvFiles['count']['ignored'] ?? null, null, 'probe.blogvault.backups.files')
+                    );
+                }
+                ?>
                 <?php
                 // Passive attack-surface checks (HttpProbe::exposureCheck()) — every
                 // one of these is a request an anonymous visitor could already make.
@@ -770,13 +855,6 @@ if ($status !== 'done'):
                 $restUsernames  = $evidence['rest_users']['usernames'] ?? [];
                 $sensitiveFiles = $exp['sensitive_files'] ?? null;
                 $sensitiveEv    = $evidence['sensitive_files'] ?? null;
-                // A 401 on the homepage itself is not the same fact as "checked,
-                // nothing found" — every row below would also 401 regardless of
-                // what it tests for, so HttpProbe skips them all rather than
-                // report a false "clean" (2026-08-30, "ce n'est pas ce que c'est
-                // ok... c'est que le site n'est pas public"). Say so plainly
-                // instead of letting six identical "not checked" rows imply an
-                // unrelated (and less alarming) reason, like the soft-404 skip.
                 if (($exp['auth_required'] ?? false) === true) {
                     echo '<div class="card card-full"><h3>Exposure</h3><div style="padding:1rem 1.1rem">'
                         . '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">'
@@ -802,15 +880,15 @@ if ($status !== 'done'):
                     . $exposureRow('HTTP TRACE method', $exp['trace_enabled'] ?? null, 'enabled', 'disabled', $evNote($evidence['trace'] ?? null))
                 );
                 }
-                // No "Integrity, malware & backup" card here (removed
-                // 2026-08-31): BlogVault's scanner status, firewall mode,
-                // backup state and remediation detail are all *current
-                // operational* facts, not a fact about the site's
-                // configuration at the moment of this extraction — out of
-                // scope for a snapshot-in-time tool by design, not merely
-                // unbuilt. See the golden rules in CLAUDE.md.
                 ?>
             </div>
+            <?= json_details('Raw request & response headers — same request this probe made', [
+                'request'  => $http['request'] ?? null,
+                'response' => [
+                    'status_code' => $http['status_code'] ?? null,
+                    'headers'     => $http['headers'] ?? null,
+                ],
+            ]) ?>
             <?php
             $perms = is_array($fs['permissions'] ?? null) ? $fs['permissions'] : [];
             if ($perms !== []):

@@ -9,24 +9,6 @@ use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use InvalidArgumentException;
 
-/**
- * Wordfence Intelligence v3 vulnerability data feed.
- *
- * Unlike BlogVault (dozens of endpoints, hence BlogVaultClient's generic
- * parameter-driven design), Wordfence has exactly two: a dedicated class with
- * one method is simpler. Confirmed live against the real API (2026-08-21):
- *
- *   GET https://www.wordfence.com/api/intelligence/v3/vulnerabilities/{production|scanner}
- *   Authorization: Bearer <key>   (no "cli-" prefix — that's specific to
- *                                  wordfence-cli's own license-key namespace)
- *
- * The response is a single JSON object keyed by vulnerability UUID, not an
- * array — {"<uuid>": {...}, ...}. Both feeds are full dumps with no
- * pagination: "scanner" alone is ~78 MB / ~39k records, "production" is
- * larger still. The API enforces a strict rate limit (observed: 1 request
- * counted immediately on success) — never call this outside a scheduled
- * refresh; see WordfenceIndex::refresh().
- */
 final class WordfenceClient
 {
     public const string VARIANT_PRODUCTION = 'production';

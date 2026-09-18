@@ -151,7 +151,6 @@ return [
         // BlogVault
         'BV1' => ['title' => 'Site non signalé comme piraté', 'fail' => 'BlogVault signale ce site comme piraté : {detections} détection(s) non résolue(s).', 'pass' => 'L\'analyse antimaliciel de BlogVault ne signale rien.'],
         'BV2' => ['title' => 'Aucune vulnérabilité connue', 'fail' => 'BlogVault recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'BlogVault ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
-        'BV3' => ['title' => 'Authentification à deux facteurs des administrateurs', 'fail' => '{observed} administrateur(s) sur {administrators} n\'ont pas d\'authentification à deux facteurs.', 'pass' => 'Tous les administrateurs ont l\'authentification à deux facteurs activée.'],
         // Wordfence
         'WF1' => ['title' => 'Aucune vulnérabilité connue (Wordfence)', 'fail' => 'Wordfence Intelligence recense {observed} vulnérabilités connues sur {components} composant(s).', 'pass' => 'Wordfence Intelligence ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.'],
         // Exposition

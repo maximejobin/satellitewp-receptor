@@ -6,17 +6,6 @@ namespace SatelliteWP\Xtractor\Http;
 
 use RuntimeException;
 
-/**
- * Locks out an address after too many failed Basic Auth attempts on the
- * admin UI (2026-08-31 — `Router::authenticate()` had no attempt limit at
- * all). Keyed by the caller's IP (`$_SERVER['REMOTE_ADDR']`) since Basic
- * Auth has no session to key on before a request is verified.
- *
- * Same file-backed, atomic-write pattern as `KeyStore`/`ReplayCache`, stored
- * at `data/login-lockout.json`. Only relevant when Basic Auth is actually
- * configured (`web.user`/`web.pass_hash`) — Google sign-in has its own
- * protections (OAuth, an allowlist) and is not gated by this.
- */
 final class LoginLockout
 {
     private const int MAX_ATTEMPTS   = 5;

@@ -47,8 +47,8 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
             field_raw('Email', e($client['email'] ?? '') . ' ' . copy_button((string) ($client['email'] ?? ''))),
         ]) ?></tbody></table>
         <table class="kv"><tbody><?= implode('', [
-            field_raw('Teamwork id', external_link($links['teamwork_client_url'] ?? null, $client['teamwork_id'] ?? null, (string) ($client['teamwork_id'] ?? '—'))),
-            field_raw('HubSpot id', external_link($links['hubspot_client_url'] ?? null, $client['hubspot_id'] ?? null, (string) ($client['hubspot_id'] ?? '—'))),
+            field_raw('Teamwork id', external_link($links['teamwork_project_url'] ?? null, $client['teamwork_id'] ?? null, (string) ($client['teamwork_id'] ?? '—'))),
+            field_raw('HubSpot id', external_link($links['hubspot_company_url'] ?? null, $client['hubspot_id'] ?? null, (string) ($client['hubspot_id'] ?? '—'))),
             field_raw('BlogVault client id', external_link($links['blogvault_client_url'] ?? null, $client['blogvault_client_id'] ?? null, (string) ($client['blogvault_client_id'] ?? '—'))),
         ]) ?></tbody></table>
     </div>
@@ -67,13 +67,9 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
     $websiteLabels = array_values(array_unique($websiteLabels));
     sort($websiteLabels);
     ?>
-    <?php // A single wrapper so the filter bar sits right against the table
-          // below it (2026-09-02, user: "plus 'collés'") — as two direct
-          // siblings of .content they'd each get its 1.4rem flex gap, same
-          // as every other pair of blocks on the page. ?>
     <div class="search-group">
     <form class="search" onsubmit="return false">
-        <input type="search" id="svc-search" placeholder="Search product…">
+        <input type="search" id="svc-search" placeholder="Search…">
         <select id="svc-website">
             <option value="">All websites</option>
             <?php foreach ($websiteLabels as $wl): ?>

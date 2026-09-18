@@ -18,14 +18,25 @@ $nav = $nav ?? 'sites';
     <?php if (!empty($dataTables)): ?>
     <link rel="stylesheet" href="/assets/vendor/datatables/dataTables.dataTables.min.css">
     <script src="/assets/vendor/datatables/dataTables.min.js"></script>
+    <script>
+      (function () {
+        var collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
+        var stripHtml = function (value) {
+          if (value === null || value === undefined) { return ''; }
+          return String(value).replace(/<[^>]*>/g, '').trim();
+        };
+        ['string', 'html'].forEach(function (type) {
+          $.fn.dataTable.ext.type.order[type + '-pre']  = stripHtml;
+          $.fn.dataTable.ext.type.order[type + '-asc']  = function (a, b) { return collator.compare(a, b); };
+          $.fn.dataTable.ext.type.order[type + '-desc'] = function (a, b) { return collator.compare(b, a); };
+        });
+      })();
+    </script>
     <?php endif; ?>
     <?php if (!empty($select2)): ?>
     <link rel="stylesheet" href="/assets/vendor/select2/select2.min.css">
     <script src="/assets/vendor/select2/select2.min.js"></script>
     <?php endif; ?>
-    <?php // Tippy.js (vendored, /assets/vendor/tippy/) — 2026-09-03, style guide
-          // exploration only, not wired into any real page yet. The "bundle"
-          // build includes Popper inline, so this is the one file to load. ?>
     <?php if (!empty($tooltip)): ?>
     <link rel="stylesheet" href="/assets/vendor/tippy/tippy.css">
     <link rel="stylesheet" href="/assets/vendor/tippy/light-border.css">
@@ -37,33 +48,32 @@ $nav = $nav ?? 'sites';
 </head>
 <body>
 <?php if (!empty($bare)): ?>
-<!-- No sidebar/menu on this page (2026-09-03, user: "cette page ne doit pas
-     montrer les menus de l'application") — the login page is reachable by
-     definition before anyone is signed in, so a nav full of links to pages
-     that would just bounce back here is noise at best. -->
 <div class="app-bare">
     <?php require $templateFile; ?>
 </div>
 <?php else: ?>
 <div class="app">
-    <aside class="side">
+    <div class="mobile-topbar">
+        <button type="button" class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="sideNav">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <line x1="2" y1="5" x2="16" y2="5"/><line x1="2" y1="9" x2="16" y2="9"/><line x1="2" y1="13" x2="16" y2="13"/>
+            </svg>
+        </button>
+        <a class="brand" href="/"><b>SatelliteWP</b> Xtractor</a>
+    </div>
+    <div class="nav-backdrop" id="navBackdrop"></div>
+    <aside class="side" id="sideNav">
         <a class="brand" href="/"><b>SatelliteWP</b> Xtractor</a>
 
         <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status</a>
 
-        <!-- No label here on purpose (2026-09-02, user: "Retirer le label
-             'CRM'") — these four sibling entities from the external CRM
-             database open the sidebar unlabeled, ahead of every other
-             section; none is nested under another (flat URLs: /clients,
-             /websites, /products, /items) — the business identifies a
-             website first and finds its client after, never the reverse. -->
         <a class="nav-item <?= $nav === 'crm-clients' ? 'active' : '' ?>" href="/clients">Clients</a>
         <a class="nav-item <?= $nav === 'crm-websites' ? 'active' : '' ?>" href="/websites">Websites</a>
         <a class="nav-item <?= $nav === 'crm-items' ? 'active' : '' ?>" href="/items">Items</a>
         <a class="nav-item <?= $nav === 'crm-products' ? 'active' : '' ?>" href="/products">Products</a>
 
         <div class="nav-label">Receptor</div>
-        <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/"><?= e($t->ui('sites')) ?></a>
+        <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?></a>
         <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue</a>
 
         <div class="nav-label">Data</div>
@@ -72,16 +82,6 @@ $nav = $nav ?? 'sites';
         <a class="nav-item <?= $nav === 'data-databases' ? 'active' : '' ?>" href="/data/databases">Databases</a>
         <a class="nav-item <?= $nav === 'data-vulnerabilities' ? 'active' : '' ?>" href="/data/vulnerabilities">Vulnerabilities</a>
 
-        <?php // "Users" is always visible, like every other nav item — "is
-              // someone currently signed in" gates nothing real (the page
-              // itself already does: read-only unless $isAdmin, mutations
-              // blocked server-side regardless of nav visibility), so hiding
-              // the link only when auth isn't configured yet made the page
-              // undiscoverable for no actual security gain (2026-09-02, user:
-              // "si on validait une capacity précise, je ne dis pas... mais
-              // valider qu'on est un user, ça sert à quoi?"). "Sign out" is
-              // the one item here that genuinely has nothing to do when
-              // nobody is signed in, so it alone stays conditional. ?>
         <div class="nav-label">Management</div>
         <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users">Users</a>
         <a class="nav-item <?= $nav === 'styleguide' ? 'active' : '' ?>" href="/styleguide">Style guide</a>
@@ -112,9 +112,6 @@ $nav = $nav ?? 'sites';
 
 <div class="toast-container" id="app-toast-container"></div>
 <script>
-  // Toasts (2026-09-03) — a transient confirmation after an AJAX save.
-  // Global on every page (the container above is always present) so any
-  // fetch()-based save anywhere can call this without its own plumbing.
   function showToast(message, isError) {
     var checkIcon = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/><polyline points="5.5 9.2 8 11.7 12.7 6.5"/></svg>';
     var errorIcon = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/><line x1="6.6" y1="6.6" x2="11.4" y2="11.4"/><line x1="11.4" y1="6.6" x2="6.6" y2="11.4"/></svg>';
@@ -128,6 +125,28 @@ $nav = $nav ?? 'sites';
       setTimeout(function () { toast.remove(); }, 200);
     }, 3000);
   }
+
+  (function () {
+    var toggle = document.getElementById('navToggle');
+    var side = document.getElementById('sideNav');
+    var backdrop = document.getElementById('navBackdrop');
+    if (!toggle || !side || !backdrop) { return; }
+
+    function closeNav() {
+      side.classList.remove('open');
+      backdrop.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+    function openNav() {
+      side.classList.add('open');
+      backdrop.classList.add('open');
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+    toggle.addEventListener('click', function () {
+      side.classList.contains('open') ? closeNav() : openNav();
+    });
+    backdrop.addEventListener('click', closeNav);
+  })();
 
   (function () {
     var bar = document.querySelector('.filt');
@@ -185,15 +204,12 @@ $nav = $nav ?? 'sites';
     });
   })();
 
-  // Every Datatable's search now requires an explicit click (or Enter),
-  // never a live filter on keystroke (2026-09-02, user: "on devra
-  // absolument cliquer sur 'Search'... " — confirmed to cover the native
-  // quick-search box too, not just a page's own filter-bar controls). Each
-  // table is initialized with `dom` excluding 'f' so DataTables never
-  // renders its own instant box; helpers.php's dt_search_box() renders the
-  // replacement input+button, matched to the table by `data-table`. The
-  // *feature* (DataTables' own .search()/.draw()) is unchanged — only the
-  // trigger is.
+  function xtEscapeHtml(value) {
+    var d = document.createElement('div');
+    d.textContent = value === null || value === undefined ? '' : String(value);
+    return d.innerHTML;
+  }
+
   function initExplicitSearch(tableId, dt) {
     var $input = jQuery('.xt-dt-search[data-table="' + tableId + '"]');
     var $btn   = jQuery('.xt-dt-search-btn[data-table="' + tableId + '"]');
@@ -241,23 +257,10 @@ $nav = $nav ?? 'sites';
     jQuery('.js-select2').each(function () { initSelect2(jQuery(this)); });
   }
 
-  // Tippy.js (2026-09-03, style guide only for now) — any element carrying
-  // data-tippy-content gets a real tooltip widget instead of the native
-  // title="" attribute. No-op on a page that didn't load tippy.
   if (window.tippy) {
     tippy('[data-tippy-content]', { theme: 'light-border', animation: 'fade' });
   }
 
-  // Filter-dropdown-as-tag (2026-09-03) — progressive enhancement over a
-  // plain <select class="js-filter-dropdown" data-label="…">: the select
-  // itself stays in the DOM (just hidden), so whatever already reads its
-  // .value — a server GET submit, or a page's own client-side "Filter"
-  // click handler — needs no changes at all. A picked value shows up as a
-  // removable tag in the nearest following .filter-tags (auto-created if
-  // absent); the button itself always shows data-label, never the picked
-  // value, unlike the native <select> it wraps.
-  // data-empty-value overrides which option value means "no filter" (some
-  // pages use a real "all"/"any" option instead of an empty string).
   function initFilterDropdown(select) {
     var label = select.dataset.label || select.name || 'Filter';
     var emptyValue = select.dataset.emptyValue !== undefined ? select.dataset.emptyValue : '';
@@ -314,6 +317,8 @@ $nav = $nav ?? 'sites';
         select.value = emptyValue;
         select.dispatchEvent(new Event('change'));
         tag.remove();
+        var applyBtn = form.querySelector('.js-apply-filters');
+        if (applyBtn) { applyBtn.click(); }
       });
       tagsContainer.appendChild(tag);
     }
@@ -340,18 +345,80 @@ $nav = $nav ?? 'sites';
   });
   document.querySelectorAll('select.js-filter-dropdown').forEach(initFilterDropdown);
 
-  // "Linked website" on a subscription (subscription_website_form()): shown
-  // as plain text by default, an edit icon reveals the dropdown (2026-09-02,
-  // user: "je voudrais que ce soit seulement afficher... avoir un icône pour
-  // edit"). select2 is initialized lazily, the first time it is revealed —
-  // NOT eagerly with the rest above (this select deliberately carries
-  // .wf-select, not .js-select2, so the loop above skips it): initializing
-  // select2 on a display:none element is a well-known source of a
-  // width/position miscalculation, since it can't measure a hidden element.
-  // Toggling uses element.style.display directly, on both elements, rather
-  // than the `hidden` attribute — an inline `style="display:flex"` on the
-  // same element as `hidden` would silently defeat it (equal CSS specificity,
-  // so the actual winner would depend on stylesheet source order — fragile).
+  function initTagFilter(root) {
+    var btn    = root.querySelector('.filter-dropdown-btn');
+    var panel  = root.querySelector('.filter-dropdown-panel');
+    var field  = root.dataset.field; // e.g. 'tag' or 'excludeTag' -> submits as tag[]/excludeTag[]
+    var isExcludeStyle = root.classList.contains('tag-filter-exclude');
+    var hidden = document.createElement('div');
+    hidden.style.display = 'none';
+    root.appendChild(hidden);
+
+    var form = root.closest('form');
+    var tagsContainer = form.parentNode.querySelector('.filter-tags');
+    if (!tagsContainer) {
+      tagsContainer = document.createElement('div');
+      tagsContainer.className = 'filter-tags';
+      form.insertAdjacentElement('afterend', tagsContainer);
+    }
+
+    var selected = (root.dataset.selected || '').split(',').filter(function (t) { return t !== ''; });
+
+    function sync() {
+      hidden.innerHTML = '';
+      tagsContainer.querySelectorAll('[data-tag-chip="' + root.id + '"]').forEach(function (el) { el.remove(); });
+      panel.querySelectorAll('button').forEach(function (b) {
+        b.classList.toggle('active', selected.indexOf(b.dataset.tag) !== -1);
+      });
+      selected.forEach(function (tag) {
+        var input = document.createElement('input');
+        input.type  = 'hidden';
+        input.name  = field + '[]';
+        input.value = tag;
+        hidden.appendChild(input);
+
+        var chip = document.createElement('span');
+        chip.className = 'filter-tag' + (isExcludeStyle ? ' filter-tag-excluded' : '');
+        chip.dataset.tagChip = root.id;
+        chip.innerHTML = '<span class="filter-tag-label">' + tag + '</span> '
+          + '<button type="button" aria-label="Remove ' + tag + ' filter">&times;</button>';
+        // Removing a chip is a complete action, same as the single-value
+        // filter-dropdown tags above — applies immediately rather than
+        // waiting for a separate "Filter" click.
+        chip.querySelector('button').addEventListener('click', function () {
+          selected = selected.filter(function (t) { return t !== tag; });
+          sync();
+          var applyBtn = form.querySelector('.js-apply-filters');
+          if (applyBtn) { applyBtn.click(); }
+        });
+        tagsContainer.appendChild(chip);
+      });
+    }
+
+    panel.querySelectorAll('button').forEach(function (optBtn) {
+      optBtn.addEventListener('click', function () {
+        var tag = optBtn.dataset.tag;
+        var idx = selected.indexOf(tag);
+        if (idx === -1) { selected.push(tag); } else { selected.splice(idx, 1); }
+        sync();
+        // Picking stays behind the page's own explicit "Filter" click (same
+        // rule as every other filter control) — only removing a chip above
+        // applies immediately. The panel stays open so several tags can be
+        // picked in a row without reopening it each time.
+      });
+    });
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var isOpen = root.classList.contains('open');
+      document.querySelectorAll('.filter-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+      root.classList.toggle('open', !isOpen);
+    });
+
+    sync(); // reflect whatever ?tag[]=/?excludeTag[]= the page already loaded with
+  }
+  document.querySelectorAll('.tag-filter').forEach(initTagFilter);
+
   document.addEventListener('click', function (e) {
     var editBtn = e.target.closest('.wf-edit-btn');
     if (editBtn) {

@@ -34,12 +34,6 @@ final class SoftwareCatalog
     }
 
     /**
-     * Record every plugin/theme slug in an extraction payload. New entries are
-     * created with license "unknown"; an already-known slug is left as-is
-     * beyond keeping its friendliest known name (no "seen" bookkeeping here —
-     * removed 2026-09-01, it told an analyst nothing that helped classify a
-     * licence).
-     *
      * @param array<string, mixed> $payload
      * @return int number of newly discovered slugs
      */

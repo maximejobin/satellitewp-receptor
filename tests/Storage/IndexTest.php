@@ -25,7 +25,7 @@ final class IndexTest extends TestCase
     /** @param array<string, mixed> $extra */
     private function seedExtraction(string $siteId, string $id, array $extra = [], string $status = 'pending'): void
     {
-        $this->index->upsertSite($siteId, ['site_url' => "https://{$siteId}.test", 'site_title' => 'T']);
+        $this->index->upsertSite($siteId, ['site_url' => "https://{$siteId}.test"]);
         $this->index->insertExtraction($siteId, $id, $extra['received_at'] ?? '2026-07-22T10:00:00Z', [
             'schema_version'   => '1.0',
             'wp_version'       => $extra['wp'] ?? '6.8.1',
@@ -207,8 +207,8 @@ final class IndexTest extends TestCase
                 last_seen  TEXT NOT NULL
             )
             SQL);
-        $pdo->prepare('INSERT INTO sites (site_id, site_url, first_seen, last_seen) VALUES (?, ?, ?, ?)')
-            ->execute([self::SITE_A, 'https://legacy.test', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z']);
+        $pdo->prepare('INSERT INTO sites (site_id, site_url, name, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)')
+            ->execute([self::SITE_A, 'https://legacy.test', 'Legacy Site Title', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z']);
         unset($pdo); // release the connection before Index opens its own
 
         $index   = new Index($file);
@@ -216,6 +216,10 @@ final class IndexTest extends TestCase
 
         $this->assertNotContains('first_seen', $columns);
         $this->assertNotContains('last_seen', $columns);
+        // "name" (the WordPress site_title, once rendered as if it were the
+        // site's own identity — removed 2026-09-10, see the docblock on
+        // migrate()) is dropped by the very same migration mechanism.
+        $this->assertNotContains('name', $columns);
 
         $sites = $index->listSites();
         $this->assertCount(1, $sites);

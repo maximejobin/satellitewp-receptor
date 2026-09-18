@@ -7,11 +7,9 @@
  */
 ?>
 <h1>Databases</h1>
-<p class="muted">Known MySQL and MariaDB branches, from the local endoflife.date cache
-    (<code>bin/xtractor reference:refresh</code>) — not the engines installed on tracked sites.
-    Search, sort or filter with the search box; always sorted by version descending.</p>
-<p><?= fmt_refreshed($mysqlRefreshedAt, 2 * 3600) ?> <span class="muted" style="font-size:.85rem">(MySQL)</span>
-    &nbsp; <?= fmt_refreshed($mariadbRefreshedAt, 2 * 3600) ?> <span class="muted" style="font-size:.85rem">(MariaDB)</span></p>
+<p class="muted">Known MySQL and MariaDB branches — not the engines installed on tracked sites.</p>
+<p><?= fmt_refreshed($mysqlRefreshedAt, 2 * 3600, 'Last MySQL sync', 'Source: endoflife.date') ?></p>
+<p><?= fmt_refreshed($mariadbRefreshedAt, 2 * 3600, 'Last MariaDB sync', 'Source: endoflife.date') ?></p>
 
 <?php if ($cycles === []): ?>
     <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
@@ -24,7 +22,7 @@
             <option value="mysql">MySQL</option>
             <option value="mariadb">MariaDB</option>
         </select>
-        <button type="button" class="btn btn-secondary" id="db-filter-btn">Filter</button>
+        <button type="button" class="btn btn-secondary js-apply-filters" id="db-filter-btn">Filter</button>
     </form>
     <table id="db-versions" class="display" style="width:100%">
         <thead>
@@ -67,8 +65,6 @@
     </div>
     <script>
       $(function () {
-        // One "Filter" button governs the engine dropdown and the text
-        // search together (2026-09-02: neither applies live any more).
         var table = $('#db-versions').DataTable({
           order: [[1, 'desc']], pageLength: 50, dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>'
         });

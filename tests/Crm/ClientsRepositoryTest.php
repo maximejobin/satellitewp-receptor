@@ -313,6 +313,39 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertSame('https://siteone.test', $subs[0]['website_url']);
     }
 
+    /**
+     * Maintenance plans first, then everything else, then licenses last —
+     * licenses alphabetical by product name regardless of when they were
+     * created (2026-09-10, user request).
+     */
+    public function testSubscriptionsForClientOrdersMaintenanceThenOtherThenAlphabeticalLicenses(): void
+    {
+        $this->seedBasicPortfolio(); // client 1 already has one license subscription (WooCommerce Pro License, product 100)
+
+        $this->pdo->exec("INSERT INTO swp_products (auto_id, id, name, category, date_sync) VALUES
+            (40, 400, 'Zeta License', 'plugin', '2026-01-01 00:00:00'),
+            (50, 500, 'Alpha License', 'plugin', '2026-01-01 00:00:00'),
+            (60, 600, 'Ad-Hoc Fix', NULL, '2026-01-01 00:00:00')");
+        $this->pdo->exec("INSERT INTO swp_licenses (auto_id, id, type, slug, is_manual_update, date_sync) VALUES
+            (40, 2, 'plugin', 'zeta', 0, '2026-01-01 00:00:00'),
+            (50, 3, 'plugin', 'alpha', 0, '2026-01-01 00:00:00')");
+        $this->pdo->exec("INSERT INTO swp_subscriptions (id, client_id, product_id, subscription_status, creation_date, last_payment_date, date_sync) VALUES
+            (4000, 1, 400, 'active', '2026-03-01 00:00:00', '2026-03-01 00:00:00', '2026-01-01 00:00:00'),
+            (5000, 1, 500, 'active', '2026-04-01 00:00:00', '2026-04-01 00:00:00', '2026-01-01 00:00:00'),
+            (6000, 1, 600, 'active', '2026-05-01 00:00:00', '2026-05-01 00:00:00', '2026-01-01 00:00:00'),
+            (7000, 1, 200, 'active', '2026-06-01 00:00:00', '2026-06-01 00:00:00', '2026-01-01 00:00:00')");
+        // 7000 links client 1 (already has an active sub on product 200
+        // from the base fixture's client 2) to the maintenance-plan product
+        // too, purely to exercise the ordering — no assignment table needed.
+
+        $names = array_column($this->repo->subscriptionsForClient(1), 'product_name');
+
+        $this->assertSame(
+            ['Care Plan Gold', 'Ad-Hoc Fix', 'Alpha License', 'WooCommerce Pro License', 'Zeta License'],
+            $names
+        );
+    }
+
     public function testSubscriptionsForClientWithNoWebsiteLinkStillReturnsTheSubscription(): void
     {
         $this->seedBasicPortfolio();
@@ -338,6 +371,29 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertSame(['ecommerce'], $websites[2]['tags']);
     }
 
+    public function testListWebsitesAttachesClients(): void
+    {
+        $this->seedBasicPortfolio(); // site 1 <-> client 1 (Acme Inc), site 2 <-> client 2 (no company)
+
+        $websites = array_column($this->repo->listWebsites(), null, 'id');
+
+        $this->assertCount(1, $websites[1]['clients']);
+        $this->assertSame('Acme Inc', $websites[1]['clients'][0]['company']);
+        $this->assertCount(1, $websites[2]['clients']);
+        $this->assertSame('Bob', $websites[2]['clients'][0]['first_name']);
+    }
+
+    /** search() matches the site's own URL/host, OR its linked client's company. */
+    public function testListWebsitesSearchAlsoMatchesClientCompany(): void
+    {
+        $this->seedBasicPortfolio(); // site 1 <-> client 1, company "Acme Inc"
+
+        $ids = array_column($this->repo->listWebsites(search: 'Acme'), 'id');
+        $this->assertSame([1], $ids);
+
+        $this->assertSame([], array_column($this->repo->listWebsites(search: 'no-such-company'), 'id'));
+    }
+
     public function testListWebsitesFiltersByTag(): void
     {
         $this->seedBasicPortfolio();
@@ -359,6 +415,26 @@ final class ClientsRepositoryTest extends TestCase
         $both = $this->repo->listWebsites(tags: ['vip', 'ecommerce']);
 
         $this->assertCount(2, $both);
+    }
+
+    public function testListWebsitesExcludesTagsRegardlessOfIncludeMatch(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("INSERT INTO swp_website_tags (website_id, tag, date_added, date_sync) VALUES
+            (2, 'DEV', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
+
+        // Default-shaped call (Router's own default): DEV-tagged site 2 dropped, site 1 stays.
+        $ids = array_column($this->repo->listWebsites(excludeTags: ['DEV']), 'id');
+        $this->assertSame([1], $ids);
+
+        // excludeTags wins even when the site also matches an include tag —
+        // exclusion isn't just "the opposite of include", it always removes.
+        $ids = array_column($this->repo->listWebsites(tags: ['ecommerce'], excludeTags: ['DEV']), 'id');
+        $this->assertSame([1], $ids);
+
+        // No exclusion at all: both sites, DEV included.
+        $ids = array_column($this->repo->listWebsites(), 'id');
+        $this->assertSame([1, 2], $ids);
     }
 
     public function testListWebsitesFiltersByConnectionStatus(): void

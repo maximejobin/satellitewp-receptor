@@ -21,6 +21,7 @@ final class Index
     public const string STATUS_RUNNING = 'running';
     public const string STATUS_DONE    = 'done';
     public const string STATUS_ERROR   = 'error';
+    public const string STATUS_ABORTED = 'aborted';
 
     private ?PDO $pdo = null;
 
@@ -54,8 +55,7 @@ final class Index
             CREATE TABLE IF NOT EXISTS sites (
                 site_id    TEXT PRIMARY KEY,
                 site_url   TEXT,
-                home_url   TEXT,
-                name       TEXT
+                home_url   TEXT
             );
             CREATE TABLE IF NOT EXISTS extractions (
                 id               TEXT NOT NULL,
@@ -93,14 +93,8 @@ final class Index
             }
         }
 
-        // Dropped 2026-09-01: a site's own first/last "seen" timestamp
-        // duplicated what the extractions table already knows precisely
-        // (received_at per extraction) without telling an analyst anything
-        // extractions doesn't — listSites() below now derives "last
-        // extraction" straight from that table instead. Same upgrade-in-place
-        // approach as the ADD COLUMN block above, mirrored for a drop.
         $siteColumns = array_column($this->pdo->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
-        foreach (['first_seen', 'last_seen'] as $column) {
+        foreach (['first_seen', 'last_seen', 'name'] as $column) {
             if (in_array($column, $siteColumns, true)) {
                 $this->pdo->exec("ALTER TABLE sites DROP COLUMN {$column}");
             }
@@ -111,17 +105,15 @@ final class Index
     public function upsertSite(string $siteId, array $payload): void
     {
         $this->pdo()->prepare(<<<'SQL'
-            INSERT INTO sites (site_id, site_url, home_url, name)
-            VALUES (:site_id, :site_url, :home_url, :name)
+            INSERT INTO sites (site_id, site_url, home_url)
+            VALUES (:site_id, :site_url, :home_url)
             ON CONFLICT(site_id) DO UPDATE SET
                 site_url = COALESCE(excluded.site_url, site_url),
-                home_url = COALESCE(excluded.home_url, home_url),
-                name     = COALESCE(excluded.name, name)
+                home_url = COALESCE(excluded.home_url, home_url)
             SQL)->execute([
             'site_id'  => $siteId,
             'site_url' => $payload['site_url'] ?? null,
             'home_url' => $payload['home_url'] ?? null,
-            'name'     => $payload['site_title'] ?? null,
         ]);
     }
 
@@ -233,13 +225,6 @@ final class Index
     }
 
     /**
-     * Extraction status counts for the status page (2026-09-03) — "waiting
-     * to run" (pending + queued, the same two states pendingExtractions()/
-     * queuedExtractions() list individually), "running" right now, "done"
-     * in the last 24h, and "error" (added on top of what was actually
-     * asked for: a run that failed is exactly the kind of thing a status
-     * page exists to surface, same reasoning as the other three).
-     *
      * @return array{pending: int, running: int, done_24h: int, error: int}
      */
     public function statusCounts(): array
@@ -287,7 +272,7 @@ final class Index
 
         $params = [];
         if ($search !== null && $search !== '') {
-            $sql .= ' WHERE s.site_url LIKE :q OR s.name LIKE :q OR s.site_id LIKE :q';
+            $sql .= ' WHERE s.site_url LIKE :q OR s.site_id LIKE :q';
             $params['q'] = '%' . $search . '%';
         }
         // NULL (no extraction yet) sorts last under DESC in SQLite — exactly
@@ -350,9 +335,8 @@ final class Index
         foreach ($store->listSiteIds() as $siteId) {
             $site = $store->readSiteInfo($siteId) ?? [];
             $this->upsertSite($siteId, [
-                'site_url'   => $site['site_url'] ?? null,
-                'home_url'   => $site['home_url'] ?? null,
-                'site_title' => $site['name'] ?? null,
+                'site_url' => $site['site_url'] ?? null,
+                'home_url' => $site['home_url'] ?? null,
             ]);
 
             foreach ($store->listExtractionIds($siteId) as $extractionId) {

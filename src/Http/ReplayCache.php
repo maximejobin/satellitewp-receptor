@@ -6,26 +6,6 @@ namespace SatelliteWP\Xtractor\Http;
 
 use RuntimeException;
 
-/**
- * Remembers every signature accepted within its replay window, so the exact
- * same signed request cannot be replayed a second time while it is still
- * fresh (2026-08-31 — `SignatureVerifier` used to check the timestamp window
- * alone, which lets a request captured in transit be resent as-is for as
- * long as that window stays open).
- *
- * Stored at `data/replay-cache.json` — same shape and same atomic
- * write-then-rename pattern as `KeyStore`. Entries expire and are pruned on
- * every read, so the file never grows past what one replay window's worth
- * of traffic actually needs.
- *
- * Deliberately simple: keyed by the signature alone (an HMAC-SHA256 output
- * is unique enough per request on its own — two distinct legitimate requests
- * producing the same signature is not a real-world case to defend against),
- * and the read-modify-write below is not lock-protected against a genuine
- * concurrent race. For the traffic one site actually produces (at most a
- * handful of pushes a day), that is not worth the extra complexity — see
- * "Keep it simple" in CLAUDE.md.
- */
 final class ReplayCache
 {
     public function __construct(private readonly string $file)

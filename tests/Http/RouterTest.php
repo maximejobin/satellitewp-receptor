@@ -17,10 +17,17 @@ final class RouterTest extends TestCase
     private const string UUID = '3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c';
     private const string EID  = '20260723T125131Z';
 
-    public function testRootRoutesToSitesList(): void
+    /** '/' is a deliberately empty placeholder (2026-09-10); the sites/"Extractions" list moved to its own URL. */
+    public function testRootRoutesToTheEmptyHomePage(): void
     {
-        $this->assertSame('sites', Router::matchRoute('/')['route']);
-        $this->assertSame('sites', Router::matchRoute('')['route']);
+        $this->assertSame('home', Router::matchRoute('/')['route']);
+        $this->assertSame('home', Router::matchRoute('')['route']);
+    }
+
+    public function testExtractionsRoutesToSitesList(): void
+    {
+        $this->assertSame('sites', Router::matchRoute('/extractions')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/extractions/extra')['route']);
     }
 
     public function testCatalogRoute(): void

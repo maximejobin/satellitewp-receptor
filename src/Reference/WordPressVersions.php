@@ -75,21 +75,6 @@ final class WordPressVersions
         };
     }
 
-    /**
-     * How many major (x.y) release branches $installedVersion trails the
-     * branch currently marked "latest" by — 0 for the latest branch itself,
-     * 1 for one branch behind, etc. Used by rule F1 ("is this install
-     * several major releases out of date", 2026-09-07 — a plain "is a newer
-     * point release available" signal lives in F2/core_update instead,
-     * which already folds branch-support status in too). Reuses
-     * EndOfLife::branch() for the same major.minor extraction EndOfLife
-     * itself uses, rather than a second copy of the same two-line logic.
-     * wordpress.org's stable-check has covered every branch back to 1.0 in
-     * practice (884 entries, no branch-level gaps, confirmed live), so this
-     * does not need to guess at a branch missing from the cache — it only
-     * returns null when the cache itself is empty, no version is marked
-     * "latest", or a branch string couldn't be derived from either version.
-     */
     public function majorVersionsBehind(string $installedVersion): ?int
     {
         $all = $this->all();

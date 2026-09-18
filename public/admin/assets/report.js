@@ -1,26 +1,9 @@
-/* Extraction report — sticky nav scrollspy, animated health ring, print
-   button. Scoped to elements under .xt-report; loaded only on that page
-   (see layout.php, `reportAssets => true`). No dependency on jQuery/Datatables. */
+/* Extraction report — sticky nav scrollspy and print button. Scoped to
+   elements under .xt-report; loaded only on that page (see layout.php,
+   `reportAssets => true`). No dependency on jQuery/Datatables. */
 (function () {
   var report = document.querySelector('.xt-report');
   if (!report) { return; }
-
-  // Animate the health ring fill-in from 0 to its real value on first paint.
-  // `--p` is a custom property; without @property CSS treats it as a plain
-  // string and cannot tween it, so this still works (the ring simply jumps to
-  // its final value instead of sweeping) on a browser that ignores @property.
-  var ring = report.querySelector('.xt-hero-ring');
-  if (ring) {
-    var target = ring.getAttribute('data-score');
-    if (target !== null) {
-      ring.style.setProperty('--p', 0);
-      window.requestAnimationFrame(function () {
-        window.requestAnimationFrame(function () {
-          ring.style.setProperty('--p', target);
-        });
-      });
-    }
-  }
 
   // Scrollspy: highlight the sticky nav entry for whichever group is
   // currently in view. IntersectionObserver only — no scroll listener.

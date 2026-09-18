@@ -22,7 +22,7 @@ final class SitesListCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('search', null, InputOption::VALUE_REQUIRED, 'Filter by URL, name or site_id');
+        $this->addOption('search', null, InputOption::VALUE_REQUIRED, 'Filter by URL or site_id');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -38,14 +38,13 @@ final class SitesListCommand extends Command
         $rows = array_map(static fn (array $s): array => [
             $s['site_id'],
             $s['site_url'] ?? '',
-            $s['name'] ?? '',
             $s['last_extraction_received_at'] ?? '',
             $s['extraction_count'],
             $s['last_extraction_status'] ?? '',
         ], $sites);
 
         (new Table($output))
-            ->setHeaders(['site_id', 'url', 'name', 'last extraction', 'extractions', 'last status'])
+            ->setHeaders(['site_id', 'url', 'last extraction', 'extractions', 'last status'])
             ->setRows($rows)
             ->render();
 

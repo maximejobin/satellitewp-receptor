@@ -6,24 +6,6 @@ namespace SatelliteWP\Xtractor\Support;
 
 use Throwable;
 
-/**
- * Append-only log of every HTTP 500 the two front controllers produce.
- *
- * One JSON Lines file per UTC day under logs/ (`logs/error-2026-08-28.log`), so
- * a failure can be found with grep and old days deleted by hand or by logrotate.
- * The entries are structured for reading, not for a log pipeline: this is a
- * ~10-person shop, not a fleet.
- *
- * Every entry carries a short `ref` which is also returned to the client, so a
- * "500, ref 9f3a1c02" from a site owner points straight at one line here.
- *
- * Deliberately never throws: a logger that takes the request down with it is
- * worse than no logger. A write that fails falls back to error_log().
- *
- * Nothing secret is recorded — no request body, no headers beyond the site id,
- * no cookies. A payload that failed to store is already on disk or lost; what
- * is needed here is why.
- */
 final class ErrorLog
 {
     /** Stack frames kept per entry — enough to place the failure, not a novel. */

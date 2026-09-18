@@ -12,22 +12,6 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * Renders config/rules.php as a readable Markdown reference — one entry per
- * rule with its category/source/severity/threshold, its French pass/fail
- * sentences, AND the exact PHP of its check() closure (pulled straight from
- * the file via reflection on the real Closure, not retyped by hand).
- *
- * This replaces the old hand-maintained HTML catalogue artifact (2026-09-07,
- * user: "j'ai le goût de scrapper ton catalogue... rends le tout efficace")
- * — that file needed a manual edit, in prose I wrote by hand, every time a
- * rule changed, which is exactly the kind of drift risk this project's own
- * golden rules warn about elsewhere. This command has nothing to keep in
- * sync: it reads the live catalogue, so `php bin/xtractor rules:doc >
- * docs/rules-catalog.md` after any change is the whole workflow, and the
- * code block for each rule IS the logic — no paraphrase to double check
- * against the source.
- */
 #[AsCommand(name: 'rules:doc', description: 'Render the rule catalogue as Markdown (writes to stdout)')]
 final class RulesDocCommand extends Command
 {

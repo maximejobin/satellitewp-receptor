@@ -21,7 +21,7 @@ use SatelliteWP\Xtractor\Crm\ClientsRepository;
 
 <div class="search-group">
 <form method="get" class="search">
-    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Company, contact or email…">
+    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search…">
     <select name="status" class="js-filter-dropdown" data-label="Status" data-empty-value="all">
         <option value="all" <?= $selectedStatus === 'all' ? 'selected' : '' ?>>All</option>
         <option value="active" <?= $selectedStatus === 'active' ? 'selected' : '' ?>>Active</option>
@@ -32,7 +32,7 @@ use SatelliteWP\Xtractor\Crm\ClientsRepository;
         <option value="have_unassigned" <?= $selectedSubscriptions === 'have_unassigned' ? 'selected' : '' ?>>Have unassigned</option>
         <option value="no_unassigned" <?= $selectedSubscriptions === 'no_unassigned' ? 'selected' : '' ?>>Do not have unassigned</option>
     </select>
-    <button type="submit" class="btn btn-secondary">Filter</button>
+    <button type="submit" class="btn btn-secondary js-apply-filters">Filter</button>
     <?php if ($selectedStatus !== 'active' || $selectedSubscriptions !== 'all' || $search !== ''): ?>
         <a href="/clients" class="search-reset">Reset filter</a>
     <?php endif; ?>

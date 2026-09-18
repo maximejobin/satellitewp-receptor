@@ -11,19 +11,6 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * Change an already-listed user's role from the server.
- *
- * `users:add` only ever adds — pointed at an email already in the file it
- * just refuses ("already present"), so there was no CLI way to fix a role
- * once set (2026-09-03: a real operator got stuck exactly this way — added
- * themselves via `users:add` with the default `maintenance` role, which
- * (correctly) has no `user_edit` capability, so the web UI's own "change my
- * role" path was itself gated by the role that needed changing). This command
- * is the server-trusted way out of that, same trust level as `users:add` —
- * both assume whoever has shell access on the box is already trusted with
- * the whole allowlist.
- */
 #[AsCommand(name: 'users:set-role', description: "Change an already-listed user's role")]
 final class UsersSetRoleCommand extends Command
 {

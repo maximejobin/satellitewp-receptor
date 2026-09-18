@@ -2,6 +2,7 @@
 /**
  * @var list<array<string, mixed>> $products
  * @var string $selectedType
+ * @var string|null $lastSyncedAt
  */
 use SatelliteWP\Xtractor\Crm\ClientsRepository;
 
@@ -13,8 +14,9 @@ $types = [
 ];
 ?>
 <h1>Products</h1>
-<p class="muted">From the external CRM/billing database. A product's type is derived from whether it has a
-    matching license or maintenance-plan record, not a free-text field.</p>
+<p class="muted">From the external CRM/billing database. Last synced <?= fmt_relative_time($lastSyncedAt) ?>.
+    A product's category is derived from whether it has a matching license or maintenance-plan
+    record, not a free-text field.</p>
 
 <p class="filters">
     <?php foreach ($types as $value => $label): ?>
@@ -27,27 +29,17 @@ $types = [
     <p class="empty">No product matches this filter.</p>
 <?php else: ?>
     <div class="search-group">
-    <p class="search"><?= dt_search_box('products-table', 'Search within these results…') ?></p>
+    <p class="search"><?= dt_search_box('products-table') ?></p>
     <table id="products-table" class="display" style="width:100%">
         <thead>
-        <tr><th>Name</th><th>Type</th><th>Category</th><th>Detail</th><th>Last synced</th></tr>
+        <tr><th>Name</th><th>Slug</th><th>Category</th></tr>
         </thead>
         <tbody>
         <?php foreach ($products as $p): ?>
             <tr>
                 <td><?= e($p['name']) ?></td>
+                <td class="mono"><?= e($p['license_slug'] ?? '—') ?></td>
                 <td><?= badge($p['product_type']) ?></td>
-                <td class="muted"><?= e($p['category'] ?? '—') ?></td>
-                <td class="mono" style="font-size:.8rem">
-                    <?php if ($p['product_type'] === ClientsRepository::PRODUCT_TYPE_LICENSE): ?>
-                        <?= e($p['license_slug'] ?? '—') ?><?= !empty($p['is_manual_update']) ? ' (manual update)' : '' ?>
-                    <?php elseif ($p['product_type'] === ClientsRepository::PRODUCT_TYPE_MAINTENANCE_PLAN): ?>
-                        <?= !empty($p['is_licenses_included']) ? 'includes licenses' : 'no licenses included' ?>
-                    <?php else: ?>
-                        —
-                    <?php endif; ?>
-                </td>
-                <td class="muted"><?= e($p['date_sync']) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

@@ -10,19 +10,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * Re-scores every stored "done" extraction against the CURRENT rule
- * catalogue — no network, no re-probing, just RuleEngine::evaluate() run
- * again over the payload + probe results already on disk (same mechanism
- * `rules:evaluate` uses for one extraction; this just loops it over
- * everything so a rules.php edit can be seen across the whole real dataset
- * instead of one extraction at a time). Prints a before/after pastille
- * count per extraction whose result actually changed, and a totals line —
- * this is the "did my rule change do what I think it did, everywhere"
- * check (2026-09-07, user request).
- */
 #[AsCommand(name: 'rules:reevaluate', description: 'Re-score every stored extraction against the current rule catalogue')]
 final class RulesReevaluateCommand extends Command
 {
@@ -33,7 +23,9 @@ final class RulesReevaluateCommand extends Command
 
     protected function configure(): void
     {
-        $this->addArgument('site_id', InputArgument::OPTIONAL, 'Limit to one site (default: every site)');
+        $this
+            ->addArgument('site_id', InputArgument::OPTIONAL, 'Limit to one site (default: every site)')
+            ->addOption('extraction', null, InputOption::VALUE_REQUIRED, 'Limit to a single extraction id');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -43,19 +35,23 @@ final class RulesReevaluateCommand extends Command
         $engine    = $this->app->ruleEngine();
         $reference = $this->app->referenceData();
 
-        $siteIdArg = $input->getArgument('site_id');
-        $sites     = $siteIdArg !== null ? [['site_id' => $siteIdArg]] : $index->listSites();
+        $siteIdArg         = $input->getArgument('site_id');
+        $sites             = $siteIdArg !== null ? [['site_id' => $siteIdArg]] : $index->listSites();
+        $extractionFilter  = $input->getOption('extraction');
 
         $scored  = 0;
         $changed = 0;
         foreach ($sites as $site) {
             $siteId = (string) $site['site_id'];
             foreach ($index->listExtractions($siteId) as $extraction) {
+                $extractionId = (string) $extraction['id'];
+                if ($extractionFilter !== null && $extractionId !== $extractionFilter) {
+                    continue;
+                }
                 if (($extraction['status'] ?? null) !== 'done') {
                     continue;
                 }
-                $extractionId = (string) $extraction['id'];
-                $payload      = $store->readExtractionPayload($siteId, $extractionId);
+                $payload = $store->readExtractionPayload($siteId, $extractionId);
                 if ($payload === null) {
                     continue;
                 }
@@ -77,6 +73,13 @@ final class RulesReevaluateCommand extends Command
                     $output->writeln("{$siteId}/{$extractionId}  {$diff}");
                 }
             }
+        }
+
+        if ($extractionFilter !== null && $scored === 0) {
+            $output->writeln("<error>No done extraction \"{$extractionFilter}\" found"
+                . ($siteIdArg !== null ? " for site {$siteIdArg}" : '') . '.</error>');
+
+            return Command::FAILURE;
         }
 
         $output->writeln("{$scored} extraction(s) re-scored, {$changed} changed.");

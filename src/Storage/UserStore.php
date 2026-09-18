@@ -6,43 +6,6 @@ namespace SatelliteWP\Xtractor\Storage;
 
 use RuntimeException;
 
-/**
- * Who may use the web UI, and which role each address has: data/users.json.
- *
- * Signing in with Google is not enough — the address must also be in this
- * list, **and** currently active (see STATUS_SUSPENDED below). Every address
- * has a role (admin/maintenance/coordinator/sale, see config/roles.php);
- * ROLE_ADMIN is the only one that may add, edit, remove or suspend others.
- * Nothing else reads or gates on role yet — see RoleCapabilities/config/roles.php.
- *
- * File format is `{"email", "role", "first_name", "last_name", "status",
- * "data", "runcloud_api_key", "public_ssh_key"}` per entry. Three older
- * shapes are read transparently and upgraded on next save():
- *   - a pre-2026-09-02 file: a flat list of email strings — the first entry
- *     becomes admin and every other becomes maintenance, the exact access
- *     every non-first entry already had.
- *   - a 2026-09-02..2026-09-02 file: `{"email", "role"}` only — first/last
- *     name default to '' and status defaults to STATUS_ACTIVE, so an
- *     existing account's access is unchanged by the upgrade.
- *   - a 2026-09-02..2026-09-03 file: adds first/last/status but not the
- *     three self-service profile fields below — those default to null.
- *
- * **Suspended vs. removed**: suspending keeps the record (name, role,
- * history) but blocks sign-in immediately (isAllowed() is re-checked every
- * request — see Router::currentUser()) and is reversible. Removing deletes
- * the record outright. Both refuse to leave the list with no *active* admin
- * reachable — an admin record that still exists but is suspended does not
- * count, since nobody could sign in to fix that.
- *
- * **Self-service profile fields** (2026-09-03, user: fields "pourront être
- * modifiées par un utilisateur dans son compte") — `data` (arbitrary JSON,
- * decoded to a PHP array before it reaches this class — see
- * updateProfile()), `runcloud_api_key` and `public_ssh_key`. These three are
- * the *only* fields updateProfile() touches: identity (email), role and
- * status stay admin-only, changed through add()/updateUser()/setStatus()
- * instead — a user editing their own profile must not be able to promote
- * themselves or change who they sign in as.
- */
 final class UserStore
 {
     public const string ROLE_ADMIN       = 'admin';
@@ -308,18 +271,6 @@ final class UserStore
     }
 
     /**
-     * Self-service profile edit — the *only* three fields a signed-in user
-     * may change about their own account: an arbitrary JSON blob, a Runcloud
-     * API key, and a public SSH key (2026-09-03). Identity (email), role and
-     * status are untouched here — those stay admin-only via
-     * add()/updateUser()/setStatus(), so editing one's own profile can never
-     * double as a privilege escalation. An empty string for either key
-     * string clears it back to null; $data replaces the stored value
-     * wholesale (null clears it too) — the caller (Router) is responsible
-     * for decoding/validating the submitted JSON before it reaches here,
-     * same division of concerns as the rest of this class not knowing about
-     * HTTP.
-     *
      * @param array<string, mixed>|null $data
      * @return bool false when the address is unknown
      */

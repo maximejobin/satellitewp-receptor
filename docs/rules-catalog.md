@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/xtractor rules:doc > docs/rules-catalog.md
 ```
 
-77 règles, 17 groupes.
+76 règles, 17 groupes.
 
 ## A. TLS / SSL
 
@@ -1166,29 +1166,6 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 + (($c->bool('probe.blogvault.core.vulnerable') === true) ? 1 : 0);
 
             return Check::fail((int) $total, ['components' => $components]);
-        },
-```
-
-### BV3 — Authentification à deux facteurs des administrateurs
-
-- **Catégorie :** USERS · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Tous les administrateurs ont l'authentification à deux facteurs activée.
-- **Échec (FR) :** {observed} administrateur(s) sur {administrators} n'ont pas d'authentification à deux facteurs.
-
-```php
-        'check' => static function (Context $c) {
-            $admins = $c->number('probe.blogvault.users.administrators');
-            if ($admins === null) {
-                return Check::unknown();
-            }
-            if ($admins <= 0) {
-                return Check::na();
-            }
-            $without = (int) ($c->number('probe.blogvault.users.administrators_without_2fa') ?? 0);
-
-            return $without === 0
-                ? Check::pass(0)
-                : Check::fail($without, ['administrators' => (int) $admins]);
         },
 ```
 

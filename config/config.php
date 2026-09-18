@@ -16,14 +16,6 @@ return [
     // Absolute path to the runtime data directory.
     'data_dir' => dirname(__DIR__) . '/data',
 
-    // Status page (/status): how many seconds of staleness on an external
-    // CRM table's own MAX(date_sync) counts as "overdue" before it's
-    // flagged red. One override per swp_ table that actually carries a
-    // date_sync column (swp_subscriptions_websites doesn't — date_added/
-    // date_updated instead — so it's never checked); anything not listed
-    // falls back to default_seconds. All eight currently sync together in
-    // one external job (confirmed live, 2026-09-03), hence one shared
-    // default rather than per-table tuning out of the gate.
     'crm_sync_freshness' => [
         'default_seconds' => 24 * 3600,
         'overrides'       => [
@@ -31,15 +23,6 @@ return [
         ],
     ],
 
-    // Same idea as crm_sync_freshness above, for the app's own reference
-    // caches (endoflife.date, wordpress.org's stable-check, Wordfence
-    // Intelligence) — also shown on the status page (2026-09-03, user:
-    // "ajoute les données de 'data' qu'on charge"). Values match what
-    // /data/wp-versions, /data/php-versions, /data/databases and
-    // /data/vulnerabilities already use inline (fmt_refreshed()'s threshold
-    // argument) — kept here as the one place both agree on, not yet wired
-    // back into those four templates to read from here instead of their own
-    // literal.
     'data_sync_freshness' => [
         'endoflife_seconds'          => 2 * 3600,  // wordpress/php/mysql/mariadb branch data
         'wordpress_versions_seconds' => 2 * 3600,  // wordpress.org's own stable-check list
@@ -131,17 +114,11 @@ return [
         'charset'  => 'utf8mb4',
     ],
 
-    // "Edit at the source" / "view in X" links on the CRM pages (2026-09-02).
-    // Each is a URL pattern with a literal "{id}" placeholder, substituted
-    // with the id named in the comment; helpers.php's external_link() turns
-    // a configured, non-empty pattern into a real link and falls back to
-    // plain text otherwise. All null until the real URLs are known — set
-    // them in config.local.php, same as crm_db above.
     'external_links' => [
-        'teamwork_client_url'          => null, // {id} = swp_clients.teamwork_id
-        'hubspot_client_url'           => null, // {id} = swp_clients.hubspot_id
+        'teamwork_project_url'         => 'https://central.s2bsolution.com/app/projects/{id}/overview/summary', // {id} = swp_clients.teamwork_id
+        'hubspot_company_url'          => 'https://app-na3.hubspot.com/contacts/2543139/record/0-2/{id}', // {id} = swp_clients.hubspot_id
         'blogvault_client_url'         => null, // {id} = swp_clients.blogvault_client_id
-        'blogvault_view_website'       => null, // {id} = swp_websites.blogvault_site_id
+        'blogvault_view_website'       => null, // {id} = swp_websites.blogvault_site_id, first 8 characters only
         'wordpress_edit_user'          => null, // {id} = swp_clients.id — TBD, confirm with user what WordPress actually expects here
         'wordpress_edit_subscription'  => null, // {id} = swp_subscriptions.id
     ],

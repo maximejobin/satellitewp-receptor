@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Http;
 
+use GuzzleHttp\Client;
 use SatelliteWP\Xtractor\App;
 use SatelliteWP\Xtractor\Crm\ClientsRepository;
 use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
@@ -11,6 +12,7 @@ use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\UserStore;
+use SatelliteWP\Xtractor\Support\HostGuard;
 use SatelliteWP\Xtractor\Support\SiteDisplay;
 
 /**
@@ -54,6 +56,7 @@ final class Router
         $params = $match['params'];
 
         match ($match['route']) {
+            'home'                     => $this->homePage(),
             'sites'                    => $this->sitesPage(),
             'status'                   => $this->statusPage(),
             'catalog'                  => $this->catalogPage(),
@@ -101,6 +104,9 @@ final class Router
 
         return match (true) {
             $segments === []
+                => ['route' => 'home', 'params' => []],
+
+            $segments === ['extractions']
                 => ['route' => 'sites', 'params' => []],
 
             $segments === ['status']
@@ -112,13 +118,6 @@ final class Router
             $segments === ['catalog', 'search']
                 => ['route' => 'catalog_search', 'params' => []],
 
-            // CRM: clients, websites, products and items are siblings, none
-            // nested under another — the business identifies a website first
-            // and finds its client after, never the reverse (user, 2026-09-02:
-            // "rien ne devrait être sous client"), so the URLs are flat
-            // (/clients, /websites, /products, /items) rather than
-            // /clients/websites, even though every list page still links to
-            // the related entities it references.
             $segments === ['clients']
                 => ['route' => 'crm_clients', 'params' => []],
 
@@ -198,15 +197,6 @@ final class Router
     }
 
     /**
-     * System status/health dashboard (2026-09-03, user: "je veux une page
-     * Home... une page de statuts"). Route is /status for now — the user
-     * asked for this to become the app's real landing page eventually but
-     * hadn't settled on a name yet ("nom à redéfinir"); swapping what '/'
-     * points to is a bigger, separate change (every internal link/redirect
-     * that assumes '/' is the sites list would need touching), left alone
-     * until that's confirmed.
-     */
-    /**
      * One entry for the status page's "External sync" list — a source name,
      * when it last synced, the threshold it's judged against, and whether
      * it's currently stale. Shared by every source type (a CRM table's
@@ -230,12 +220,6 @@ final class Router
     {
         $extractionCounts = $this->app->index()->statusCounts();
 
-        // The app's own reference caches — always checked, regardless of
-        // whether the external CRM database is configured (2026-09-03,
-        // user: "ajoute les données de 'data' qu'on charge dans ta liste" —
-        // the same sources /data/wp-versions, /data/php-versions,
-        // /data/databases and /data/vulnerabilities already show a
-        // "Last refreshed" badge for).
         $dataFreshness = (int) $this->app->config->get('data_sync_freshness.endoflife_seconds', 2 * 3600);
         $eol           = $this->app->endOfLife();
         $syncSources   = [
@@ -297,10 +281,18 @@ final class Router
         ]);
     }
 
+    private function homePage(): void
+    {
+        $this->render('home', [
+            'title' => 'SatelliteWP Xtractor',
+            'nav'   => '',
+        ]);
+    }
+
     private function sitesPage(): void
     {
         $this->render('sites', [
-            'title'      => 'Sites',
+            'title'      => 'Extractions',
             'nav'        => 'sites',
             'sites'      => $this->app->index()->listSites($_GET['q'] ?? null),
             'search'     => (string) ($_GET['q'] ?? ''),
@@ -348,8 +340,8 @@ final class Router
 
         $result = $this->app->softwareCatalog()->search(
             null,
-            !empty($_GET['needs']),
-            !empty($_GET['unclassified']),
+            ($_GET['needs'] ?? '') === 'true',
+            ($_GET['unclassified'] ?? '') === 'true',
             $query,
             $start,
             $length
@@ -380,18 +372,6 @@ final class Router
     }
 
     /**
-     * Clients/websites/products/items are four sibling entities from the same
-     * external CRM database — none owned by another (2026-09-02, user: "notre
-     * business fonctionne par site web et non par client... rien ne devrait
-     * être sous client. Tout est une entité de même hiérarchie"), hence flat
-     * URLs (/clients, /websites, /products, /items) rather than nesting the
-     * other three under /clients/. This helper is just shared plumbing: every
-     * one of the four pages needs the same "not connected yet"
-     * (App::crmRepository() is null until crm_db is configured) and
-     * "connection dropped mid-request" handling (a configured but temporarily
-     * unreachable MySQL server must not 500 the whole admin UI with a raw
-     * PDOException).
-     *
      * @param callable(ClientsRepository): void $render
      */
     private function withCrmRepository(string $title, string $nav, callable $render): void
@@ -424,11 +404,6 @@ final class Router
     private function crmClientsPage(): void
     {
         $this->withCrmRepository('Clients', 'crm-clients', function (ClientsRepository $repo): void {
-            // Absent from the URL at all -> default to "active" (2026-09-02,
-            // user: "par défaut, on affiche les clients actifs"); explicitly
-            // ?status=all is how the filter bar asks for everyone, so the
-            // three real states (active / inactive / all) are distinguishable
-            // from "no filter chosen yet" without a fourth empty-string case.
             $status        = (string) ($_GET['status'] ?? 'active');
             $search        = trim((string) ($_GET['q'] ?? ''));
             $subscriptions = (string) ($_GET['subscriptions'] ?? 'all');
@@ -495,32 +470,39 @@ final class Router
             $tags       = is_array($tagsRaw)
                 ? array_values(array_filter(array_map('strval', $tagsRaw), static fn (string $t): bool => $t !== ''))
                 : [];
-            $clientId   = ctype_digit((string) ($_GET['client_id'] ?? '')) ? (int) $_GET['client_id'] : null;
+            // A cleared multi-value filter submits no key at all in the query
+            // string — indistinguishable from "this filter was never
+            // touched" by presence alone. exclude_tag_present is a hidden
+            // field the tag-filter widget always sends once the form is
+            // submitted at all (see layout.php's initTagFilter()), so its
+            // absence is the one reliable signal for "first visit, apply the
+            // default" and its presence means "trust excludeTag[] exactly,
+            // even if now empty."
+            $excludeTags = isset($_GET['exclude_tag_present'])
+                ? (is_array($_GET['excludeTag'] ?? null)
+                    ? array_values(array_filter(array_map('strval', $_GET['excludeTag']), static fn (string $t): bool => $t !== ''))
+                    : [])
+                : [ClientsRepository::TAG_EXCLUDED_FROM_ASSIGNMENT];
             $search     = trim((string) ($_GET['q'] ?? ''));
             $connection = trim((string) ($_GET['connection'] ?? ''));
-
-            // Only the *currently selected* client needs a label looked up —
-            // select2's AJAX source supplies every other option on demand,
-            // so the full 315-client list this used to preload never has to
-            // reach the page at all.
-            $selectedClient = $clientId !== null ? $repo->getClient($clientId) : null;
 
             $this->render('crm-websites', [
                 'title'        => 'Websites',
                 'nav'          => 'crm-websites',
                 'dataTables'   => true,
-                'select2'      => true,
                 'websites'     => $repo->listWebsites(
                     $tags !== [] ? $tags : null,
-                    $clientId,
+                    null,
                     $search !== '' ? $search : null,
-                    $connection !== '' ? $connection : null
+                    $connection !== '' ? $connection : null,
+                    $excludeTags !== [] ? $excludeTags : null
                 ),
                 'selectedTags' => $tags,
-                'selectedClientId'    => $clientId,
-                'selectedClientLabel' => $selectedClient !== null ? ClientsRepository::clientLabel($selectedClient) : null,
+                'selectedExcludeTags' => $excludeTags,
                 'selectedConnection'  => $connection,
                 'search'       => $search,
+                'allTags'      => $repo->searchTags('', 500),
+                'links'        => $this->app->config->get('external_links', []),
             ]);
         });
     }
@@ -603,6 +585,7 @@ final class Router
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
                 'links'         => $this->app->config->get('external_links', []),
+                'eol'           => $this->app->endOfLife(),
             ]);
         });
     }
@@ -618,6 +601,7 @@ final class Router
                 'dataTables'   => true,
                 'products'     => $repo->listProducts($type !== '' ? $type : null),
                 'selectedType' => $type,
+                'lastSyncedAt' => $repo->productsLastSyncedAt(),
             ]);
         });
     }
@@ -685,19 +669,16 @@ final class Router
             'draw'            => $draw,
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
-            // Plain scalars only, no server-built HTML (same convention as
-            // dataVulnerabilitiesSearch() below) — this endpoint never loads
-            // helpers.php's e(), and DataTables does not escape a column's
-            // content for you if you hand it markup instead of text.
             'data'            => array_map(static fn (array $row): array => [
                 strtoupper((string) $row['type']),
                 (string) $row['name'],
                 (string) $row['slug'],
                 (string) $row['version'],
                 $row['is_update_available'] ? ((string) ($row['new_version'] ?? '?')) : '—',
-                $row['is_vulnerable'] ? 'Yes (' . ((int) ($row['vulnerability_count'] ?? 0)) . ')' : 'No',
+                $row['is_vulnerable'] ? 'Vulnerable' : '—',
                 $row['is_active'] ? 'Yes' : 'No',
                 SiteDisplay::of($row['website_url']),
+                (int) $row['website_id'],
             ], $result['rows']),
         ]);
     }
@@ -820,6 +801,7 @@ final class Router
             'title'       => 'Vulnerabilities (Wordfence Intelligence)',
             'nav'         => 'data-vulnerabilities',
             'dataTables'  => true,
+            'tooltip'     => true,
             'available'   => $this->app->wordfenceIndex()->isAvailable(),
             'refreshedAt' => $this->app->wordfenceIndex()->refreshedAt(),
         ]);
@@ -827,12 +809,11 @@ final class Router
 
     /**
      * JSON endpoint consumed by Datatables' server-side mode on
-     * /data/vulnerabilities. Streams the cache (WordfenceIndex::search()) so
-     * a request never has to hold the full nested cache in memory — see the
-     * OOM this exact pattern already caused once for a per-site scan,
-     * documented on WordfenceIndex::preload(). search() itself still sorts
-     * the (flat, filtered) result set by version descending before this
-     * slices out the requested page.
+     * /data/vulnerabilities, backed by CatalogIndex's SQLite table (rebuilt
+     * from the Wordfence cache by wordfence:refresh/catalog:reindex) instead
+     * of streaming the cache file on every request — this is what makes
+     * column sorting possible here (a plain file scan would have to buffer
+     * the whole filtered set to sort it, defeating the point of streaming).
      */
     private function dataVulnerabilitiesSearch(): void
     {
@@ -846,7 +827,16 @@ final class Router
         $length = $length > 0 ? min($length, 100) : 25;
         $query  = (string) ($_GET['search']['value'] ?? '');
 
-        $result = $this->app->wordfenceIndex()->search($query, $start, $length);
+        // Column index -> SQL column, matching data-vulnerabilities.php's
+        // <thead> order. Columns with no direct backing column (Patched
+        // version, the hidden raw-row/icon columns) simply fall back to the
+        // default sort inside searchVulnerabilities().
+        $sortColumns  = [0 => 'name', 2 => 'type', 3 => 'cve_id', 4 => 'title', 5 => 'published_at', 6 => 'cvss_score'];
+        $orderColumn  = (int) ($_GET['order'][0]['column'] ?? 5);
+        $orderColumn  = $sortColumns[$orderColumn] ?? 'published_at';
+        $orderDir     = (string) ($_GET['order'][0]['dir'] ?? 'desc');
+
+        $result = $this->app->catalogIndex()->searchVulnerabilities($query, $start, $length, $orderColumn, $orderDir);
 
         header('Content-Type: application/json; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
@@ -855,12 +845,17 @@ final class Router
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
             'data'            => array_map(static fn (array $row): array => [
+                $row['name'] ?? $row['slug'],
                 $row['slug'],
-                strtoupper((string) $row['type']),
+                (string) $row['type'],
                 $row['cve_id'] ?? '—',
                 $row['title'] ?? '',
-                $row['cvss_score'] !== null ? $row['cvss_score'] . ' (' . ($row['cvss_rating'] ?? '?') . ')' : '—',
+                $row['published_at'] ?? null,
+                $row['cvss_score'],
+                $row['cvss_rating'] ?? null,
                 !empty($row['patched']) ? implode(', ', $row['patched_versions']) : '—',
+                $row,
+                null,
             ], $result['rows']),
         ]);
     }
@@ -893,7 +888,7 @@ final class Router
         $extractions = $this->app->index()->listExtractions($siteId);
 
         $this->render('site', [
-            'title'       => $site['name'] ?? $site['site_url'] ?? $siteId,
+            'title'       => $site['site_url'] ?? $keyRow['origin'] ?? $siteId,
             'nav'         => 'sites',
             'site'        => $site,
             'siteId'      => $siteId,
@@ -930,6 +925,7 @@ final class Router
         // on every refresh.
         $awaiting  = in_array((string) ($row['status'] ?? ''), [Index::STATUS_PENDING, Index::STATUS_QUEUED], true);
         $blogVault = $awaiting ? $this->blogVaultPreflight($payload) : null;
+        $httpAuth  = $awaiting ? $this->httpAuthPreflight($siteId, $payload) : null;
 
         $this->render('extraction', [
             'title'        => 'Extraction ' . $extractionId,
@@ -946,6 +942,7 @@ final class Router
             'catalog'      => $this->app->softwareCatalog(),
             'csrf'         => $this->csrfToken(),
             'blogVault'    => $blogVault,
+            'httpAuth'     => $httpAuth,
             'reportAssets' => true,
         ]);
     }
@@ -1048,17 +1045,6 @@ final class Router
         ]);
     }
 
-    /**
-     * Self-service "my account" page — a signed-in user editing their own
-     * data/runcloud_api_key/public_ssh_key (2026-09-03), never anyone else's
-     * (there is no email/id param — always the current session's own
-     * record). Identity, role and status are shown read-only here; those
-     * stay admin-only via /users. Not capability-gated: any signed-in user
-     * may edit their own profile, that is what "self-service" means — the
-     * only real gate is having an identity at all, which requires Google
-     * sign-in to be configured (there is no per-user account under Basic
-     * auth/the open dev fallback, so this 404s there, same as /auth/*).
-     */
     private function profilePage(): void
     {
         $me = $this->currentUser();
@@ -1084,18 +1070,6 @@ final class Router
         ]);
     }
 
-    /**
-     * Design-system reference (2026-09-03, user: "une page de test qui montre
-     * toutes les possibilités de visuel") — every reusable visual component
-     * rendered in isolation with its class name labelled, so a real page can
-     * be diffed against it instead of each new feature inventing its own
-     * inline style. Deliberately a real page in the app (not a static
-     * artifact off to the side): it goes through the same layout.php and
-     * loads the same /assets/style.css every other page does, so it can
-     * never drift out of sync with what actually ships — an exported/copied
-     * reference would start lying the moment style.css next changes. No data,
-     * no capability gate beyond being signed in (same tier as the sites list).
-     */
     private function styleguidePage(): void
     {
         $this->render('styleguide', [
@@ -1288,6 +1262,62 @@ final class Router
     }
 
     /**
+     * Does the site answer 401 to an anonymous request? Every external check —
+     * headers, exposure, robots/sitemap, PageSpeed — hits the same wall and
+     * comes back empty, so a run against a Basic-Auth-protected site with no
+     * credentials stored produces a report that says nothing about the site.
+     * Settled before the analyst spends the run, not after.
+     *
+     * Credentials already stored for the site are sent, so a site that is
+     * configured correctly reads as "ok" rather than "locked".
+     *
+     * @param array<string, mixed> $payload
+     * @return array{checked: bool, required: bool, configured: bool, status: int|null, error?: string}
+     */
+    private function httpAuthPreflight(string $siteId, array $payload): array
+    {
+        $credentials = $this->app->keyStore()->getHttpAuth($siteId);
+        $configured  = $credentials !== null;
+        $url         = (string) ($payload['home_url'] ?? $payload['site_url'] ?? '');
+        $host        = (string) (parse_url($url, PHP_URL_HOST) ?? '');
+
+        $unchecked = ['checked' => false, 'required' => false, 'configured' => $configured, 'status' => null];
+
+        if ($url === '' || $host === '') {
+            return $unchecked;
+        }
+        // Same SSRF guard the probes apply: the URL comes from the payload, so
+        // a compromised site could point it at an internal address.
+        if (!HostGuard::isPubliclyRoutable($host)) {
+            return $unchecked + ['error' => 'Host does not resolve to a public address'];
+        }
+
+        $options = [
+            'connect_timeout' => 5,
+            'timeout'         => 10,
+            'http_errors'     => false,
+            'allow_redirects' => ['max' => 5],
+            'headers'         => ['User-Agent' => (string) $this->app->config->get('probes.user_agent', 'SatelliteWP-Xtractor/1.0')],
+        ];
+        if ($credentials !== null) {
+            $options['auth'] = [$credentials['username'], $credentials['password']];
+        }
+
+        try {
+            $status = (new Client($options))->get($url)->getStatusCode();
+        } catch (\Throwable $e) {
+            return $unchecked + ['error' => $e->getMessage()];
+        }
+
+        return [
+            'checked'    => true,
+            'required'   => $status === 401,
+            'configured' => $configured,
+            'status'     => $status,
+        ];
+    }
+
+    /**
      * Is this site managed in BlogVault? A single "url:contains" lookup, matched
      * on exact host. Absence is a business signal in its own right — the site is
      * not on a maintenance plan — so it is reported, never treated as an error.
@@ -1387,9 +1417,6 @@ final class Router
             return true; // auth not configured (dev) — rely on server-level protection in prod
         }
 
-        // Basic Auth has no session to key a limit on before the request is
-        // verified, so this is by IP — no attempt limit existed at all
-        // before 2026-08-31.
         $ip      = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
         $lockout = $this->app->loginLockout();
 
@@ -1439,14 +1466,6 @@ final class Router
             return;
         }
 
-        // A double-submit CSRF check has exactly one job: prove the request
-        // carries the same secret the cookie carries. That only holds if
-        // "the cookie is missing" and "the field is missing" are rejected as
-        // their own cases, not folded into '' via a '??' default and then
-        // compared as strings — '' == '' is true, so two different kinds of
-        // "not there" would silently agree with each other. Fixed 2026-08-30
-        // (a '?? "_"' sentinel on the posted side used to paper over exactly
-        // this, which is what let an absent cookie slip past unnoticed).
         if (!isset($_COOKIE['swp_csrf'], $_POST['_csrf'])) {
             http_response_code(400);
             echo 'Invalid CSRF token';
@@ -1478,6 +1497,23 @@ final class Router
             }
 
             $this->app->index()->setExtractionStatus($segments[1], $segments[3], Index::STATUS_QUEUED);
+            $this->redirect(self::safeReturn(
+                $_POST['return'] ?? "/site/{$segments[1]}/extraction/{$segments[3]}"
+            ));
+
+            return;
+        }
+
+        if (count($segments) === 5
+            && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])
+            && $segments[2] === 'extraction' && self::isExtractionId($segments[3])
+            && $segments[4] === 'abort'
+        ) {
+            if (!$this->requireCapability('extraction_run')) {
+                return;
+            }
+
+            $this->app->index()->setExtractionStatus($segments[1], $segments[3], Index::STATUS_ABORTED);
             $this->redirect(self::safeReturn(
                 $_POST['return'] ?? "/site/{$segments[1]}/extraction/{$segments[3]}"
             ));
@@ -1660,12 +1696,19 @@ final class Router
             }
 
             $type = (string) ($_POST['type'] ?? '');
+            $slug = (string) ($_POST['slug'] ?? '');
             $saved = in_array($type, ['plugin', 'theme'], true)
-                && $this->app->softwareCatalog()->setLicense(
-                    $type,
-                    (string) ($_POST['slug'] ?? ''),
-                    (string) ($_POST['license'] ?? '')
-                );
+                && $this->app->softwareCatalog()->setLicense($type, $slug, (string) ($_POST['license'] ?? ''));
+
+            // Keep the SQLite cross-reference index current immediately,
+            // rather than waiting for the next wordfence:refresh-triggered
+            // rebuild — a single-row upsert, not a full reindex.
+            if ($saved) {
+                $entry = $this->app->softwareCatalog()->get($type, $slug);
+                if ($entry !== null) {
+                    $this->app->catalogIndex()->upsertCatalogEntry($entry);
+                }
+            }
 
             // A rejected save (missing/invalid field, unknown slug) must not
             // 303 like a successful one: the licence dropdown's fetch() call

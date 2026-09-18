@@ -26,6 +26,7 @@ $console->addCommands([
     new Console\CatalogListCommand($app),
     new Console\CatalogSetCommand($app),
     new Console\CatalogSuggestCommand($app),
+    new Console\CatalogReindexCommand($app),
     new Console\SitesListCommand($app),
     new Console\ExtractionsListCommand($app),
     new Console\KeysAddCommand($app),

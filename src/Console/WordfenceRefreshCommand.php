@@ -60,6 +60,18 @@ final class WordfenceRefreshCommand extends Command
             $output->writeln("<comment>{$error}</comment>");
         }
 
+        // Keep the SQLite cross-reference index in step with the same cadence
+        // as the cache file it mirrors — whatever the file holds now (fresh
+        // this run, or carried forward from a partial failure) is what the
+        // index should reflect. The catalogue side is re-synced here too,
+        // piggy-backing on this already-scheduled daily job rather than
+        // adding a second cron entry for it.
+        $vulnCount    = $this->app->catalogIndex()->rebuildVulnerabilities(
+            (string) $this->app->config->get('data_dir') . '/reference/wordfence.json'
+        );
+        $catalogCount = $this->app->catalogIndex()->rebuildCatalog($this->app->softwareCatalog());
+        $output->writeln("<info>reindex</info>    : {$vulnCount} vulnérabilité(s), {$catalogCount} entrée(s) catalogue.");
+
         return $result['errors'] === [] ? Command::SUCCESS : Command::FAILURE;
     }
 

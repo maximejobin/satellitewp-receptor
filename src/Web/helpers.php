@@ -18,18 +18,9 @@ function site_display(mixed $url): string
     return \SatelliteWP\Xtractor\Support\SiteDisplay::of($url);
 }
 
-/**
- * The explicit-search box every Datatable now needs instead of the native
- * live-as-you-type quick search (2026-09-02, user: "on devra absolument
- * cliquer sur 'Search'... " — confirmed to apply to the built-in box too,
- * not just a page's own filter-bar controls). `#$tableId table.DataTable()`
- * must be initialized with `dom` excluding 'f' (no native box rendered) —
- * this input is wired by the shared `initExplicitSearch()` in layout.php,
- * matched to the table by `data-table="#$tableId"`.
- */
-function dt_search_box(string $tableId, string $placeholder = 'Search…'): string
+function dt_search_box(string $tableId): string
 {
-    return '<input type="search" class="xt-dt-search" data-table="#' . e($tableId) . '" placeholder="' . e($placeholder) . '">'
+    return '<input type="search" class="xt-dt-search" data-table="#' . e($tableId) . '" placeholder="Search…">'
         . '<button type="button" class="btn btn-secondary xt-dt-search-btn" data-table="#' . e($tableId) . '">Search</button>';
 }
 
@@ -51,28 +42,24 @@ function fmt_bytes(mixed $bytes): string
     return round($bytes, 1) . ' Po';
 }
 
-/** Status badge (ok / warn / error / pending / running / done). */
+/** Status badge (ok / warn / error / pending / queued / running / done / aborted). */
 function badge(?string $status): string
 {
     $status = $status ?? 'unknown';
     $class  = match ($status) {
         'ok', 'done'       => 'badge-ok',
-        'warn', 'pending', 'queued', 'running' => 'badge-warn',
+        'pending'          => 'badge-pending',
+        'warn', 'queued', 'running' => 'badge-warn',
         'error'            => 'badge-error',
+        // Aborted is a deliberate "I don't care about this data" — neutral
+        // grey, same bucket as 'unknown', not a status that needs attention.
+        'aborted'          => 'badge-muted',
         default            => 'badge-muted',
     };
 
     return '<span class="badge ' . $class . '">' . e($status) . '</span>';
 }
 
-/**
- * A colored dot + colored text status label — a lighter-weight alternative to
- * badge()'s solid pill, modeled after a reference design the user shared for
- * the "Services" table on /clients/{id} (2026-09-02: active/pending/on-hold,
- * the three real swp_subscriptions.subscription_status values — see
- * ClientsRepository). Not a general replacement for badge(), which every
- * other status column in the app still uses.
- */
 function status_dot(?string $status): string
 {
     $status = $status ?? 'unknown';
@@ -84,6 +71,32 @@ function status_dot(?string $status): string
     };
 
     return '<span class="status-dot ' . $class . '">' . e(ucfirst(str_replace('-', ' ', $status))) . '</span>';
+}
+
+/**
+ * Trail back up the page hierarchy, e.g. Extractions › example.com › this
+ * extraction. Each entry is [label, href]; a null href (or the last entry,
+ * whichever comes first) renders as plain text for the current page.
+ *
+ * @param list<array{0: string, 1: string|null}> $trail
+ */
+function breadcrumb(array $trail): string
+{
+    if ($trail === []) {
+        return '';
+    }
+
+    $last  = count($trail) - 1;
+    $parts = [];
+    foreach ($trail as $i => [$label, $href]) {
+        $parts[] = ($href === null || $i === $last)
+            ? '<span aria-current="page">' . e($label) . '</span>'
+            : '<a href="' . e($href) . '">' . e($label) . '</a>';
+    }
+
+    return '<nav class="crumbs" aria-label="Breadcrumb">'
+        . implode('<span class="crumbs-sep" aria-hidden="true">›</span>', $parts)
+        . '</nav>';
 }
 
 /**
@@ -99,10 +112,6 @@ function status_dot(?string $status): string
 function notice(string $level, string $html): string
 {
     $level = in_array($level, ['info', 'warning', 'critical', 'progress'], true) ? $level : 'info';
-    // Small hand-drawn inline SVGs (stroke, currentColor) — same convention
-    // as report_icon() in this file: no icon font/library (2026-09-03, user
-    // asked whether to load Font Awesome for this; the project already has a
-    // deliberate no-CDN, no-icon-library rule for exactly this reason).
     $icon = match ($level) {
         'warning'  => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
             . 'stroke-linecap="round" stroke-linejoin="round"><path d="M8.18 2.6 1.4 14.2A1.4 1.4 0 0 0 '
@@ -179,16 +188,19 @@ function external_link_button(?string $pattern, mixed $id, string $label): strin
         . 'target="_blank" rel="noopener noreferrer">' . e($label) . ' <span class="icon">' . icon_external_link() . '</span></a>';
 }
 
-/**
- * Two small hand-drawn icons proposed on the style guide (2026-09-03, not
- * wired into any real page yet — every existing edit affordance still uses
- * the plain "✎" character, every external link is still plain text/an
- * unmarked <a>). Same convention as report_icon(): inline SVG primitives,
- * stroke="currentColor" so each one follows whatever text colour it's
- * dropped into, no icon font/library. Deliberately separate functions
- * rather than folding these into report_icon(), which is scoped to the
- * extraction report's own design system.
- */
+function external_link_icon(?string $pattern, mixed $id, string $title): string
+{
+    $idString = $id !== null && $id !== '' ? (string) $id : null;
+    if ($pattern === null || $pattern === '' || $idString === null) {
+        return '';
+    }
+
+    $url = str_replace('{id}', rawurlencode($idString), $pattern);
+
+    return '<a class="icon-btn" href="' . e($url) . '" target="_blank" rel="noopener noreferrer" '
+        . 'title="' . e($title) . '" aria-label="' . e($title) . '">' . icon_external_link() . '</a>';
+}
+
 function icon_edit(): string
 {
     return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" '
@@ -242,33 +254,6 @@ function license_select(
 }
 
 /**
- * The "change linked website" control shown next to a subscription, wherever
- * one is listed (client detail, website detail). Deliberately **not** the
- * auto-submit-on-change pattern license_select() uses above: this changes a
- * real billing/service relationship in the external CRM database (2026-09-02,
- * user: "la sauvegarde de ce changement doit être explicite"), so it is a
- * real form submit + full page reload behind a visible Save button, not a
- * one-click dropdown.
- *
- * select2 in **AJAX** mode (2026-09-02, user: "je veux les select2 avec du
- * ajax. C'était ça le point" — a first pass that preloaded every assignable
- * website into the <select> missed this): only the *currently linked*
- * website, if any, is rendered as an <option> here — everything else is
- * fetched from /websites/search as the operator types. This also removes the
- * "current site excluded from assignment" edge case an earlier version had
- * to special-case: with nothing preloaded to match against, the current
- * option is simply always shown as-is, DEV-tagged or not, until deliberately
- * changed.
- *
- * Display-only by default, an edit icon reveals the form (2026-09-02, user:
- * "je voudrais que ce soit seulement afficher... avoir un icône pour edit et
- * là, on affiche le dropdown") — layout.php's shared click handler toggles
- * `.wf-display`/`.wf-edit-form` by matching `data-wf-id` and initializes
- * select2 the first time the form is revealed (not eagerly: this select
- * deliberately carries `.wf-select`, not `.js-select2`, to opt out of the
- * page's normal eager init, since a select2 initialized against a
- * display:none element cannot correctly measure it).
- *
  * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url'
  */
 function subscription_website_form(array $subscription, string $csrf, string $return): string
@@ -281,9 +266,6 @@ function subscription_website_form(array $subscription, string $csrf, string $re
     $display = '<span class="wf-display" data-wf-id="' . $subId . '">'
         . ($label !== null
             ? '<a href="/websites/' . $currentId . '">' . e($label) . '</a>'
-            // Red, not the usual muted "—": a subscription with no linked
-            // website is something to act on, not a neutral absence
-            // (2026-09-02, user: "Unassigned en rouge").
             : '<span class="val-error">Unassigned</span>')
         . ' <button type="button" class="wf-edit-btn" data-wf-id="' . $subId . '" '
         . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
@@ -306,77 +288,6 @@ function subscription_website_form(array $subscription, string $csrf, string $re
         . '</form>';
 
     return $display . $form;
-}
-
-/**
- * Multiplicative decay, not a flat "100 - red*8 - orange*3" deduction: the
- * flat version clips to 0 the moment a site accumulates ~13 red findings,
- * which a real, if unhealthy, WordPress site reaches easily — a live tracked
- * site here scored exactly 0 on every one of its extractions (9-12 red,
- * 19 orange each time), with no way to tell "quite bad" from "catastrophic"
- * apart, which reads as the meter being broken rather than reporting a
- * genuinely low score. Each red multiplies by 0.90, each orange by 0.97:
- * the score approaches 0 for a site with very many failures but never
- * actually floors there for a realistic count, so two bad sites still
- * compare meaningfully against each other.
- *
- * @param array{by_pastille?: array<string, int>} $counts
- */
-function health_score(array $counts): int
-{
-    $p      = $counts['by_pastille'] ?? [];
-    $red    = (int) ($p['red'] ?? 0);
-    $orange = (int) ($p['orange'] ?? 0);
-
-    return (int) round(100 * (0.9 ** $red) * (0.97 ** $orange));
-}
-
-/** Semantic color for a health score: green ≥80, orange ≥50, red below. */
-function health_color(int $score): string
-{
-    return $score >= 80 ? 'var(--ok)' : ($score >= 50 ? 'var(--warn)' : 'var(--error)');
-}
-
-/** A report-card letter for the same score — the one-glance version of the number. */
-function health_grade(int $score): string
-{
-    return match (true) {
-        $score >= 90 => 'A',
-        $score >= 80 => 'B',
-        $score >= 65 => 'C',
-        $score >= 50 => 'D',
-        default      => 'F',
-    };
-}
-
-/**
- * The exact arithmetic behind health_score(), spelled out with this
- * extraction's own numbers — not a restatement of the formula, the formula
- * *applied*. An analyst asked to sign off on a client-facing grade needs to
- * see precisely how it was reached, not just be told to trust it.
- *
- * @param array{by_pastille?: array<string, int>} $counts
- */
-function health_score_breakdown(array $counts): string
-{
-    $p      = $counts['by_pastille'] ?? [];
-    $red    = (int) ($p['red'] ?? 0);
-    $orange = (int) ($p['orange'] ?? 0);
-    $redFactor    = 0.9 ** $red;
-    $orangeFactor = 0.97 ** $orange;
-    $score        = health_score($counts);
-
-    $rows = field_raw('Critical / High findings (red)', e($red) . ' × 10% penalty each → <span class="mono">0.9<sup>' . e($red) . '</sup> = ' . e(round($redFactor, 4)) . '</span>')
-        . field_raw('Medium findings (orange)', e($orange) . ' × 3% penalty each → <span class="mono">0.97<sup>' . e($orange) . '</sup> = ' . e(round($orangeFactor, 4)) . '</span>')
-        . field_raw('Score', '<span class="mono">100 × ' . e(round($redFactor, 4)) . ' × ' . e(round($orangeFactor, 4)) . ' ≈ ' . e($score) . '</span>')
-        . field('Grade', health_grade($score) . ' (A ≥ 90, B ≥ 80, C ≥ 65, D ≥ 50, else F)');
-
-    return '<div class="xt-score-breakdown"><table class="kv"><tbody>' . $rows . '</tbody></table>'
-        . '<p class="muted" style="padding:0 1.1rem 1rem;margin:0;font-size:.82rem">'
-        . 'Blue (info) and grey (n/a/unknown) findings never affect the score — only red and orange do. '
-        . 'Each red multiplies the score by 0.90 and each orange by 0.97, compounding rather than subtracting flat points, '
-        . 'so the score approaches 0 for a very unhealthy site without ever floor-clipping to exactly 0 the way a flat '
-        . '"100 − red×8 − orange×3" deduction would.</p></div>';
 }
 
 /** Colored pastille (green/orange/red/blue/grey) + label — the analyst signal. */
@@ -432,14 +343,6 @@ function wp_count(mixed $value, string ...$keys): ?int
     return (int) array_sum(array_map('intval', array_filter($value, 'is_numeric')));
 }
 
-/**
- * One label/value row. $status colors the value: ok (green), warn (orange),
- * error (red), or null (default). Booleans are rendered yes/no. $source, when
- * given, appends a small "ⓘ ) info marker (src_note()) naming exactly which
- * dot-path this came from and how Xtractor can vouch for it — "every datum
- * must be explainable" (user, 2026-08-30): a field on a report an analyst
- * has to sign off on is not allowed to be a mystery number.
- */
 function field(string $label, mixed $value, ?string $status = null, ?string $source = null): string
 {
     if (is_bool($value)) {
@@ -536,6 +439,20 @@ function fmt_list(mixed $items, int $max = 12): string
     $more  = count($items) - count($shown);
 
     return e(implode(', ', array_map('strval', $shown))) . ($more > 0 ? " <span class=\"val-muted\">+{$more}</span>" : '');
+}
+
+/** Like fmt_list(), but one item per line instead of comma-separated — a name list read easier this way. */
+function fmt_lines(mixed $items, int $max = 30): string
+{
+    if (!is_array($items) || $items === []) {
+        return '—';
+    }
+
+    $shown = array_slice($items, 0, $max);
+    $more  = count($items) - count($shown);
+
+    return implode('<br>', array_map(static fn ($i): string => e((string) $i), $shown))
+        . ($more > 0 ? '<br><span class="val-muted">+' . $more . '</span>' : '');
 }
 
 /**
@@ -701,20 +618,27 @@ function vulnerability_source_badge(array $sources): string
  * (orange) — a page full of "High" and "Critical" rows in the same shade
  * hides exactly the distinction that matters most.
  */
+/**
+ * Same coloring as /data/vulnerabilities: banded by the score itself (0–6.0
+ * green, 6.1–8.0 orange, 8.1–8.9 red, 9.0+ dark red), not by the rating
+ * string — the rating still shows, in the tooltip.
+ */
 function cvss_badge(mixed $score, ?string $rating): string
 {
     if ($score === null) {
         return '—';
     }
 
-    $cls = match (strtolower((string) $rating)) {
-        'critical' => 'badge-critical',
-        'high'     => 'badge-error',
-        'medium'   => 'badge-warn',
-        default    => 'badge-muted', // low, or no rating
+    $score = (float) $score;
+    $cls   = match (true) {
+        $score >= 9.0 => 'badge-critical',
+        $score >= 8.1 => 'badge-error',
+        $score >= 6.1 => 'badge-warn',
+        default       => 'badge-ok',
     };
+    $title = 'CVSS ' . $score . ($rating ? ' — ' . $rating : '');
 
-    return '<span class="badge ' . $cls . '">' . e($score) . ($rating ? ' (' . e($rating) . ')' : '') . '</span>';
+    return '<span class="badge ' . $cls . '" title="' . e($title) . '">' . e($score) . '</span>';
 }
 
 /**
@@ -750,29 +674,19 @@ function fmt_status_tally(mixed $items): string
  * cron's own interval (plus a little slack): older than that means a
  * scheduled refresh was missed, not just "not brand new".
  */
-function fmt_refreshed(?string $isoDate, int $maxAgeSeconds): string
+function fmt_refreshed(?string $isoDate, int $maxAgeSeconds, string $label = 'Last refreshed', ?string $title = null): string
 {
+    $titleAttr = $title !== null ? ' title="' . e($title) . '"' : '';
     if ($isoDate === null) {
-        return '<span class="badge badge-error">Never refreshed</span>';
+        return '<span class="badge badge-error"' . $titleAttr . '>Never refreshed</span>';
     }
 
     $age  = time() - (int) strtotime($isoDate);
     $cls  = $age > $maxAgeSeconds ? 'badge-warn' : 'badge-muted';
 
-    return '<span class="badge ' . $cls . '">Last refreshed: ' . e($isoDate) . '</span>';
+    return '<span class="badge ' . $cls . '"' . $titleAttr . '>' . e($label) . ': ' . e($isoDate) . '</span>';
 }
 
-/**
- * "50 minutes ago", pale-grey italic, with the exact timestamp in a real
- * tooltip widget (2026-09-02: a native title="" attribute; 2026-09-03:
- * upgraded to Tippy.js — see .text-subtle/data-tippy-content in the style
- * guide) — quick to scan, never lossy: the real date is always one hover
- * away. Callers need `'tooltip' => true` on their render() call for the
- * widget to actually be loaded; the native title="" a browser gives every
- * element for free is not there as a fallback, so without that flag this
- * renders a plain unhoverable span — deliberately, so a missing flag is
- * obvious (blank hover) rather than silently degrading.
- */
 function fmt_relative_time(?string $isoDate): string
 {
     if ($isoDate === null || $isoDate === '') {
@@ -800,12 +714,6 @@ function fmt_relative_time(?string $isoDate): string
     return '<span class="text-subtle" data-tippy-content="' . e($isoDate) . '">' . e($label) . '</span>';
 }
 
-/**
- * A small inline "copy to clipboard" button next to a value (2026-09-02,
- * client email). Pure JS (navigator.clipboard), no library — the value is
- * embedded in a data attribute rather than read from the DOM text, so it
- * works next to a link/badge too, not just plain text.
- */
 function copy_button(string $value): string
 {
     return '<button type="button" class="copy-btn" data-copy="' . e($value) . '" '

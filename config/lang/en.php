@@ -153,7 +153,6 @@ return [
         // BlogVault
         'BV1' => ['title' => 'Site not flagged as hacked', 'fail' => 'BlogVault has flagged this site: {detections} unresolved detection(s).', 'pass' => 'BlogVault\'s malware scan reports nothing.'],
         'BV2' => ['title' => 'No known vulnerability', 'fail' => 'BlogVault lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'BlogVault lists no known vulnerability for core, plugins or themes.'],
-        'BV3' => ['title' => 'Two-factor authentication for administrators', 'fail' => '{observed} of {administrators} administrator(s) have no two-factor authentication.', 'pass' => 'Every administrator has two-factor authentication enabled.'],
         // Wordfence
         'WF1' => ['title' => 'No known vulnerability (Wordfence)', 'fail' => 'Wordfence Intelligence lists {observed} known vulnerabilities across {components} component(s).', 'pass' => 'Wordfence Intelligence lists no known vulnerability for core, plugins or themes.'],
         // Exposure

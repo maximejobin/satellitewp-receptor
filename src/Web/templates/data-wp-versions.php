@@ -6,21 +6,15 @@
  */
 ?>
 <h1>WordPress versions</h1>
-<p class="muted">Every explicit version known to wordpress.org (<code>bin/xtractor reference:refresh</code>),
-    not the versions installed on tracked sites. Status computed by wordpress.org itself (the same
-    service core uses for its own security nags): <b>insecure</b> = a security update exists for that
-    branch; <b>up to date</b> = latest released version; <b>outdated</b> = older but still a supported
-    release. Search matches the Version column only, always sorted descending.</p>
-<p><?= fmt_refreshed($refreshedAt, 2 * 3600) ?>
-    <span class="muted" style="font-size:.85rem">(wordpress.org versions)</span>
-    &nbsp; <?= fmt_refreshed($eolRefreshedAt, 2 * 3600) ?>
-    <span class="muted" style="font-size:.85rem">(endoflife.date branch data)</span></p>
+<p class="muted">Every explicit version known to wordpress.org — not what's installed on tracked sites.</p>
+<p><?= fmt_refreshed($refreshedAt, 2 * 3600, 'Last WP sync', 'Source: WordPress.org repository') ?></p>
+<p><?= fmt_refreshed($eolRefreshedAt, 2 * 3600, 'Last EOL sync', 'Source: endoflife.date') ?></p>
 
 <?php if ($rows === []): ?>
     <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
 <?php else: ?>
     <div class="search-group">
-    <p class="search"><?= dt_search_box('wp-versions', 'Search version…') ?></p>
+    <p class="search"><?= dt_search_box('wp-versions') ?></p>
     <table id="wp-versions" class="display" style="width:100%">
         <thead>
         <tr>

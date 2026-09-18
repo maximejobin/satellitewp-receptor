@@ -382,6 +382,34 @@ final class BlogVaultProbe extends AbstractProbe
                 'status'     => self::stringOrNull($snapshot['status'] ?? null),
                 'age_days'   => self::ageInDays($takenAt),
             ],
+            // What the latest backup actually covers — bytes and file/table
+            // counts, each split into what BlogVault synced vs. deliberately
+            // ignored (its own exclusion rules: caches, node_modules, etc.).
+            'files'    => self::parseBackupBreakdown((array) ($backups['files'] ?? [])),
+            'database' => self::parseBackupBreakdown((array) ($backups['database'] ?? [])),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $breakdown a {count, size} pair, each {total, synced, ignored}
+     * @return array{count: array{total: int|null, synced: int|null, ignored: int|null}, size: array{total: int|null, synced: int|null, ignored: int|null}}
+     */
+    private static function parseBackupBreakdown(array $breakdown): array
+    {
+        $count = (array) ($breakdown['count'] ?? []);
+        $size  = (array) ($breakdown['size'] ?? []);
+
+        return [
+            'count' => [
+                'total'   => self::intOrNull($count['total'] ?? null),
+                'synced'  => self::intOrNull($count['synced'] ?? null),
+                'ignored' => self::intOrNull($count['ignored'] ?? null),
+            ],
+            'size' => [
+                'total'   => self::intOrNull($size['total'] ?? null),
+                'synced'  => self::intOrNull($size['synced'] ?? null),
+                'ignored' => self::intOrNull($size['ignored'] ?? null),
+            ],
         ];
     }
 

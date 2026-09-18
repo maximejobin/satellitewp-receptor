@@ -69,7 +69,6 @@ final class DataStore
             'site_id'  => $siteId,
             'site_url' => $payload['site_url'] ?? $existing['site_url'] ?? null,
             'home_url' => $payload['home_url'] ?? $existing['home_url'] ?? null,
-            'name'     => $payload['site_title'] ?? $existing['name'] ?? null,
         ]);
     }
 

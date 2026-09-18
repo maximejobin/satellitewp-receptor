@@ -229,6 +229,13 @@ final class BlogVaultProbeTest extends TestCase
         $this->assertSame('succeeded', $data['backups']['latest_snapshot']['status']);
         $this->assertIsInt($data['backups']['latest_snapshot']['age_days']);
 
+        $this->assertSame(15130, $data['backups']['files']['count']['total']);
+        $this->assertSame(15058, $data['backups']['files']['count']['synced']);
+        $this->assertSame(72, $data['backups']['files']['count']['ignored']);
+        $this->assertSame(6315532214, $data['backups']['files']['size']['total']);
+        $this->assertSame(42, $data['backups']['database']['count']['total']);
+        $this->assertSame(5436608, $data['backups']['database']['size']['total']);
+
         $this->assertTrue($data['firewall']['enabled']);
         $this->assertSame('protect', $data['firewall']['mode']);
         $this->assertTrue($data['firewall']['bot_protection']);

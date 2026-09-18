@@ -5,7 +5,11 @@
  * @var array{site_id: string, key: string, origin: string|null}|null $createdKey
  */
 ?>
-<h1><?= e($site['name'] ?? $siteId) ?></h1>
+<?= breadcrumb([
+    [$t->ui('sites'), '/extractions'],
+    [site_display($site['site_url'] ?? $keyRow['origin'] ?? '') ?: $siteId, null],
+]) ?>
+<h1><?= e(site_display($site['site_url'] ?? $keyRow['origin'] ?? '') ?: $siteId) ?></h1>
 <?php if ($site === []): ?>
     <p class="pending-note">This site is paired but has not sent an extraction yet.</p>
 <?php else: ?>

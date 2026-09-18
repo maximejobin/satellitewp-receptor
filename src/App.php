@@ -24,6 +24,7 @@ use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Probe\RdapProbe;
 use SatelliteWP\Xtractor\Probe\TlsProbe;
 use SatelliteWP\Xtractor\Probe\WordfenceProbe;
+use SatelliteWP\Xtractor\Reference\CatalogIndex;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordfenceIndex;
 use SatelliteWP\Xtractor\Reference\WordPressVersions;
@@ -251,6 +252,18 @@ final class App
         return $this->services[WordfenceIndex::class] ??= new WordfenceIndex(
             (string) $this->config->get('data_dir') . '/reference/wordfence.json',
             $this->isConfigured('wordfence') ? $this->wordfence() : null
+        );
+    }
+
+    /**
+     * Rebuildable SQLite index over the Wordfence cache + software catalogue
+     * (never the source of truth — see the class docblock). Same file the
+     * two JSON sources already sit next to.
+     */
+    public function catalogIndex(): CatalogIndex
+    {
+        return $this->services[CatalogIndex::class] ??= new CatalogIndex(
+            (string) $this->config->get('data_dir') . '/reference/catalog-index.sqlite'
         );
     }
 

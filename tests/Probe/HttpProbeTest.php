@@ -40,6 +40,12 @@ final class HttpProbeTest extends TestCase
         $this->assertTrue($data['cookies']['secure']);
         $this->assertTrue($data['cookies']['httponly']);
         $this->assertTrue($data['cookies']['samesite']);
+        $this->assertSame('cloudflare', $data['headers']['server'], 'the full raw response is kept, not just the curated subsets');
+        $this->assertArrayNotHasKey(
+            'set-cookie',
+            $data['headers'],
+            'a real cookie value (a site visitor session/cart id) must never be written to data/ or shown in the UI — cookies above is the safe boolean-only summary of the same fact'
+        );
     }
 
     public function testParseMainResponseMinimal(): void
