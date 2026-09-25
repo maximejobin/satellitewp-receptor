@@ -120,6 +120,19 @@ final class RouterTest extends TestCase
         $this->assertSame('not_found', Router::matchRoute('/websites/7/extra')['route']);
     }
 
+    public function testWithQueryParamKeepsAnExistingQueryAndFragment(): void
+    {
+        $this->assertSame('/clients?notice=saved', Router::withQueryParam('/clients', 'notice', 'saved'));
+        $this->assertSame('/clients?service=all&notice=saved', Router::withQueryParam('/clients?service=all', 'notice', 'saved'));
+        $this->assertSame('/clients?notice=saved#top', Router::withQueryParam('/clients?notice=old#top', 'notice', 'saved'));
+    }
+
+    public function testSafeReturnUsesTheGivenFallback(): void
+    {
+        $this->assertSame('/clients', Router::safeReturn('https://evil.test', '/clients'));
+        $this->assertSame('/catalog', Router::safeReturn(null));
+    }
+
     public function testSafeReturnRejectsOffsiteRedirects(): void
     {
         // Same-site relative paths pass through.
@@ -149,6 +162,22 @@ final class RouterTest extends TestCase
         $this->assertSame('extraction', $match['route']);
         $this->assertSame(self::UUID, $match['params']['site_id']);
         $this->assertSame(self::EID, $match['params']['extraction_id']);
+    }
+
+    public function testReportJsonRouteIsItsOwnTokenGatedRoute(): void
+    {
+        $match = Router::matchRoute('/site/' . self::UUID . '/extraction/' . self::EID . '/report.json');
+
+        $this->assertSame('extraction_report_json', $match['route']);
+        $this->assertSame(self::EID, $match['params']['extraction_id']);
+    }
+
+    public function testReportHtmlAndOtherSuffixesAreNotFound(): void
+    {
+        foreach (['report.html', 'observations', 'licenses', 'report-token'] as $suffix) {
+            // POST-only targets (and the removed HTML report) have no GET route.
+            $this->assertSame('not_found', Router::matchRoute('/site/' . self::UUID . '/extraction/' . self::EID . '/' . $suffix)['route'], $suffix);
+        }
     }
 
     public function testRawRoute(): void
@@ -201,6 +230,8 @@ final class RouterTest extends TestCase
             ['http', 'probes/http.json'],
             ['pagespeed', 'probes/pagespeed.json'],
             ['payload.json', 'payload.json'], // extension is stripped and re-added
+            ['observations', 'observations.json'],
+            ['licenses', 'licenses.json'],
             // keys.json lives outside the extraction directory, so this points at
             // a probes/keys.json that never exists -> 404.
             ['keys', 'probes/keys.json'],

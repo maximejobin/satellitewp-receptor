@@ -240,17 +240,29 @@ final class WordfenceIndex
      */
     public static function write(string $file, array $index): void
     {
-        $handle = fopen($file, 'wb');
+        // Written beside the target then renamed over it: a scan preloading
+        // during the daily refresh reads the old file or the new one, never a
+        // truncated one (which would silently read as "no vulnerabilities").
+        $tmp    = $file . '.tmp.' . bin2hex(random_bytes(4));
+        $handle = fopen($tmp, 'wb');
         if ($handle === false) {
             throw new RuntimeException("Cannot write Wordfence cache: {$file}");
         }
 
-        flock($handle, LOCK_EX);
+        $ok = true;
         foreach ($index as $key => $entries) {
-            fwrite($handle, (string) json_encode(['k' => $key, 'v' => $entries], JSON_UNESCAPED_SLASHES) . "\n");
+            $line = (string) json_encode(['k' => $key, 'v' => $entries], JSON_UNESCAPED_SLASHES) . "\n";
+            if (fwrite($handle, $line) !== strlen($line)) {
+                $ok = false;
+                break;
+            }
         }
-        flock($handle, LOCK_UN);
-        fclose($handle);
+        $ok = fclose($handle) && $ok;
+
+        if (!$ok || !rename($tmp, $file)) {
+            @unlink($tmp);
+            throw new RuntimeException("Cannot write Wordfence cache: {$file}");
+        }
     }
 
     /**

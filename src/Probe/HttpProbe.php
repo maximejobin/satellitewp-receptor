@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Probe;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
+use GuzzleHttp\Promise\Create;
 use GuzzleHttp\TransferStats;
+use Psr\Http\Message\RequestInterface;
 use SatelliteWP\Xtractor\Domain\ProbeResult;
 use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Support\HostGuard;
@@ -85,12 +90,26 @@ final class HttpProbe extends AbstractProbe
             'verify'          => true,
             'allow_redirects' => false,
         ];
+        $stack = HandlerStack::create();
+        // Every request (and every manually followed redirect hop) connects to
+        // the address HostGuard vetted, never to a second, independent lookup.
+        $stack->push(self::pinToVettedAddress([HostGuard::class, 'publicIpFor']), 'pin_vetted_address');
         // A site paired behind HTTP Basic Auth (staging, an IP-restriction
         // bypass, …) needs these to see anything past a 401 — see
         // KeyStore::getHttpAuth() / the site's "⚙ Site settings" panel.
+        // Attached per request, never client-wide: the redirect chain starts
+        // on plain http:// and can hop to another host, and neither may see
+        // the credentials (see shouldSendCredentials()).
         if ($site->httpAuth !== null) {
-            $clientOptions['auth'] = [$site->httpAuth['username'], $site->httpAuth['password']];
+            $header   = 'Basic ' . base64_encode($site->httpAuth['username'] . ':' . $site->httpAuth['password']);
+            $siteHost = $site->host;
+            $stack->push(Middleware::mapRequest(
+                static fn (RequestInterface $request): RequestInterface => self::shouldSendCredentials((string) $request->getUri(), $siteHost)
+                    ? $request->withHeader('Authorization', $header)
+                    : $request->withoutHeader('Authorization')
+            ), 'site_http_auth');
         }
+        $clientOptions['handler'] = $stack;
         $client = new Client($clientOptions);
 
         $errors = [];
@@ -745,6 +764,52 @@ final class HttpProbe extends AbstractProbe
                 'trace'             => ['url' => $traceUrl, 'status' => $trace['status']],
             ],
         ];
+    }
+
+    /**
+     * Guzzle middleware pinning each request's connection to one vetted
+     * address: $resolve (HostGuard::publicIpFor in production) returns the
+     * public IP for the request's host, or null — then the request is refused
+     * outright instead of letting curl resolve the name again on its own.
+     *
+     * @param callable(string): ?string $resolve
+     * @return callable(callable): callable
+     */
+    public static function pinToVettedAddress(callable $resolve): callable
+    {
+        return static function (callable $handler) use ($resolve): callable {
+            return static function (RequestInterface $request, array $options) use ($handler, $resolve) {
+                $uri  = $request->getUri();
+                $host = $uri->getHost();
+                $ip   = $host !== '' ? $resolve($host) : null;
+                if ($ip === null) {
+                    return Create::rejectionFor(new ConnectException(
+                        "Refusing to connect to {$host}: it does not resolve to a public address (SSRF guard)",
+                        $request
+                    ));
+                }
+                $port = $uri->getPort() ?? (strtolower($uri->getScheme()) === 'https' ? 443 : 80);
+                $options['curl'][\CURLOPT_RESOLVE] = [HostGuard::curlResolveEntry($host, $port, $ip)];
+
+                return $handler($request, $options);
+            };
+        };
+    }
+
+    /**
+     * Whether one request may carry the site's HTTP Basic credentials: only
+     * over https, and only to the site's own host — never the initial
+     * plain-http request, never a redirect hop to another host.
+     */
+    public static function shouldSendCredentials(string $url, string $siteHost): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || $siteHost === '') {
+            return false;
+        }
+
+        return strtolower((string) ($parts['scheme'] ?? '')) === 'https'
+            && strtolower((string) ($parts['host'] ?? '')) === strtolower($siteHost);
     }
 
     /**

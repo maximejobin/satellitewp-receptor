@@ -210,7 +210,7 @@ final class Index
     }
 
     /**
-     * Reset extractions stuck in "running" for longer than $minutes back to "pending".
+     * Reset extractions stuck in "running" for longer than $minutes back to "queued", so the worker picks them up again.
      */
     public function requeueStale(int $minutes): int
     {
@@ -349,13 +349,20 @@ final class Index
                 $receivedAt = (string) ($meta['received_at'] ?? gmdate('Y-m-d\TH:i:s\Z'));
                 $probes     = $store->readAllProbeResults($siteId, $extractionId);
 
-                // Reconstructed from what is on disk: probes present means the
-                // analysis ran, absent means it did not. An extraction that was
+                // Reconstructed from what is on disk: no probes means the
+                // analysis never ran (PENDING); probes AND findings.json means
+                // it completed (DONE); probes without findings.json means it
+                // stopped part-way (ERROR) — never DONE, or the page would show
+                // a "finished" report with no findings. An extraction that was
                 // merely QUEUED has no on-disk trace — it comes back as PENDING
                 // and the analyst re-presses "Lancer l'analyse". Acceptable:
                 // rebuild is a recovery step, and the JSON tree is the source of
                 // truth, not the queue.
-                $status = $probes === [] ? self::STATUS_PENDING : self::STATUS_DONE;
+                $status = match (true) {
+                    $probes === []                                           => self::STATUS_PENDING,
+                    $store->readFindings($siteId, $extractionId) !== null    => self::STATUS_DONE,
+                    default                                                  => self::STATUS_ERROR,
+                };
                 $this->insertExtraction($siteId, $extractionId, $receivedAt, $payload, $status);
 
                 foreach ($probes as $name => $envelope) {

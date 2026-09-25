@@ -33,13 +33,20 @@ final class KeyStore
     ): string {
         $apiKey ??= bin2hex(random_bytes(32));
 
-        $keys          = $this->all();
-        $keys[$siteId] = [
+        $keys     = $this->all();
+        $existing = $keys[$siteId] ?? [];
+        $entry    = [
             'api_key'    => $apiKey,
-            'origin'     => $origin,
+            // A rotation (key re-added for a known site) must not unbind it —
+            // that would silently disable the restored-backup 409 guard.
+            'origin'     => $origin ?? ($existing['origin'] ?? null),
             'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
             'revoked'    => false,
         ];
+        if (isset($existing['http_auth'])) {
+            $entry['http_auth'] = $existing['http_auth'];
+        }
+        $keys[$siteId] = $entry;
         $this->save($keys);
 
         return $apiKey;

@@ -17,6 +17,27 @@ final class WordPressVersionsTest extends TestCase
         return new WordPressVersions($file);
     }
 
+    public function testLatestVersionReturnsTheOneTaggedLatest(): void
+    {
+        $wp = $this->seed(['6.9' => '', '7.0.4' => '', '7.1' => 'latest']);
+
+        $this->assertSame('7.1', $wp->latestVersion());
+    }
+
+    public function testLatestVersionIsNullWhenNothingIsTaggedLatest(): void
+    {
+        $wp = $this->seed(['6.9' => '', '7.0.4' => 'outdated']);
+
+        $this->assertNull($wp->latestVersion());
+    }
+
+    public function testLatestVersionIsNullWhenCacheNeverRefreshed(): void
+    {
+        $wp = new WordPressVersions($this->tmpDir . '/never-refreshed.json');
+
+        $this->assertNull($wp->latestVersion());
+    }
+
     public function testMajorVersionsBehindCountsBranchesNotPointReleases(): void
     {
         // 7.0.4 installed, 7.1 latest, one point release apart on 7.0's own

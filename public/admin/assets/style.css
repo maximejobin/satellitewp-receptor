@@ -18,6 +18,7 @@
     --error-2: #8f1214; /* CVSS "critical", distinct from "high" (--error) — deliberately more red than brown */
     --info:  #2f7fe0;  --bg-info: #e6f0fc;
     --pending: #92720c; --bg-pending: #fdf4cf;
+    --low: #7c7556; --bg-low: #f1efe0; /* CVSS "low" — a vulnerability, even a minor one, is never --ok green */
 
     --shadow: 0 1px 2px rgba(20,35,50,.05), 0 6px 20px -12px rgba(20,35,50,.18);
     --radius: 12px;
@@ -93,6 +94,7 @@ body { margin: 0; }
 .nav-item { display: flex; align-items: center; gap: .6rem; padding: .5rem .65rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: .9rem; flex: none; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active { background: var(--bg-accent); color: var(--accent-2); font-weight: 600; }
+.nav-item-button { width: 100%; border: 0; background: none; font: inherit; font-weight: 500; font-size: .9rem; cursor: pointer; text-align: left; }
 .side-foot { margin-top: auto; padding: .6rem; color: var(--faint); font-size: .72rem; }
 
 /* ---------- mobile nav (hamburger + off-canvas sidebar) ---------- */
@@ -147,6 +149,7 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 .badge-critical { color: #fff; background: var(--error-2, #8f1214); }
 .badge-muted { color: var(--muted); background: var(--surface-2); }
 .badge-pending { color: var(--pending); background: var(--bg-pending); }
+.badge-low { color: var(--low); background: var(--bg-low); }
 
 .status-dot { display: inline-flex; align-items: center; gap: .4rem; font-weight: 600; font-size: .85rem; }
 .status-dot::before { content: ''; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; flex: none; }
@@ -275,6 +278,12 @@ table.kv td { text-align: left; word-break: break-word; font-variant-numeric: ta
 .lic-form select.lic-premium, .lic-form select.lic-mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
 .lic-form select.lic-unknown { border-color: var(--border); color: var(--muted); }
 .lic-form select.lic-custom { border-color: var(--info); color: var(--info); }
+/* Per-site licence-key status (license_status_select()) — a different
+   dropdown than the free/premium classification above, same .lic-form. */
+.lic-form select.lic-active { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.lic-form select.lic-missing { border-color: var(--error); color: var(--error); font-weight: 600; }
+.lic-form select.lic-to_validate { border-color: var(--warn); color: var(--warn); }
+.lic-form select.lic-n_a { border-color: var(--border); color: var(--muted); }
 .lic-form select.lic-saved { box-shadow: 0 0 0 2px var(--bg-ok), 0 0 0 3px var(--ok); }
 .lic-form select:disabled { opacity: .6; cursor: wait; }
 tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
@@ -563,7 +572,10 @@ dialog.json-dialog::backdrop { background: rgba(15, 23, 42, .45); }
     display: flex; align-items: center; gap: .6rem;
     background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ok);
     border-radius: 8px; padding: .7rem 1rem; box-shadow: var(--shadow);
-    font-size: .88rem; color: var(--text); min-width: 220px; max-width: 340px;
+    /* .toast-container sits outside .app/.app-bare (layout.php) — it never
+       inherits their font-family/font-size, so both are pinned here
+       explicitly, same discipline as select2's own surfaces below. */
+    font-family: var(--sans); font-size: .88rem; color: var(--text); min-width: 220px; max-width: 340px;
     animation: sg-toast-in .18s ease-out; transition: opacity .2s ease;
 }
 .toast-error { border-left-color: var(--error); }

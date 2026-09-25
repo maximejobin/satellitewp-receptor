@@ -44,4 +44,15 @@ final class ReplayCacheTest extends TestCase
 
         $this->assertTrue((new ReplayCache($file))->seenBefore('sig-a', time(), 300));
     }
+
+    public function testALockFileSitsBesideTheCacheAndDoesNotChangeBehaviour(): void
+    {
+        $file  = $this->tmpDir . '/sub/replay-cache.json'; // directory created on demand
+        $cache = new ReplayCache($file);
+
+        $this->assertFalse($cache->seenBefore('sig-a', time(), 300));
+        $this->assertTrue($cache->seenBefore('sig-a', time(), 300));
+        $this->assertFalse($cache->seenBefore('sig-b', time(), 300));
+        $this->assertFileExists($file . '.lock');
+    }
 }

@@ -322,4 +322,17 @@ final class WordfenceIndexTest extends TestCase
         $this->assertTrue($index->isAvailable());
         $this->assertNotEmpty($index->vulnerabilitiesFor('plugin', 'opening-hours', '1.0'));
     }
+
+    public function testWriteReplacesTheCacheWholeAndLeavesNoTempFile(): void
+    {
+        $file = $this->cacheFile();
+        @mkdir(dirname($file), 0775, true);
+        WordfenceIndex::write($file, ['plugin:a' => [['id' => '1']], 'plugin:b' => [['id' => '2']]]);
+        WordfenceIndex::write($file, ['plugin:c' => [['id' => '3']]]);
+
+        $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
+        $this->assertCount(1, $lines);
+        $this->assertStringContainsString('plugin:c', $lines[0]);
+        $this->assertSame([], glob($file . '.tmp*') ?: []);
+    }
 }

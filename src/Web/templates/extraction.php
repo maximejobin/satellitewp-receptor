@@ -35,6 +35,33 @@ $vulnCell = static function (array $merged): string {
 };
 
 /**
+ * Quiet glyph indicators appended to a plugin/theme row's Status cell —
+ * update available, known vulnerability, licence needing a look — the
+ * Update/Vulnerabilities/Licence columns still carry the full detail, this
+ * is only the "glance at Status and know if anything else on the row
+ * needs attention" summary. Nothing shown at all when none apply.
+ *
+ * @param list<array<string, mixed>> $merged
+ */
+$statusIcons = static function (bool $hasUpdate, ?string $newVersion, array $merged, string $licenseStatus): string {
+    $html = '';
+    if ($hasUpdate) {
+        $html .= status_icon('⬆', 'warn', 'Update available' . ($newVersion ? ": {$newVersion}" : ''));
+    }
+    if ($merged !== []) {
+        $count = count($merged);
+        $html .= status_icon('⚠', 'error', $count . ' known vulnerabilit' . ($count === 1 ? 'y' : 'ies'));
+    }
+    if ($licenseStatus !== 'n_a') {
+        $glyph = ['active' => '✓', 'missing' => '✗', 'to_validate' => '?'][$licenseStatus] ?? '?';
+        $color = ['active' => 'ok', 'missing' => 'error', 'to_validate' => 'warn'][$licenseStatus] ?? 'warn';
+        $html .= status_icon($glyph, $color, 'Licence: ' . str_replace('_', ' ', $licenseStatus));
+    }
+
+    return $html;
+};
+
+/**
  * Active theme first, its parent right after (forced "active" too — it has
  * to be loaded for the child to work, even though WordPress itself never
  * marks it active), everything else after that in its original order.
@@ -249,10 +276,18 @@ if ($status !== 'done'):
                 . e(json_encode(implode("\n\n", $runWarnings) . "\n\nRun the analysis anyway?"))
                 . ')"';
             ?>
-            <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-                <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run" <?= $confirm ?>>
+            <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+                <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run" <?= $confirm ?>
+                      style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                     <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
+                    <label style="display:flex;gap:.4rem;align-items:center;font-size:.85rem" class="muted">
+                        Language
+                        <select name="language" style="padding:.35rem .5rem;font:inherit;color:var(--text)" title="PageSpeed locale and the Google Docs report's default language">
+                            <option value="fr" selected>Français</option>
+                            <option value="en">English</option>
+                        </select>
+                    </label>
                     <button type="submit" class="btn"><?= $runWarnings === [] ? 'Run analysis' : 'Run analysis anyway' ?></button>
                 </form>
                 <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/abort"
@@ -294,6 +329,11 @@ if ($status !== 'done'):
                 <button type="button" class="btn-ghost" data-print><?= report_icon('printer') ?> Print report</button>
                 <?php if ($findings !== null): ?>
                     <a class="btn-ghost mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings"><?= report_icon('raw') ?> findings.json</a>
+                    <button type="button" class="btn-ghost" id="xt-report-key-btn"
+                            data-action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/report-token"
+                            data-csrf="<?= e($csrf) ?>" title="Copy a one-hour link for the Google Docs report template">
+                        <?= report_icon('raw') ?> Report data key
+                    </button>
                 <?php endif; ?>
             </div>
         </div>
@@ -320,6 +360,7 @@ if ($status !== 'done'):
         <a href="#infrastructure" style="--group-color:var(--group-infra)"><?= report_icon('hosting') ?> Infrastructure</a>
         <a href="#content-access" style="--group-color:var(--group-content)"><?= report_icon('plugins') ?> Content &amp; Access</a>
         <a href="#quality-security" style="--group-color:var(--group-quality)"><?= report_icon('performance') ?> Quality &amp; Security</a>
+        <a href="#observations" style="--group-color:var(--accent)"><?= report_icon('raw') ?> Observations</a>
         <a href="#raw-data" style="--group-color:var(--muted)"><?= report_icon('raw') ?> Raw data</a>
     </nav>
 
@@ -549,7 +590,6 @@ if ($status !== 'done'):
                 <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Auto-update</th><th>Requires</th><th>Status</th><th>Vulnerabilities</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($plugins as $file => $pl):
                     $slug   = SoftwareCatalog::normalizeSlug('plugin', (string) ($pl['slug'] ?? ''));
-                    $entry  = $catalog->get('plugin', (string) ($pl['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
                         $bvPluginsBySlug[$slug]['vulnerabilities'] ?? [],
                         $wfPluginsBySlug[$slug]['vulnerabilities'] ?? [],
@@ -565,17 +605,18 @@ if ($status !== 'done'):
                         <td><?= $hasUpdate ? '<span class="b-upd">' . e($pl['new_version'] ?: 'available') . '</span>' : '—' ?></td>
                         <td><?= in_array($file, $autoUpdatePlugins, true) ? '<span class="badge badge-ok">Yes</span>' : '<span class="badge badge-muted">No</span>' ?></td>
                         <td><?= requirement_cell($pl['requires_wp'] ?? null, $pl['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
-                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td>
+                        <?php $pluginLicense = $licenseStatuses['plugin:' . $slug] ?? 'n_a'; ?>
+                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?><?= $statusIcons($hasUpdate, $pl['new_version'] ?? null, $merged, $pluginLicense) ?></td>
                         <td><?= $vulnCell($merged) ?></td>
-                        <td><?php echo $entry ? license_select('plugin', (string) $entry['slug'], (string) ($entry['license'] ?? 'unknown'), $csrf,
-                            '/site/' . e($siteId) . '/extraction/' . e($extractionId), $entry['suggested'] ?? null) : '—'; ?></td>
+                        <td><?= license_status_select($siteId, $extractionId, 'plugin', $slug, $pluginLicense, $csrf,
+                            '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
             <?php if ($themes !== []): ?>
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
-                <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>Status</th><th>Vulnerabilities</th></tr></thead><tbody>
+                <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>Status</th><th>Vulnerabilities</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($orderThemes($themes) as $file => $th):
                     $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
@@ -591,8 +632,11 @@ if ($status !== 'done'):
                         <td><?= $hasUpdate ? '<span class="b-upd">' . e($th['new_version'] ?: 'available') . '</span>' : '—' ?></td>
                         <td><?= requirement_cell($th['requires_wp'] ?? null, $th['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
                         <td class="mono"><?= e($th['template'] ?? '') ?></td>
-                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?></td>
-                        <td><?= $vulnCell($merged) ?></td></tr>
+                        <?php $themeLicense = $licenseStatuses['theme:' . $slug] ?? 'n_a'; ?>
+                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?><?= $statusIcons($hasUpdate, $th['new_version'] ?? null, $merged, $themeLicense) ?></td>
+                        <td><?= $vulnCell($merged) ?></td>
+                        <td><?= license_status_select($siteId, $extractionId, 'theme', $slug, $themeLicense, $csrf,
+                            '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
@@ -804,10 +848,10 @@ if ($status !== 'done'):
                 $sec = $http['security_headers'] ?? [];
                 echo section('Security headers',
                     field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.x-content-type-options')
-                    . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', null, 'probe.http.security_headers.x-frame-options')
+                    . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', ($sec['x-frame-options'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.x-frame-options')
                     . field('Content-Security-Policy', $sec['content-security-policy'] ?? 'missing', ($sec['content-security-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.content-security-policy')
-                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', null, 'probe.http.security_headers.referrer-policy')
-                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', null, 'probe.http.security_headers.permissions-policy')
+                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', ($sec['referrer-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.referrer-policy')
+                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', ($sec['permissions-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.permissions-policy')
                     . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.strict-transport-security')
                 ); ?>
                 <?php
@@ -913,6 +957,115 @@ if ($status !== 'done'):
             <?php endif; ?>
         </div>
     </section>
+
+    <?php if ($findings !== null): ?>
+    <!-- ======================== MANUAL OBSERVATIONS ======================== -->
+    <section class="xt-group" id="observations" data-nav-target="observations" style="--group-color:var(--accent)">
+        <div class="xt-group-head">
+            <span class="xt-icon-badge"><?= report_icon('raw') ?></span>
+            <h2>Observations</h2>
+        </div>
+        <div class="xt-subsection">
+            <p class="muted" style="margin-top:0">
+                Analyst-authored lines for the Google Docs report — each one targets one
+                <span class="mono">{{…_observations}}</span> spot in the template. An omitted one
+                stays saved, just left out of the report until re-included.
+            </p>
+            <?php if ($observations === []): ?>
+                <p class="empty">No manual observation yet.</p>
+            <?php else: ?>
+            <table>
+                <thead><tr><th>Pastille</th><th>Section</th><th>Title</th><th>Description</th><th>In report</th><?php if ($canEditObservations): ?><th></th><?php endif; ?></tr></thead>
+                <tbody>
+                <?php foreach ($observations as $i => $rec): ?>
+                    <?php $rowId = 'rec-' . e($i); ?>
+                    <tr class="row-display" data-row-id="<?= $rowId ?>">
+                        <td><span class="dot dot-<?= e($rec['color'] ?? 'grey') ?>"></span> <?= e($t->pastille((string) ($rec['color'] ?? 'grey'))) ?></td>
+                        <td class="mono"><?= e($rec['section'] ?? '') ?></td>
+                        <td><?= e($rec['title'] ?? '') ?></td>
+                        <td><?= format_observation_text((string) ($rec['description'] ?? '')) ?></td>
+                        <td><?= !empty($rec['include']) ? '<span class="badge badge-ok">Included</span>' : '<span class="badge badge-muted">Omitted</span>' ?></td>
+                        <?php if ($canEditObservations): ?>
+                        <td>
+                            <button type="button" class="row-edit-btn" data-row-id="<?= $rowId ?>" title="Edit"><?= icon_edit() ?></button>
+                            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:inline;margin:0"
+                                  onsubmit="return confirm('Remove this observation?')">
+                                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                                <input type="hidden" name="action" value="remove">
+                                <input type="hidden" name="id" value="<?= e($rec['id'] ?? '') ?>">
+                                <button type="submit" class="btn btn-danger" style="padding:.2rem .5rem;font-size:.8rem">Remove</button>
+                            </form>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php if ($canEditObservations): ?>
+                    <tr class="row-edit-form" data-row-id="<?= $rowId ?>" style="display:none">
+                        <td colspan="6">
+                            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:0">
+                                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                                <input type="hidden" name="action" value="edit">
+                                <input type="hidden" name="id" value="<?= e($rec['id'] ?? '') ?>">
+                                <select name="section" style="padding:.35rem .5rem;font:inherit">
+                                    <?php foreach ($observationSections as $s): ?>
+                                        <option value="<?= e($s) ?>" <?= $s === ($rec['section'] ?? null) ? 'selected' : '' ?>><?= e($s) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <select name="color" style="padding:.35rem .5rem;font:inherit">
+                                    <?php foreach (['blue', 'green', 'orange', 'red', 'grey'] as $c): ?>
+                                        <option value="<?= e($c) ?>" <?= $c === ($rec['color'] ?? null) ? 'selected' : '' ?>><?= e($t->pastille($c)) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="text" name="title" value="<?= e($rec['title'] ?? '') ?>" placeholder="Title" required style="padding:.35rem .5rem;font:inherit;min-width:12rem">
+                                <textarea name="description" placeholder="Description" rows="2"
+                                          title="Supports **bold**, _italic_, [link text](https://…) — resolved into real formatting both here and in the Google Docs report."
+                                          style="padding:.35rem .5rem;font:inherit;min-width:20rem;flex:1;resize:vertical"><?= e($rec['description'] ?? '') ?></textarea>
+                                <label style="display:flex;align-items:center;gap:.3rem;font-size:.85rem">
+                                    <input type="checkbox" name="include" <?= !empty($rec['include']) ? 'checked' : '' ?>> In report
+                                </label>
+                                <button type="submit" class="btn" style="padding:.35rem .7rem">Save</button>
+                                <button type="button" class="btn btn-muted row-cancel-btn" style="padding:.35rem .7rem">Cancel</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+
+            <?php if ($canEditObservations): ?>
+            <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Add an observation</h4>
+            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                <input type="hidden" name="action" value="add">
+                <select name="section" required style="padding:.35rem .5rem;font:inherit">
+                    <option value="">Section…</option>
+                    <?php foreach ($observationSections as $s): ?>
+                        <option value="<?= e($s) ?>"><?= e($s) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="color" style="padding:.35rem .5rem;font:inherit">
+                    <?php foreach (['blue', 'green', 'orange', 'red', 'grey'] as $c): ?>
+                        <option value="<?= e($c) ?>"><?= e($t->pastille($c)) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <input type="text" name="title" placeholder="Title" required style="padding:.35rem .5rem;font:inherit;min-width:12rem">
+                <textarea name="description" placeholder="Description" rows="2"
+                          title="Supports **bold**, _italic_, [link text](https://…) — resolved into real formatting both here and in the Google Docs report."
+                          style="padding:.35rem .5rem;font:inherit;min-width:20rem;flex:1;resize:vertical"></textarea>
+                <label style="display:flex;align-items:center;gap:.3rem;font-size:.85rem">
+                    <input type="checkbox" name="include" checked> In report
+                </label>
+                <button type="submit" class="btn">Add</button>
+            </form>
+            <p class="muted" style="font-size:.78rem;margin:.4rem 0 0">
+                Description supports <span class="mono">**bold**</span>, <span class="mono">_italic_</span>, and
+                <span class="mono">[link text](https://…)</span> — same formatting in this list and in the Google Docs report.
+            </p>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <!-- ============================== RAW DATA ============================== -->
     <section class="xt-group" id="raw-data" data-nav-target="raw-data" style="--group-color:var(--muted)">

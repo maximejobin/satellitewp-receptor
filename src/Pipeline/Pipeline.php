@@ -45,8 +45,15 @@ final class Pipeline
         $payload = $this->store->readExtractionPayload($siteId, $extractionId)
             ?? throw new RuntimeException("Extraction {$siteId}/{$extractionId} not found");
 
+        // The analyst's chosen language (extraction page, before "Run
+        // analysis") — null for a CLI-triggered run or one queued before
+        // this existed; SiteContext/PageSpeedProbe fall back to the
+        // configured default in that case.
+        $meta   = $this->store->readMeta($siteId, $extractionId) ?? [];
+        $locale = is_string($meta['language'] ?? null) && $meta['language'] !== '' ? $meta['language'] : null;
+
         $context = new ExtractionContext(
-            SiteContext::fromExtractionPayload($siteId, $payload, $this->keyStore?->getHttpAuth($siteId)),
+            SiteContext::fromExtractionPayload($siteId, $payload, $this->keyStore?->getHttpAuth($siteId), $locale),
             $extractionId,
             $this->store->extractionDir($siteId, $extractionId)
         );

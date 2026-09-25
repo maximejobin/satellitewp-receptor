@@ -106,4 +106,25 @@ final class SoftwareCatalogTest extends TestCase
         $this->assertCount(1, $needs);
         $this->assertSame('woocommerce', $needs[0]['slug']);
     }
+
+    /**
+     * ingest:process holds one instance for minutes; an analyst's licence
+     * choice saved through another instance meanwhile must survive the
+     * pipeline's next write.
+     */
+    public function testALongLivedInstanceDoesNotClobberAnotherInstancesWrite(): void
+    {
+        $pipeline = $this->catalog();
+        $pipeline->recordExtraction(['plugins' => [['slug' => 'woocommerce/woocommerce.php', 'name' => 'WooCommerce']]]);
+
+        $ui = $this->catalog();
+        $this->assertTrue($ui->setLicense('plugin', 'woocommerce', SoftwareCatalog::LICENSE_PREMIUM));
+
+        $pipeline->recordExtraction(['plugins' => [['slug' => 'akismet/akismet.php', 'name' => 'Akismet']]]);
+
+        $fresh = $this->catalog();
+        $this->assertSame(SoftwareCatalog::LICENSE_PREMIUM, $fresh->get('plugin', 'woocommerce')['license'] ?? null);
+        $this->assertNotNull($fresh->get('plugin', 'akismet'));
+        $this->assertSame([], glob($this->tmpDir . '/catalog/software.json.tmp*') ?: []);
+    }
 }

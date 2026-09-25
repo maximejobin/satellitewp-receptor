@@ -48,4 +48,13 @@ final class SiteContextTest extends TestCase
         $this->assertSame('latest.1.webint.ca', $context->host, 'host stays the full hostname (DNS A/AAAA need it)');
         $this->assertSame('webint.ca', $context->registrableDomain, 'RDAP/WHOIS/NS/MX need the registered domain');
     }
+
+    public function testFromExtractionPayloadCarriesTheGivenLocale(): void
+    {
+        $withLocale = SiteContext::fromExtractionPayload('site-1', ['site_url' => 'https://example.test'], null, 'en');
+        $this->assertSame('en', $withLocale->locale);
+
+        $withoutLocale = SiteContext::fromExtractionPayload('site-1', ['site_url' => 'https://example.test']);
+        $this->assertNull($withoutLocale->locale);
+    }
 }

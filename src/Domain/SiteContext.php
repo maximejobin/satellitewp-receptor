@@ -19,6 +19,11 @@ final readonly class SiteContext
      *        environment, an IP-restriction bypass, …). Without it, HttpProbe's passive
      *        exposure checks (xmlrpc/REST-enum/sensitive-files/…) would all 401 and read as
      *        a false "clean" instead of "couldn't check" — see HttpProbe::exposureCheck().
+     * @param ?string $locale the analyst's chosen language for this extraction
+     *        (meta.json's 'language', set on the extraction page before "Run
+     *        analysis" — see Pipeline::run()), null for one run before that
+     *        choice existed. PageSpeedProbe reads it for PSI's own locale
+     *        param, falling back to its configured default when null.
      */
     public function __construct(
         public string $siteId,
@@ -30,6 +35,7 @@ final readonly class SiteContext
         public array $themes = [],
         public ?string $wpVersion = null,
         public ?array $httpAuth = null,
+        public ?string $locale = null,
     ) {
     }
 
@@ -61,7 +67,7 @@ final readonly class SiteContext
      * @param array<string, mixed> $payload
      * @param array{username: string, password: string}|null $httpAuth see the constructor docblock
      */
-    public static function fromExtractionPayload(string $siteId, array $payload, ?array $httpAuth = null): self
+    public static function fromExtractionPayload(string $siteId, array $payload, ?array $httpAuth = null, ?string $locale = null): self
     {
         $siteUrl = (string) ($payload['site_url'] ?? '');
         $homeUrl = (string) ($payload['home_url'] ?? $siteUrl);
@@ -84,6 +90,7 @@ final readonly class SiteContext
             themes: is_array($payload['themes'] ?? null) ? $payload['themes'] : [],
             wpVersion: $wpVersion,
             httpAuth: $httpAuth,
+            locale: $locale,
         );
     }
 

@@ -128,6 +128,12 @@
 }
 .xt-src:hover, .xt-src:focus-visible { color: var(--accent-2); outline: none; }
 
+/* Status-cell glyphs (status_icon() in helpers.php) — same quiet, tooltip-
+   only pattern as .xt-src above, coloured per what they mean instead of
+   always muted. */
+.xt-status-icon { display: inline-block; margin-left: .15rem; cursor: help; font-size: .95em; }
+.xt-status-icon:hover, .xt-status-icon:focus-visible { opacity: .7; outline: none; }
+
 .xt-subsection { display: flex; flex-direction: column; gap: .7rem; }
 .xt-subsection:not(:first-child) { margin-top: .3rem; }
 .xt-subsection-head { display: flex; align-items: center; gap: .55rem; }

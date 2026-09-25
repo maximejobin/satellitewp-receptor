@@ -91,7 +91,10 @@ $nav = $nav ?? 'sites';
               // so it stays conditional, same reasoning as "Sign out". ?>
         <?php if (!empty($currentUser)): ?>
             <a class="nav-item <?= $nav === 'profile' ? 'active' : '' ?>" href="/profile">My profile</a>
-            <a class="nav-item" href="/auth/logout">Sign out</a>
+            <form method="post" action="/auth/logout" style="margin:0">
+                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                <button type="submit" class="nav-item nav-item-button">Sign out</button>
+            </form>
         <?php endif; ?>
 
         <div class="side-foot">
@@ -162,16 +165,19 @@ $nav = $nav ?? 'sites';
       });
     });
 
-    // Licence dropdowns (catalog + per-plugin on an extraction report): save
-    // via fetch() instead of a real form submit, so picking a licence for
-    // one of a hundred plugins does not reload the whole page every time.
-    // The form/action/CSRF are untouched — this is the same POST /catalog a
-    // no-JS submit would make, just not navigated to.
+    // Licence dropdowns (catalog + per-plugin on an extraction report, plus
+    // the per-site licence-status dropdown): save via fetch() instead of a
+    // real form submit, so picking a value for one of a hundred plugins
+    // does not reload the whole page every time. The form/action/CSRF are
+    // untouched — this is the same POST a no-JS submit would make, just
+    // not navigated to. select[name] is deliberately not pinned to
+    // "license" — a .lic-form always carries exactly one <select>, whatever
+    // its field is named (license, status, …).
     document.addEventListener('submit', function (e) {
       var form = e.target;
       if (!form.classList.contains('lic-form')) { return; }
       e.preventDefault();
-      var select = form.querySelector('select[name="license"]');
+      var select = form.querySelector('select');
       var previous = select ? select.className : '';
       // Build the body BEFORE disabling the select: a disabled form control
       // is excluded from FormData (same rule as a real submit), so disabling
@@ -311,8 +317,8 @@ $nav = $nav ?? 'sites';
       var tag = document.createElement('span');
       tag.className = 'filter-tag';
       tag.dataset.filter = select.name;
-      tag.innerHTML = label + ': ' + (chosen ? chosen.textContent : select.value)
-        + ' <button type="button" aria-label="Remove ' + label + ' filter">&times;</button>';
+      tag.innerHTML = xtEscapeHtml(label) + ': ' + xtEscapeHtml(chosen ? chosen.textContent : select.value)
+        + ' <button type="button" aria-label="Remove ' + xtEscapeHtml(label) + ' filter">&times;</button>';
       tag.querySelector('button').addEventListener('click', function () {
         select.value = emptyValue;
         select.dispatchEvent(new Event('change'));
@@ -380,8 +386,8 @@ $nav = $nav ?? 'sites';
         var chip = document.createElement('span');
         chip.className = 'filter-tag' + (isExcludeStyle ? ' filter-tag-excluded' : '');
         chip.dataset.tagChip = root.id;
-        chip.innerHTML = '<span class="filter-tag-label">' + tag + '</span> '
-          + '<button type="button" aria-label="Remove ' + tag + ' filter">&times;</button>';
+        chip.innerHTML = '<span class="filter-tag-label">' + xtEscapeHtml(tag) + '</span> '
+          + '<button type="button" aria-label="Remove ' + xtEscapeHtml(tag) + ' filter">&times;</button>';
         // Removing a chip is a complete action, same as the single-value
         // filter-dropdown tags above — applies immediately rather than
         // waiting for a separate "Filter" click.

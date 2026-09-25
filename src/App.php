@@ -34,6 +34,7 @@ use SatelliteWP\Xtractor\Rules\Translator;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Xtractor\Storage\ReportTokenStore;
 use SatelliteWP\Xtractor\Storage\RoleCapabilities;
 use SatelliteWP\Xtractor\Storage\UserStore;
 use SatelliteWP\Xtractor\Support\ErrorLog;
@@ -68,6 +69,13 @@ final class App
     {
         return $this->services[KeyStore::class] ??= new KeyStore(
             (string) $this->config->get('data_dir') . '/keys.json'
+        );
+    }
+
+    public function reportTokenStore(): ReportTokenStore
+    {
+        return $this->services[ReportTokenStore::class] ??= new ReportTokenStore(
+            (string) $this->config->get('data_dir') . '/report-tokens.json'
         );
     }
 
@@ -204,7 +212,7 @@ final class App
         );
     }
 
-    /** Role -> capability lookup (config/roles.php). Not yet used to gate anything. */
+    /** Role -> capability lookup (config/roles.php), checked by Router::requireCapability()/currentUserCan(). */
     public function roleCapabilities(): RoleCapabilities
     {
         return $this->services[RoleCapabilities::class] ??= RoleCapabilities::load(

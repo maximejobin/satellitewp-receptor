@@ -299,4 +299,14 @@ final class UserStoreTest extends TestCase
 
         $this->assertFalse($store->updateProfile('nobody@example.com', null, null, null));
     }
+
+    public function testUsersFileIsOwnerOnlyAndLeavesNoTempFileBehind(): void
+    {
+        $store = $this->store();
+        $store->add('boss@example.com', 'admin');
+
+        $file = $this->tmpDir . '/users.json';
+        $this->assertSame('600', substr(sprintf('%o', fileperms($file)), -3));
+        $this->assertSame([], glob($file . '.tmp*') ?: []);
+    }
 }

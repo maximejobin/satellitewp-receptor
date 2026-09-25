@@ -12,7 +12,7 @@ use Throwable;
  *
  * Layout:
  *   data/sites/<site_id>/site.json
- *   data/sites/<site_id>/extractions/<id>/{payload,meta,findings}.json
+ *   data/sites/<site_id>/extractions/<id>/{payload,meta,findings,observations,licenses}.json
  *   data/sites/<site_id>/extractions/<id>/probes/<probe>.json
  *   data/sites/<site_id>/extractions/latest        (symlink)
  *   data/sites/<site_id>/events/<YYYY-MM>.jsonl
@@ -156,10 +156,102 @@ final class DataStore
         return $this->readJson($this->extractionDir($siteId, $extractionId) . '/findings.json');
     }
 
+    /**
+     * Analyst-authored observations, one file per extraction, same
+     * "JSON file is the source of truth" convention as findings.json — the
+     * only piece of report content that isn't derived from a probe or the
+     * rules engine. {"items": [{id, section, color, title, description,
+     * include}]} — 'section' names one of the active report contract's own
+     * 'observations'-type fields, resolved by Web\ReportBuilder exactly
+     * like a rule finding would be.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function writeObservations(string $siteId, string $extractionId, array $data): void
+    {
+        $this->writeJson($this->extractionDir($siteId, $extractionId) . '/observations.json', $data);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function readObservations(string $siteId, string $extractionId): ?array
+    {
+        return $this->readJson($this->extractionDir($siteId, $extractionId) . '/observations.json');
+    }
+
+    /**
+     * Read-modify-write of observations.json under the extraction's lock:
+     * $fn gets the current item list (a list, [] when nothing is stored yet)
+     * and returns the new one, which is written back as {"items": [...]}.
+     * Two analysts saving at once can no longer drop each other's edit.
+     *
+     * @param callable(list<mixed>): list<mixed> $fn
+     */
+    public function mutateObservations(string $siteId, string $extractionId, callable $fn): void
+    {
+        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $fn): void {
+            $items = array_values((array) ($this->readObservations($siteId, $extractionId)['items'] ?? []));
+            $this->writeObservations($siteId, $extractionId, ['items' => $fn($items)]);
+        });
+    }
+
+    /**
+     * Per-extraction licence-key status for each plugin/theme — is the
+     * licence active on the install THIS extraction snapshotted, missing,
+     * or does it need checking. Deliberately scoped like every other
+     * extraction fact (findings.json, observations.json): re-set on
+     * each new extraction rather than carried forward, same "an extraction
+     * is a snapshot in time" rule the rest of data/ already follows —
+     * not SoftwareCatalog's cross-site classification (free/premium,
+     * shared by every site) and not a per-site file either.
+     *
+     * licenses.json: {"plugin:<slug>"/"theme:<slug>" => "active"|"missing"|"to_validate"|"n_a"}.
+     *
+     * @return array<string, string>|null
+     */
+    public function readLicenses(string $siteId, string $extractionId): ?array
+    {
+        $decoded = $this->readJson($this->extractionDir($siteId, $extractionId) . '/licenses.json');
+
+        return $decoded !== null ? array_map('strval', $decoded) : null;
+    }
+
+    /** False when $status isn't a known one — nothing is written. */
+    public function setLicenseStatus(string $siteId, string $extractionId, string $type, string $slug, string $status): bool
+    {
+        if (!in_array($status, ['n_a', 'active', 'missing', 'to_validate'], true)) {
+            return false;
+        }
+
+        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $type, $slug, $status): void {
+            $licenses = $this->readLicenses($siteId, $extractionId) ?? [];
+            $licenses[$type . ':' . $slug] = $status;
+            $this->writeJson($this->extractionDir($siteId, $extractionId) . '/licenses.json', $licenses);
+        });
+
+        return true;
+    }
+
     /** @return array<string, mixed>|null */
     public function readMeta(string $siteId, string $extractionId): ?array
     {
         return $this->readJson($this->extractionDir($siteId, $extractionId) . '/meta.json');
+    }
+
+    /**
+     * Merges $patch into an extraction's existing meta.json (e.g. the
+     * analyst's chosen report/PageSpeed language, set from the extraction
+     * page before "Run analysis" — meta.json is written once at ingest
+     * time, before that choice exists, so this is a real merge, not an
+     * overwrite).
+     *
+     * @param array<string, mixed> $patch
+     */
+    public function updateMeta(string $siteId, string $extractionId, array $patch): void
+    {
+        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $patch): void {
+            $meta = $this->readMeta($siteId, $extractionId) ?? [];
+            $this->writeJson($this->extractionDir($siteId, $extractionId) . '/meta.json', array_merge($meta, $patch));
+        });
     }
 
     /** @return array<string, mixed>|null */
@@ -238,16 +330,50 @@ final class DataStore
         }
     }
 
+    /**
+     * Claims the directory itself (a plain, non-recursive mkdir is atomic:
+     * exactly one caller succeeds), so two pushes in the same second can
+     * never both get the same id and write into one directory.
+     */
     private function newExtractionId(string $siteId): string
     {
-        $id  = $this->timestampId(gmdate('c'));
-        $dir = $this->extractionDir($siteId, $id);
+        $id = $this->timestampId(gmdate('c'));
+        $this->mkdir($this->siteDir($siteId) . '/extractions');
 
-        for ($n = 2; is_dir($dir); $n++) {
-            $dir = $this->extractionDir($siteId, $id . '-' . $n);
+        for ($n = 1; $n < 1000; $n++) {
+            $candidate = $n === 1 ? $id : $id . '-' . $n;
+            if (@mkdir($this->extractionDir($siteId, $candidate), 0775)) {
+                return $candidate;
+            }
         }
 
-        return basename($dir);
+        throw new RuntimeException("Unable to claim an extraction directory for {$siteId}");
+    }
+
+    /**
+     * Runs $fn holding an exclusive lock on this extraction (a .lock file in
+     * its directory). Readers never take it — every write is an atomic
+     * rename, so a reader sees the old or the new file, never a torn one;
+     * the lock only serialises read-modify-write sequences.
+     */
+    private function withExtractionLock(string $siteId, string $extractionId, callable $fn): void
+    {
+        $dir = $this->extractionDir($siteId, $extractionId);
+        $this->mkdir($dir);
+
+        $handle = fopen($dir . '/.lock', 'c');
+        if ($handle === false) {
+            throw new RuntimeException("Unable to open lock file in {$dir}");
+        }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new RuntimeException("Unable to lock {$dir}");
+            }
+            $fn();
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     private function timestampId(string $isoDate): string

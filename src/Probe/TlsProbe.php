@@ -42,16 +42,19 @@ final class TlsProbe extends AbstractProbe
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['No host in site context']];
         }
 
-        if (!HostGuard::isPubliclyRoutable($host)) {
+        // Resolve once and connect to that vetted address (host kept as the
+        // TLS peer name), so a second lookup can't be answered differently.
+        $ip = HostGuard::publicIpFor($host);
+        if ($ip === null) {
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['Host does not resolve to a public address — refusing to connect (SSRF guard)']];
         }
 
         // Full handshake with verification, capturing the certificate.
-        [$cert, $chainValid, $handshakeError] = $this->fetchCertificate($host, verify: true);
+        [$cert, $chainValid, $handshakeError] = $this->fetchCertificate($host, $ip, verify: true);
 
         if ($cert === null) {
             // Retry without verification: cert may be self-signed or chain broken.
-            [$cert, , $handshakeError2] = $this->fetchCertificate($host, verify: false);
+            [$cert, , $handshakeError2] = $this->fetchCertificate($host, $ip, verify: false);
             $chainValid = false;
 
             if ($cert === null) {
@@ -65,7 +68,7 @@ final class TlsProbe extends AbstractProbe
         $parsed = openssl_x509_parse($cert);
         $data   = self::parseCertificate(is_array($parsed) ? $parsed : [], $host, (bool) $chainValid);
 
-        $data['protocols'] = $this->probeProtocols($host);
+        $data['protocols'] = $this->probeProtocols($host, $ip);
 
         $errors = [];
         $status = $this->assess($data);
@@ -139,7 +142,7 @@ final class TlsProbe extends AbstractProbe
     /**
      * @return array{0: \OpenSSLCertificate|null, 1: bool, 2: string|null}
      */
-    private function fetchCertificate(string $host, bool $verify): array
+    private function fetchCertificate(string $host, string $ip, bool $verify): array
     {
         $context = stream_context_create(['ssl' => [
             'capture_peer_cert' => true,
@@ -147,10 +150,11 @@ final class TlsProbe extends AbstractProbe
             'verify_peer_name'  => $verify,
             'allow_self_signed' => !$verify,
             'SNI_enabled'       => true,
+            'peer_name'         => $host,
         ]]);
 
         $client = @stream_socket_client(
-            "ssl://{$host}:443",
+            self::socketTarget($ip),
             $errno,
             $errstr,
             $this->connectTimeout,
@@ -171,7 +175,7 @@ final class TlsProbe extends AbstractProbe
     }
 
     /** @return array<string, bool|null> */
-    private function probeProtocols(string $host): array
+    private function probeProtocols(string $host, string $ip): array
     {
         $support = [];
 
@@ -182,10 +186,11 @@ final class TlsProbe extends AbstractProbe
                 'verify_peer_name'  => false,
                 'allow_self_signed' => true,
                 'SNI_enabled'       => true,
+                'peer_name'         => $host,
             ]]);
 
             $client = @stream_socket_client(
-                "ssl://{$host}:443",
+                self::socketTarget($ip),
                 $errno,
                 $errstr,
                 $this->connectTimeout,
@@ -200,6 +205,14 @@ final class TlsProbe extends AbstractProbe
         }
 
         return $support;
+    }
+
+    /** Pure: the stream_socket_client() target for a vetted IP — IPv6 in brackets. */
+    public static function socketTarget(string $ip): string
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? "ssl://[{$ip}]:443"
+            : "ssl://{$ip}:443";
     }
 
     /** @param array<string, mixed> $data */

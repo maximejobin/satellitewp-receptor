@@ -60,4 +60,10 @@ final class TlsProbeTest extends TestCase
         $this->assertFalse(TlsProbe::hostnameCovered('a.b.example.com', ['*.example.com'], null));
         $this->assertFalse(TlsProbe::hostnameCovered('example.com', ['*.example.com'], null));
     }
+
+    public function testSocketTargetBracketsIpv6(): void
+    {
+        $this->assertSame('ssl://93.184.216.34:443', TlsProbe::socketTarget('93.184.216.34'));
+        $this->assertSame('ssl://[2606:2800:220:1::1]:443', TlsProbe::socketTarget('2606:2800:220:1::1'));
+    }
 }

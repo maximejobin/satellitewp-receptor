@@ -103,7 +103,7 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['G1', 'G4', 'G5', 'G6', 'H9', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'L5', 'M1', 'M2', 'F1', 'F4'] as $id) {
+        foreach (['G1', 'G3', 'G4', 'G5', 'G6', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'M1', 'M2', 'F1', 'F4', 'N2', 'N4'] as $id) {
             $this->assertSame(
                 Status::Pass->value,
                 $findings[$id]['status'],
@@ -120,6 +120,9 @@ final class RuleCatalogTest extends TestCase
         $payload['cron']['overdue_events']   = 7;      // J2
         $payload['administrators']           = [['id' => 1, 'login' => 'admin']]; // M2
         $payload['filesystem']['disk_free_bytes'] = 1_000_000; // L1, ~1%
+        $payload['posts_count']['trash']     = 50;  // N2 (threshold 20)
+        $payload['posts_count']['draft']     = 500; // N4: 500/(500+100) = 83% (threshold 30%)
+        $payload['posts_count']['publish']   = 100;
 
         $findings = array_column(
             $this->engine()->evaluate(new Context($payload))['findings'],
@@ -127,11 +130,111 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['K1', 'I1', 'J2', 'M2', 'L1'] as $id) {
+        foreach (['K1', 'I1', 'J2', 'M2', 'L1', 'N2', 'N4'] as $id) {
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
             // Findings are neutral: they carry the raw observed value, not prose.
             $this->assertArrayHasKey('observed', $findings[$id]);
         }
+    }
+
+    /**
+     * G3: post_max_size / upload_max_filesize should match (PHP silently
+     * caps an upload at whichever is smaller, so a mismatch is always dead
+     * weight on one side) AND the effective limit should clear a real
+     * working threshold (default 50 MB), or a normal upload risks silently
+     * failing partway through.
+     */
+    public function testUploadLimitsConsistencyRule(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+
+        // Mismatched — fails regardless of either value's own size.
+        $payload['php']['post_max_size']       = '64M';
+        $payload['php']['upload_max_filesize'] = '32M';
+        $payload['php']['upload_max_size']     = 32 * 1048576;
+        $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
+        $this->assertSame(Status::Fail->value, $findings['G3']['status']);
+
+        // Identical but under the 50 MB threshold — still fails.
+        $payload['php']['post_max_size']       = '32M';
+        $payload['php']['upload_max_filesize'] = '32M';
+        $payload['php']['upload_max_size']     = 32 * 1048576;
+        $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
+        $this->assertSame(Status::Fail->value, $findings['G3']['status']);
+
+        // Identical and at least 50 MB — passes.
+        $payload['php']['post_max_size']       = '64M';
+        $payload['php']['upload_max_filesize'] = '64M';
+        $payload['php']['upload_max_size']     = 64 * 1048576;
+        $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
+        $this->assertSame(Status::Pass->value, $findings['G3']['status']);
+
+        // Missing data — unknown, never a fabricated failure.
+        unset($payload['php']['post_max_size']);
+        $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
+        $this->assertSame(Status::Unknown->value, $findings['G3']['status']);
+    }
+
+    /** G3 compares bytes, not raw ini strings, and reads post_max_size 0 as unlimited. */
+    public function testUploadLimitsCompareBytesAndTreatZeroPostAsUnlimited(): void
+    {
+        $g3 = function (string $post, string $upload): string {
+            $payload = $this->fixtureArray('extraction-valid.json');
+            $payload['php']['post_max_size']       = $post;
+            $payload['php']['upload_max_filesize'] = $upload;
+            $payload['php']['upload_max_size']     = 0; // never read by G3 any more
+
+            $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
+
+            return $findings['G3']['status'];
+        };
+
+        $this->assertSame(Status::Pass->value, $g3('64M', '64m'), 'same size, different case');
+        $this->assertSame(Status::Pass->value, $g3('64M', '67108864'), 'same size, different notation');
+        $this->assertSame(Status::Pass->value, $g3('0', '64M'), 'post_max_size 0 = unlimited, not a mismatch');
+        $this->assertSame(Status::Fail->value, $g3('0', '32M'), 'unlimited POST, but uploads still capped under 50 MB');
+        $this->assertSame(Status::Fail->value, $g3('128M', '64M'), 'mismatch');
+        $this->assertSame(Status::Fail->value, $g3('32M', '32M'), 'identical but under 50 MB');
+        $this->assertSame(Status::Unknown->value, $g3('garbage', '64M'), 'unparseable value');
+    }
+
+    public function testL1CarriesTheFreeSpaceInGigabytes(): void
+    {
+        $l1 = function (int $free, int $total): array {
+            $payload = $this->fixtureArray('extraction-valid.json');
+            $payload['filesystem']['disk_free_bytes']  = $free;
+            $payload['filesystem']['disk_total_bytes'] = $total;
+
+            return array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id')['L1'];
+        };
+
+        $pass = $l1(50 * 1073741824, 100 * 1073741824);
+        $this->assertSame(Status::Pass->value, $pass['status']);
+        $this->assertEquals(50.0, $pass['data']['free_gb']);
+
+        $fail = $l1(1073741824, 100 * 1073741824);
+        $this->assertSame(Status::Fail->value, $fail['status']);
+        $this->assertEquals(1.0, $fail['data']['free_gb']);
+    }
+
+    /** A homepage behind HTTP Basic Auth returns the gate's headers, not the site's: unknown, never a fail. */
+    public function testSecurityHeaderRulesAreUnknownWhenTheHomepageRequiresAuth(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $probes  = ['http' => ['status' => 'ok', 'data' => [
+            'auth'             => ['required' => true, 'configured' => false],
+            'security_headers' => [],
+        ]]];
+
+        $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
+
+        foreach (['A8', 'B7a', 'B7b', 'B7c', 'B7d', 'B7e'] as $id) {
+            $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} must not fail a non-public site");
+        }
+
+        $probes['http']['data']['auth']['required'] = false;
+        $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
+        $this->assertSame(Status::Fail->value, $findings['B7a']['status'], 'public site with no headers still fails');
     }
 
     /**
@@ -225,6 +328,34 @@ final class RuleCatalogTest extends TestCase
     }
 
     /**
+     * F2 fails on a missing same-branch patch (minor_update_version), never
+     * just because a newer major release is offered (available_version).
+     */
+    public function testF2IgnoresAMajorReleaseOfferAndFailsOnlyOnABranchPatch(): void
+    {
+        mkdir($this->tmpDir . '/reference', 0775, true);
+        file_put_contents($this->tmpDir . '/reference/wordpress.json', (string) json_encode([
+            ['cycle' => '6.8', 'eol' => '2099-12-31'],
+        ]));
+        $eol = new \SatelliteWP\Xtractor\Reference\EndOfLife($this->tmpDir . '/reference');
+
+        $payload = $this->fixtureArray('extraction-valid.json'); // WP 6.8.1
+        $f2 = function (array $coreUpdate) use ($payload, $eol): array {
+            $payload['core_update'] = $coreUpdate;
+            $findings = array_column($this->engine()->evaluate(new Context($payload, [], ['eol' => $eol]))['findings'], null, 'id');
+
+            return $findings['F2'];
+        };
+
+        $majorOnly = $f2(['available_version' => '6.9', 'status' => 'upgrade', 'minor_update_version' => '']);
+        $this->assertSame(Status::Pass->value, $majorOnly['status'], 'a newer major release is not a missing security patch');
+
+        $branchPatch = $f2(['available_version' => '6.9', 'status' => 'upgrade', 'minor_update_version' => '6.8.3']);
+        $this->assertSame(Status::Fail->value, $branchPatch['status']);
+        $this->assertSame('6.8.3', $branchPatch['data']['available']);
+    }
+
+    /**
      * F1 (rewritten 2026-09-07) fails only on a 4+ major-branch gap, not on
      * "a newer point release exists" — that narrower signal is F2/core_update
      * now. See WordPressVersionsTest for majorVersionsBehind() itself.
@@ -278,6 +409,41 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(Status::NotApplicable->value, $findings['K3']['status']);
     }
 
+    /**
+     * D1 must not pass on presence alone — "?all"/"+all" protect nothing,
+     * and only "-all"/"~all" actually restrict who may send as the domain.
+     */
+    public function testD1RequiresARestrictiveAllMechanism(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $dns     = static fn (?string $record): array => [
+            'status' => 'ok',
+            'data'   => ['spf' => ['present' => $record !== null, 'record' => $record]],
+        ];
+
+        $cases = [
+            'v=spf1 include:_spf.example.com ~all' => Status::Pass,  // softfail, the recommended one
+            'v=spf1 include:_spf.example.com -all' => Status::Pass,  // hardfail
+            'v=spf1 include:_spf.example.com ?all' => Status::Fail,  // neutral — protects nothing
+            'v=spf1 include:_spf.example.com +all' => Status::Fail,  // pass-all — accepts forgery from anywhere
+            'v=spf1 include:_spf.example.com'      => Status::Fail,  // no "all" mechanism at all
+            null                                    => Status::Fail,  // absent entirely
+        ];
+
+        foreach ($cases as $record => $expected) {
+            $findings = array_column(
+                $this->engine()->evaluate(new Context($payload, ['dns' => $dns($record)]))['findings'],
+                null,
+                'id'
+            );
+            $this->assertSame(
+                $expected->value,
+                $findings['D1']['status'],
+                'record: ' . var_export($record, true)
+            );
+        }
+    }
+
     public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void
     {
         $findings = array_column(
@@ -290,5 +456,42 @@ final class RuleCatalogTest extends TestCase
         foreach (['A1', 'A10', 'B1', 'C5', 'D1', 'W1'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} without probes");
         }
+    }
+
+    /**
+     * page_count is a bare integer on every real extraction checked (never
+     * the full draft/trash breakdown posts_count carries) — N2/N4 read
+     * posts_count only, and must stay unknown rather than guess when even
+     * that is missing.
+     */
+    public function testN2AndN4AreUnknownWithoutPostsCount(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        unset($payload['posts_count']);
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        $this->assertSame(Status::Unknown->value, $findings['N2']['status']);
+        $this->assertSame(Status::Unknown->value, $findings['N4']['status']);
+    }
+
+    public function testN4IsTheDraftShareNotTheDraftToPublishedRatio(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $payload['posts_count']['publish'] = '3';
+        $payload['posts_count']['draft']   = '1';
+
+        $findings = array_column(
+            $this->engine()->evaluate(new Context($payload))['findings'],
+            null,
+            'id'
+        );
+
+        // 1 draft among 4 total (3 published + 1 draft) = 25%, not 1/3 = 33%.
+        $this->assertSame(25.0, $findings['N4']['observed']);
     }
 }

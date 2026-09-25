@@ -34,10 +34,13 @@ final class HelpersCvssBadgeTest extends TestCase
         $this->assertStringContainsString('badge-warn', \cvss_badge(6.1, 'Medium'));
     }
 
-    public function testUpToSixIsOk(): void
+    public function testUpToSixIsLowNeverOk(): void
     {
-        $this->assertStringContainsString('badge-ok', \cvss_badge(6.0, 'Medium'));
-        $this->assertStringContainsString('badge-ok', \cvss_badge(2.0, 'Low'));
+        // A vulnerability is never --ok green, however low its score —
+        // green means "compliant", not "a minor known flaw".
+        $this->assertStringContainsString('badge-low', \cvss_badge(6.0, 'Medium'));
+        $this->assertStringContainsString('badge-low', \cvss_badge(2.0, 'Low'));
+        $this->assertStringNotContainsString('badge-ok', \cvss_badge(2.0, 'Low'));
     }
 
     public function testTitleCarriesTheScoreAndRating(): void

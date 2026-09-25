@@ -83,8 +83,10 @@ final class PageSpeedProbe extends AbstractProbe
         $errors = [];
         $scores = [];
 
+        $locale = $this->resolveLocale($site);
+
         foreach ($this->strategies as $strategy) {
-            [$result, $error] = $this->runStrategyWithRetries($client, $url, $strategy);
+            [$result, $error] = $this->runStrategyWithRetries($client, $url, $strategy, $locale);
 
             if ($error !== null) {
                 $errors[] = $error;
@@ -119,12 +121,12 @@ final class PageSpeedProbe extends AbstractProbe
      *
      * @return array{0: array<string, mixed>|null, 1: string|null}
      */
-    private function runStrategyWithRetries(Client $client, string $url, string $strategy): array
+    private function runStrategyWithRetries(Client $client, string $url, string $strategy, string $locale): array
     {
         $lastError = null;
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
-            [$result, $error] = $this->runStrategy($client, $url, $strategy);
+            [$result, $error] = $this->runStrategy($client, $url, $strategy, $locale);
 
             if ($error === null) {
                 return [$result, null];
@@ -150,16 +152,29 @@ final class PageSpeedProbe extends AbstractProbe
     }
 
     /**
+     * The analyst's per-extraction choice (extraction page, before "Run
+     * analysis" — SiteContext::$locale, threaded from meta.json's
+     * 'language' by Pipeline::run()) wins over this probe's own configured
+     * default; the default only matters for a run with no such choice
+     * recorded (CLI, or one queued before this existed). Public and pure
+     * (no network) so it's directly unit-tested, same as parseResponse().
+     */
+    public function resolveLocale(SiteContext $site): string
+    {
+        return $site->locale !== null && $site->locale !== '' ? $site->locale : $this->locale;
+    }
+
+    /**
      * @return array{0: array<string, mixed>|null, 1: string|null}
      */
-    private function runStrategy(Client $client, string $url, string $strategy): array
+    private function runStrategy(Client $client, string $url, string $strategy, string $locale): array
     {
         // PSI expects the category parameter repeated, not category[]= — so the
         // query string is built by hand rather than through Guzzle's array form.
         $parts = [
             'url=' . rawurlencode($url),
             'strategy=' . rawurlencode($strategy),
-            'locale=' . rawurlencode($this->locale),
+            'locale=' . rawurlencode($locale),
         ];
         foreach ($this->categories as $category) {
             $parts[] = 'category=' . rawurlencode($category);
@@ -171,7 +186,7 @@ final class PageSpeedProbe extends AbstractProbe
         try {
             $response = $client->get(self::ENDPOINT, ['query' => implode('&', $parts)]);
         } catch (GuzzleException $e) {
-            return [null, "PSI {$strategy}: {$e->getMessage()}"];
+            return [null, self::redactKey("PSI {$strategy}: {$e->getMessage()}", $this->apiKey)];
         }
 
         $decoded = json_decode((string) $response->getBody(), true);
@@ -183,7 +198,7 @@ final class PageSpeedProbe extends AbstractProbe
             $message = $decoded['error']['message'] ?? 'unknown error';
             $code    = $decoded['error']['code'] ?? $response->getStatusCode();
 
-            return [null, "PSI {$strategy}: HTTP {$code} — {$message}"];
+            return [null, self::redactKey("PSI {$strategy}: HTTP {$code} — {$message}", $this->apiKey)];
         }
 
         return [self::parseResponse($decoded), null];
@@ -261,5 +276,19 @@ final class PageSpeedProbe extends AbstractProbe
             'overall_category' => $experience['overall_category'] ?? null,
             'metrics'          => $metrics,
         ];
+    }
+
+    /**
+     * Pure: $message with the API key removed, raw and URL-encoded — a
+     * transport failure's Guzzle message embeds the full request URI
+     * (?key=…), and these messages are stored in probes/pagespeed.json.
+     */
+    public static function redactKey(string $message, ?string $apiKey): string
+    {
+        if ($apiKey === null || $apiKey === '') {
+            return $message;
+        }
+
+        return str_replace(array_unique([rawurlencode($apiKey), urlencode($apiKey), $apiKey]), '[redacted]', $message);
     }
 }

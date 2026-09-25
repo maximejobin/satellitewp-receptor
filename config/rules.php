@@ -27,6 +27,14 @@ use SatelliteWP\Xtractor\Rules\Context;
 use SatelliteWP\Xtractor\Rules\Rule;
 use SatelliteWP\Xtractor\Rules\Severity;
 
+// Security headers are only a fact about the site when the probe actually saw
+// its public homepage: a 401 (HTTP Basic Auth in front of the site, no
+// credentials configured) returns the auth gate's headers, not the site's —
+// "not public" is unknown, never a missing-header failure (same rule as the
+// exposure checks).
+$headersReadable = static fn (Context $c): bool => $c->probeRan('http')
+    && $c->get('probe.http.auth.required') !== true;
+
 return [
 
     // ===================================================================
@@ -80,8 +88,8 @@ return [
     ],
     [
         'id' => 'A8', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
+        'check' => static function (Context $c) use ($headersReadable) {
+            if (!$headersReadable($c)) {
                 return Check::unknown();
             }
 
@@ -142,14 +150,14 @@ return [
     ],
     [
         'id' => 'B7a', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7b', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
+        'check' => static function (Context $c) use ($headersReadable) {
+            if (!$headersReadable($c)) {
                 return Check::unknown();
             }
             $xfo = $c->get('probe.http.security_headers.x-frame-options');
@@ -160,19 +168,19 @@ return [
     ],
     [
         'id' => 'B7c', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7d', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7e', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
@@ -296,9 +304,29 @@ return [
     //  D. EMAIL DELIVERABILITY (DNS side only)                     [EXT]
     // ===================================================================
     [
+        // "?all" (neutral) and "+all" (pass-all) protect nothing — only
+        // "-all"/"~all" actually constrain who may send as this domain.
+        // "~all" (softfail) counts as a pass, not just "-all" (hardfail):
+        // it is the mechanism generally recommended for SPF specifically,
+        // since forwarding and mailing lists routinely break the sender
+        // check in ways a hard fail would then reject as forged.
         'id' => 'D1', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => $c->probeRan('dns')
-            ? Check::isTrue($c->bool('probe.dns.spf.present')) : Check::unknown(),
+        'check' => static function (Context $c) {
+            if (!$c->probeRan('dns')) {
+                return Check::unknown();
+            }
+            if ($c->bool('probe.dns.spf.present') !== true) {
+                return Check::fail('absent');
+            }
+            $record = $c->string('probe.dns.spf.record') ?? '';
+            if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
+                return Check::fail('no all mechanism', [], Severity::Medium);
+            }
+
+            return in_array($m[1], ['-', '~'], true)
+                ? Check::pass($m[1] . 'all')
+                : Check::fail($m[1] . 'all', [], Severity::Medium);
+        },
     ],
     [
         'id' => 'D3', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
@@ -344,6 +372,19 @@ return [
 
             return Check::graded($days, [[15, Severity::Critical], [(float) $rule->threshold, Severity::High]]);
         },
+    ],
+    // W2/W3: unconditional advisories, not a check against this site's own
+    // data — every extraction carries them the same way it carries every
+    // other DOMAIN finding, so a per-category pastille tally (fed from
+    // findings.json like any other count) counts them without a second,
+    // report-template-only source of "how many blue lines are there".
+    [
+        'id' => 'W2', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info,
+        'check' => static fn () => Check::pass(),
+    ],
+    [
+        'id' => 'W3', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info,
+        'check' => static fn () => Check::pass(),
     ],
 
     // ===================================================================
@@ -416,9 +457,12 @@ return [
                 return Check::fail($version, ['eol_date' => $date]); // outdated branch, no longer patched — not a confirmed vulnerability
             }
 
-            $available = $c->get('payload.core_update.available_version');
-            if ($available !== null && $available !== '') {
-                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $available]);
+            // minor_update_version, not available_version: the latter is
+            // update_core's first offer, which is also filled for a new major
+            // release — not a missing security patch on this branch.
+            $minor = $c->get('payload.core_update.minor_update_version');
+            if ($minor !== null && $minor !== '') {
+                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $minor]);
             }
 
             return Check::pass($version, ['eol_date' => $date]);
@@ -520,6 +564,38 @@ return [
         },
     ],
     [
+        // post_max_size / upload_max_filesize cohérents (docblock G3): the
+        // two should match — PHP silently caps an upload at whichever is
+        // smaller, so a mismatch just means one of the two numbers is dead
+        // weight — and the effective limit (the smaller of the two) should
+        // clear a real working threshold, or a client uploading a normal
+        // media file/backup risks a silent transmission failure. Compared in
+        // bytes, not as raw ini strings ("64M" == "64m" == "67108864").
+        // post_max_size 0 disables PHP's POST limit, so it is unlimited, not
+        // a mismatch — the effective limit is then upload_max_filesize alone
+        // (payload.php.upload_max_size is not used: the plugin's own min()
+        // turns that same 0 into a 0-byte limit).
+        'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
+        'check' => static function (Context $c, Rule $rule) {
+            $postRaw   = $c->string('payload.php.post_max_size');
+            $uploadRaw = $c->string('payload.php.upload_max_filesize');
+            $post      = $c->bytes('payload.php.post_max_size');
+            $upload    = $c->bytes('payload.php.upload_max_filesize');
+            if ($postRaw === null || $uploadRaw === null || $post === null || $upload === null) {
+                return Check::unknown();
+            }
+            if ($post == 0) {
+                $post = INF;
+            }
+            $observed  = "{$postRaw} / {$uploadRaw}";
+            $mismatch  = $post !== INF && $post != $upload;
+            $effective = min($post, $upload);
+            $tooSmall  = $effective / 1048576 < (float) $rule->threshold;
+
+            return ($mismatch || $tooSmall) ? Check::fail($observed) : Check::pass($observed);
+        },
+    ],
+    [
         'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 3000,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
     ],
@@ -602,15 +678,6 @@ return [
         'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
     ],
-    [
-        'id' => 'H9', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Info,
-        'check' => static function (Context $c) {
-            $prefix = $c->string('payload.db_table_prefix');
-
-            return $prefix === null ? Check::unknown() : ($prefix === 'wp_' ? Check::fail($prefix) : Check::pass($prefix));
-        },
-    ],
-
     // ===================================================================
     //  I. AUTOLOAD / OBJECT CACHE                                 [DATA]
     // ===================================================================
@@ -735,20 +802,27 @@ return [
             }
             $percent  = round($free / $total * 100, 1);
             $lowSpace = $percent < 20 || $free < 2147483648; // 20% or 2 GiB
+            // A plain number, not "X GB" — findings.json stays language-
+            // neutral (no unit baked in here); the unit word lives in each
+            // lang template alongside {free_gb}, same as every other
+            // placeholder.
+            $freeGb = round($free / 1073741824, 1);
 
             return $lowSpace
-                ? Check::fail($percent, ['free_bytes' => $free], Severity::Medium)
-                : Check::pass($percent);
+                ? Check::fail($percent, ['free_bytes' => $free, 'free_gb' => $freeGb], Severity::Medium)
+                : Check::pass($percent, ['free_gb' => $freeGb]);
         },
     ],
     [
         'id' => 'L4', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
     ],
-    [
-        'id' => 'L5', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
-    ],
+    // L5 (core files writable in production) — disabled for now, kept here
+    // rather than deleted so it's a one-line uncomment to bring back.
+    // [
+    //     'id' => 'L5', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
+    //     'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
+    // ],
 
     // ===================================================================
     //  M. USERS & ACCESS                                          [DATA]
@@ -775,6 +849,42 @@ return [
             }
 
             return Check::pass('none');
+        },
+    ],
+
+    // ===================================================================
+    //  N. CONTENU                                                  [DATA]
+    // ===================================================================
+    [
+        // Only 'post' is ever a full wp_count_posts()-shaped breakdown in
+        // real payloads — page_count comes through as a bare integer on
+        // every real extraction checked, so trash on pages cannot be read
+        // here yet (the plugin's collector would need to report page_count
+        // the same shape as posts_count to close that gap).
+        'id' => 'N2', 'category' => Category::CONTENT, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 20,
+        'check' => static function (Context $c, Rule $rule) {
+            $posts = $c->get('payload.posts_count');
+            if (!is_array($posts)) {
+                return Check::unknown();
+            }
+
+            return Check::atMost((float) ($posts['trash'] ?? 0), (float) $rule->threshold);
+        },
+    ],
+    [
+        'id' => 'N4', 'category' => Category::CONTENT, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 30,
+        'check' => static function (Context $c, Rule $rule) {
+            $posts = $c->get('payload.posts_count');
+            if (!is_array($posts)) {
+                return Check::unknown();
+            }
+            $published = (int) ($posts['publish'] ?? 0);
+            $draft     = (int) ($posts['draft'] ?? 0);
+            if ($published + $draft === 0) {
+                return Check::unknown();
+            }
+
+            return Check::atMost(round($draft / ($published + $draft) * 100, 1), (float) $rule->threshold);
         },
     ],
 

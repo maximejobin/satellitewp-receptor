@@ -237,6 +237,7 @@ final class IndexTest extends TestCase
             'received_at' => '2026-07-22T14:30:00Z',
         ]);
         $store->writeProbeResult(self::SITE_A, $id, 'dns', ['status' => 'ok', 'ran_at' => '2026-07-22T14:31:00Z', 'duration_ms' => 10]);
+        $store->writeFindings(self::SITE_A, $id, ['findings' => []]);
 
         // Start from an index that knows nothing.
         $count = $this->index->rebuildFrom($store);
@@ -244,7 +245,25 @@ final class IndexTest extends TestCase
         $this->assertSame(1, $count);
         $row = $this->index->getExtraction(self::SITE_A, $id);
         $this->assertSame('6.8.1', $row['wp_version']);
-        $this->assertSame('done', $row['status'], 'has a probe result -> done');
+        $this->assertSame('done', $row['status'], 'has probe results and findings -> done');
         $this->assertCount(1, $this->index->listProbeRuns(self::SITE_A, $id));
+    }
+
+    public function testRebuildMarksProbesWithoutFindingsAsErrorNotDone(): void
+    {
+        $store   = new DataStore($this->tmpDir);
+        $pending = $store->storeExtraction(self::SITE_A, '{}', ['received_at' => '2026-07-22T14:30:00Z']);
+        $partial = $store->storeExtraction(self::SITE_A, '{}', ['received_at' => '2026-07-22T14:31:00Z']);
+        $done    = $store->storeExtraction(self::SITE_A, '{}', ['received_at' => '2026-07-22T14:32:00Z']);
+        foreach ([$partial, $done] as $id) {
+            $store->writeProbeResult(self::SITE_A, $id, 'dns', ['status' => 'ok']);
+        }
+        $store->writeFindings(self::SITE_A, $done, ['findings' => []]);
+
+        $this->index->rebuildFrom($store);
+
+        $this->assertSame('pending', $this->index->getExtraction(self::SITE_A, $pending)['status']);
+        $this->assertSame('error', $this->index->getExtraction(self::SITE_A, $partial)['status'], 'stopped part-way');
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_A, $done)['status']);
     }
 }

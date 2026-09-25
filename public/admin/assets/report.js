@@ -49,4 +49,31 @@
       window.print();
     });
   });
+
+  // "Report data key" — mints a one-hour, single-extraction token server-side
+  // (Router::issueReportToken()) and copies the ready-to-paste URL, instead
+  // of ever putting the shared reports.api_key on screen.
+  var keyBtn = report.querySelector('#xt-report-key-btn');
+  if (keyBtn) {
+    keyBtn.addEventListener('click', function () {
+      keyBtn.disabled = true;
+      fetch(keyBtn.dataset.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: '_csrf=' + encodeURIComponent(keyBtn.dataset.csrf)
+      })
+        .then(function (res) {
+          if (!res.ok) { throw new Error('HTTP ' + res.status); }
+          return res.json();
+        })
+        .then(function (data) { return navigator.clipboard.writeText(data.url); })
+        .then(function () {
+          if (window.showToast) { window.showToast('Report link copied — valid for one hour.', false); }
+        })
+        .catch(function () {
+          if (window.showToast) { window.showToast('Could not create the report link.', true); }
+        })
+        .finally(function () { keyBtn.disabled = false; });
+    });
+  }
 })();

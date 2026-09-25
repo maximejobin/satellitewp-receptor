@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Tests\Probe;
 
+use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
 use SatelliteWP\Xtractor\Tests\TestCase;
 
@@ -66,5 +67,41 @@ final class PageSpeedProbeTest extends TestCase
         $data = PageSpeedProbe::parseResponse(['lighthouseResult' => ['audits' => []]]);
 
         $this->assertNull($data['performance_score']);
+    }
+
+    private function probe(string $configuredLocale = 'fr'): PageSpeedProbe
+    {
+        return new PageSpeedProbe(null, ['mobile'], ['performance'], $configuredLocale, 60, 90, 'UA');
+    }
+
+    private function site(?string $locale): SiteContext
+    {
+        return new SiteContext('s1', 'https://example.test', 'https://example.test', 'example.test', 'example.test', locale: $locale);
+    }
+
+    public function testResolveLocalePrefersTheExtractionsOwnChoice(): void
+    {
+        $this->assertSame('en', $this->probe('fr')->resolveLocale($this->site('en')));
+    }
+
+    public function testResolveLocaleFallsBackToTheConfiguredDefaultWhenNoneWasChosen(): void
+    {
+        $this->assertSame('fr', $this->probe('fr')->resolveLocale($this->site(null)));
+        $this->assertSame('fr', $this->probe('fr')->resolveLocale($this->site('')));
+    }
+
+    public function testRedactKeyRemovesTheKeyRawAndUrlEncoded(): void
+    {
+        $key = 'AIza+Sy/abc=';
+        $msg = 'PSI mobile: cURL error 28: Operation timed out for https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=x&key='
+            . rawurlencode($key) . ' (raw ' . $key . ', form ' . urlencode($key) . ')';
+
+        $out = PageSpeedProbe::redactKey($msg, $key);
+
+        $this->assertStringNotContainsString($key, $out);
+        $this->assertStringNotContainsString(rawurlencode($key), $out);
+        $this->assertStringNotContainsString(urlencode($key), $out);
+        $this->assertStringContainsString('key=[redacted]', $out);
+        $this->assertSame('no key here', PageSpeedProbe::redactKey('no key here', null));
     }
 }

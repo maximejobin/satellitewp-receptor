@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/xtractor rules:doc > docs/rules-catalog.md
 ```
 
-76 règles, 17 groupes.
+79 règles, 18 groupes.
 
 ## A. TLS / SSL
 
@@ -47,7 +47,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### A3 — Chaîne de certification complète
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** La chaîne de certification est complète.
 - **Échec (FR) :** La chaîne de certification est incomplète (intermédiaire manquant).
 
 ```php
@@ -57,7 +57,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### A4 — Nom d'hôte couvert par le certificat
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le nom d'hôte du site est couvert par le certificat.
 - **Échec (FR) :** Le nom d'hôte du site n'est pas couvert par le certificat (CN/SAN).
 
 ```php
@@ -67,7 +67,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### A5 — Émetteur de confiance (pas auto-signé)
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le certificat est émis par une autorité de confiance.
 - **Échec (FR) :** Le certificat est auto-signé : les navigateurs afficheront un avertissement.
 
 ```php
@@ -98,12 +98,12 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### A8 — En-tête HSTS présent
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** L'en-tête Strict-Transport-Security est présent.
 - **Échec (FR) :** L'en-tête Strict-Transport-Security est absent.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
+        'check' => static function (Context $c) use ($headersReadable) {
+            if (!$headersReadable($c)) {
                 return Check::unknown();
             }
 
@@ -177,7 +177,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B6 — En-têtes de cache sur les assets
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 86400
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Les assets statiques ont un cache de {observed}s (au moins {threshold}s).
 - **Échec (FR) :** Les assets statiques ont un cache de {observed}s (attendu au moins {threshold}s).
 
 ```php
@@ -195,11 +195,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B7a — X-Content-Type-Options: nosniff
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** L'en-tête X-Content-Type-Options est présent.
 - **Échec (FR) :** L'en-tête X-Content-Type-Options est absent.
 
 ```php
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
@@ -207,12 +207,12 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B7b — Protection contre le clickjacking
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le site est protégé contre le clickjacking (X-Frame-Options ou Content-Security-Policy).
 - **Échec (FR) :** Ni X-Frame-Options ni Content-Security-Policy ne sont présents.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('http')) {
+        'check' => static function (Context $c) use ($headersReadable) {
+            if (!$headersReadable($c)) {
                 return Check::unknown();
             }
             $xfo = $c->get('probe.http.security_headers.x-frame-options');
@@ -225,11 +225,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B7c — Content-Security-Policy présent
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Une Content-Security-Policy est définie.
 - **Échec (FR) :** Aucune Content-Security-Policy n'est définie.
 
 ```php
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
@@ -237,11 +237,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B7d — Referrer-Policy définie
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** L'en-tête Referrer-Policy est présent.
 - **Échec (FR) :** L'en-tête Referrer-Policy est absent.
 
 ```php
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
@@ -249,11 +249,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B7e — Permissions-Policy définie
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** L'en-tête Permissions-Policy est présent.
 - **Échec (FR) :** L'en-tête Permissions-Policy est absent.
 
 ```php
-        'check' => static fn (Context $c) => $c->probeRan('http')
+        'check' => static fn (Context $c) => $headersReadable($c)
             ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
@@ -261,7 +261,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B9 — Aucune divulgation de version serveur
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le serveur ne divulgue pas sa version.
 - **Échec (FR) :** Le serveur divulgue sa version : {observed}.
 
 ```php
@@ -286,7 +286,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### C1 — IPv6 (enregistrement AAAA)
 
 - **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le site est joignable en IPv6 ({observed} enregistrement(s) AAAA).
 - **Échec (FR) :** Aucun enregistrement AAAA : le site n'est pas joignable en IPv6.
 
 ```php
@@ -303,7 +303,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### C2 — Enregistrement CAA présent
 
 - **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** {observed} enregistrement(s) CAA limitent les autorités pouvant émettre un certificat.
 - **Échec (FR) :** Aucun enregistrement CAA : n'importe quelle autorité peut émettre un certificat.
 
 ```php
@@ -320,7 +320,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### C5 — Chaîne de redirection courte
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** La chaîne de redirection est courte ({observed} redirection(s), au plus {threshold}).
 - **Échec (FR) :** La chaîne de redirection est trop longue ou boucle ({observed}).
 
 ```php
@@ -353,7 +353,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### C8 — Page 404 correcte
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Une URL inexistante répond correctement 404.
 - **Échec (FR) :** Une URL inexistante répond 200 au lieu de 404 (soft 404).
 
 ```php
@@ -427,15 +427,29 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## D. Délivrabilité e-mail (DNS)
 
-### D1 — Enregistrement SPF présent
+### D1 — Enregistrement SPF efficace
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Un enregistrement SPF est configuré.
-- **Échec (FR) :** Aucun enregistrement SPF : les courriels du site risquent d'être rejetés.
+- **Réussite (FR) :** SPF applique un mécanisme restrictif ({observed}).
+- **Échec (FR) :** SPF est {observed}. Publier un mécanisme restrictif (~all ou -all) — ?all et +all ne protègent rien.
 
 ```php
-        'check' => static fn (Context $c) => $c->probeRan('dns')
-            ? Check::isTrue($c->bool('probe.dns.spf.present')) : Check::unknown(),
+        'check' => static function (Context $c) {
+            if (!$c->probeRan('dns')) {
+                return Check::unknown();
+            }
+            if ($c->bool('probe.dns.spf.present') !== true) {
+                return Check::fail('absent');
+            }
+            $record = $c->string('probe.dns.spf.record') ?? '';
+            if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
+                return Check::fail('no all mechanism', [], Severity::Medium);
+            }
+
+            return in_array($m[1], ['-', '~'], true)
+                ? Check::pass($m[1] . 'all')
+                : Check::fail($m[1] . 'all', [], Severity::Medium);
+        },
 ```
 
 ### D3 — DMARC avec politique active
@@ -463,7 +477,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### D4 — Enregistrements MX résolvables
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** {observed} enregistrement(s) MX : le domaine peut recevoir du courriel.
 - **Échec (FR) :** Aucun enregistrement MX : le domaine ne peut recevoir de courriel.
 
 ```php
@@ -497,6 +511,26 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
             return Check::graded($days, [[15, Severity::Critical], [(float) $rule->threshold, Severity::High]]);
         },
+```
+
+### W2 — Renouvellement de noms de domaine
+
+- **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** Il est important de renouveler vos noms de domaine avant la date d'expiration ou d'activer le renouvellement automatique. Si celui-ci est activé, pensez à vérifier les informations de carte de crédit, dont la date d'expiration de la carte. L'oubli de renouvellement peut avoir de lourdes conséquences sur votre site web et la gestion de vos courriels.
+- **Échec (FR) :** Le renouvellement du domaine mérite votre attention.
+
+```php
+        'check' => static fn () => Check::pass(),
+```
+
+### W3 — Propriété des noms de domaine
+
+- **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** La propriété d'un nom de domaine appartient à la personne ou entité dont le nom est inscrit au registraire. Il faut donc s'assurer que les informations soient à jour afin d'éviter les complications en cas de problème.
+- **Échec (FR) :** La propriété du domaine mérite votre attention.
+
+```php
+        'check' => static fn () => Check::pass(),
 ```
 
 ## PS. Performance (Lighthouse/PageSpeed)
@@ -564,7 +598,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### PS4 — LCP sous le seuil
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2500
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le LCP mobile est de {observed} ms (seuil {threshold} ms).
 - **Échec (FR) :** Le LCP mobile est de {observed} ms (seuil {threshold} ms).
 
 ```php
@@ -619,9 +653,12 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::fail($version, ['eol_date' => $date]); // outdated branch, no longer patched — not a confirmed vulnerability
             }
 
-            $available = $c->get('payload.core_update.available_version');
-            if ($available !== null && $available !== '') {
-                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $available]);
+            // minor_update_version, not available_version: the latter is
+            // update_core's first offer, which is also filled for a new major
+            // release — not a missing security patch on this branch.
+            $minor = $c->get('payload.core_update.minor_update_version');
+            if ($minor !== null && $minor !== '') {
+                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $minor]);
             }
 
             return Check::pass($version, ['eol_date' => $date]);
@@ -696,7 +733,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### F7 — Prérequis des extensions respectés
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Toutes les extensions sont compatibles avec les versions PHP et WordPress du site.
 - **Échec (FR) :** {observed} extension(s) exigent une version PHP/WP supérieure à l'environnement : {names}.
 
 ```php
@@ -751,10 +788,37 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
+### G3 — Cohérence des limites d'upload PHP
+
+- **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 50
+- **Réussite (FR) :** post_max_size et upload_max_filesize sont identiques et suffisants ({observed}).
+- **Échec (FR) :** post_max_size et upload_max_filesize devraient être identiques et permettre au moins {threshold} Mo ({observed}), sans quoi des problèmes de transmission de données peuvent survenir.
+
+```php
+        'check' => static function (Context $c, Rule $rule) {
+            $postRaw   = $c->string('payload.php.post_max_size');
+            $uploadRaw = $c->string('payload.php.upload_max_filesize');
+            $post      = $c->bytes('payload.php.post_max_size');
+            $upload    = $c->bytes('payload.php.upload_max_filesize');
+            if ($postRaw === null || $uploadRaw === null || $post === null || $upload === null) {
+                return Check::unknown();
+            }
+            if ($post == 0) {
+                $post = INF;
+            }
+            $observed  = "{$postRaw} / {$uploadRaw}";
+            $mismatch  = $post !== INF && $post != $upload;
+            $effective = min($post, $upload);
+            $tooSmall  = $effective / 1048576 < (float) $rule->threshold;
+
+            return ($mismatch || $tooSmall) ? Check::fail($observed) : Check::pass($observed);
+        },
+```
+
 ### G4 — max_input_vars suffisant
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 3000
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** max_input_vars vaut {observed} (au moins {threshold}).
 - **Échec (FR) :** max_input_vars vaut {observed} (recommandé au moins {threshold}).
 
 ```php
@@ -843,7 +907,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### H4 — Fragmentation des tables maîtrisée
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 10485760
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Les tables cumulent {observed} octets d'overhead (seuil {threshold}).
 - **Échec (FR) :** Les tables cumulent {observed} octets d'overhead (seuil {threshold}).
 
 ```php
@@ -861,25 +925,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### H5 — Transients expirés non accumulés
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 250
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** {observed} transients expirés en base (seuil {threshold}).
 - **Échec (FR) :** {observed} transients expirés traînent en base (seuil {threshold}).
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
-```
-
-### H9 — Préfixe de tables non standard
-
-- **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
-- **Échec (FR) :** Le préfixe de tables est le défaut « wp_ » ; le changer complique les attaques automatisées.
-
-```php
-        'check' => static function (Context $c) {
-            $prefix = $c->string('payload.db_table_prefix');
-
-            return $prefix === null ? Check::unknown() : ($prefix === 'wp_' ? Check::fail($prefix) : Check::pass($prefix));
-        },
 ```
 
 ## I. Autoload / cache objet
@@ -944,7 +994,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### J3 — Nombre d'événements cron raisonnable
 
 - **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 100
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** {observed} événements planifiés (seuil {threshold}).
 - **Échec (FR) :** {observed} événements planifiés (seuil {threshold}).
 
 ```php
@@ -982,7 +1032,7 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### K2 — WP_DEBUG_DISPLAY désactivé
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** WP_DEBUG_DISPLAY est désactivé : les erreurs PHP ne s'affichent pas aux visiteurs.
 - **Échec (FR) :** WP_DEBUG_DISPLAY est activé : les erreurs PHP s'affichent aux visiteurs.
 
 ```php
@@ -1046,8 +1096,8 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### L1 — Espace disque libre
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** {observed}% d'espace disque libre.
-- **Échec (FR) :** Il reste {observed}% d'espace disque libre — sous 20% ou moins de 2 Go.
+- **Réussite (FR) :** {observed}% d'espace disque libre ({free_gb} Go).
+- **Échec (FR) :** Il reste {observed}% d'espace disque libre ({free_gb} Go) — sous 20% ou moins de 2 Go.
 
 ```php
         'check' => static function (Context $c) {
@@ -1058,31 +1108,26 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             }
             $percent  = round($free / $total * 100, 1);
             $lowSpace = $percent < 20 || $free < 2147483648; // 20% or 2 GiB
+            // A plain number, not "X GB" — findings.json stays language-
+            // neutral (no unit baked in here); the unit word lives in each
+            // lang template alongside {free_gb}, same as every other
+            // placeholder.
+            $freeGb = round($free / 1073741824, 1);
 
             return $lowSpace
-                ? Check::fail($percent, ['free_bytes' => $free], Severity::Medium)
-                : Check::pass($percent);
+                ? Check::fail($percent, ['free_bytes' => $free, 'free_gb' => $freeGb], Severity::Medium)
+                : Check::pass($percent, ['free_gb' => $freeGb]);
         },
 ```
 
 ### L4 — Dossier uploads inscriptible
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
+- **Réussite (FR) :** Le dossier uploads est inscriptible.
 - **Échec (FR) :** Le dossier uploads n'est pas inscriptible : les téléversements et mises à jour échoueront.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
-```
-
-### L5 — Cœur non inscriptible en production
-
-- **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** _(pas de texte dédié — voir le code)_
-- **Échec (FR) :** Les fichiers du cœur sont inscriptibles par le serveur web : durcir les permissions.
-
-```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
 ```
 
 ## M. Utilisateurs & accès
@@ -1120,6 +1165,47 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             }
 
             return Check::pass('none');
+        },
+```
+
+## N. N
+
+### N2 — Corbeille maîtrisée
+
+- **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 20
+- **Réussite (FR) :** La corbeille des articles ne contient que {observed} élément(s).
+- **Échec (FR) :** {observed} article(s) traînent dans la corbeille (seuil {threshold}). Les vider libère de l'espace en base de données.
+
+```php
+        'check' => static function (Context $c, Rule $rule) {
+            $posts = $c->get('payload.posts_count');
+            if (!is_array($posts)) {
+                return Check::unknown();
+            }
+
+            return Check::atMost((float) ($posts['trash'] ?? 0), (float) $rule->threshold);
+        },
+```
+
+### N4 — Peu de brouillons en attente
+
+- **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 30
+- **Réussite (FR) :** Seulement {observed}% des articles sont en brouillon.
+- **Échec (FR) :** {observed}% des articles sont encore à l'état de brouillon (seuil {threshold}%). Publier ou supprimer les brouillons abandonnés garde le contenu à jour.
+
+```php
+        'check' => static function (Context $c, Rule $rule) {
+            $posts = $c->get('payload.posts_count');
+            if (!is_array($posts)) {
+                return Check::unknown();
+            }
+            $published = (int) ($posts['publish'] ?? 0);
+            $draft     = (int) ($posts['draft'] ?? 0);
+            if ($published + $draft === 0) {
+                return Check::unknown();
+            }
+
+            return Check::atMost(round($draft / ($published + $draft) * 100, 1), (float) $rule->threshold);
         },
 ```
 

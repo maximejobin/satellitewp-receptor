@@ -75,6 +75,22 @@ final class WordPressVersions
         };
     }
 
+    /**
+     * The single version wordpress.org's stable-check currently marks
+     * "latest" — Xtractor's own independently-refreshed reference cache,
+     * not the extraction's own payload.core_update.available_version
+     * (what the site's own WordPress install self-reported, which can be
+     * stale if that install hasn't checked for updates recently, or has
+     * update checks blocked). Null when the cache is empty/not yet
+     * refreshed, or if nothing in it happens to be tagged "latest".
+     */
+    public function latestVersion(): ?string
+    {
+        $latest = array_search('latest', $this->all(), true);
+
+        return $latest !== false ? (string) $latest : null;
+    }
+
     public function majorVersionsBehind(string $installedVersion): ?int
     {
         $all = $this->all();
@@ -82,8 +98,8 @@ final class WordPressVersions
             return null;
         }
 
-        $latestVersion = array_search('latest', $all, true);
-        if ($latestVersion === false) {
+        $latestVersion = $this->latestVersion();
+        if ($latestVersion === null) {
             return null;
         }
 
@@ -138,9 +154,19 @@ final class WordPressVersions
             throw new RuntimeException('wordpress.org stable-check: invalid JSON');
         }
 
-        file_put_contents($this->cacheFile, $body, LOCK_EX);
+        self::writeAtomically($this->cacheFile, $body);
         $this->loaded = $decoded;
 
         return count($decoded);
+    }
+
+    /** Temp file + rename: a concurrent reader sees the old cache or the new one, never a truncated file. */
+    private static function writeAtomically(string $file, string $body): void
+    {
+        $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
+        if (file_put_contents($tmp, $body) === false || !rename($tmp, $file)) {
+            @unlink($tmp);
+            throw new RuntimeException("Cannot write reference cache: {$file}");
+        }
     }
 }

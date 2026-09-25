@@ -58,4 +58,26 @@ final class KeyStoreTest extends TestCase
         $this->assertNull($keys->getHttpAuth(self::SITE_ID));
     }
 
+    public function testRotatingAKeyKeepsOriginAndHttpAuth(): void
+    {
+        $keys = $this->store();
+        $keys->addKey(self::SITE_ID, 'old', 'example.com');
+        $keys->setHttpAuth(self::SITE_ID, 'u', 'p');
+
+        $keys->addKey(self::SITE_ID, 'new');
+
+        $this->assertSame('new', $keys->getKey(self::SITE_ID));
+        $this->assertSame('example.com', $keys->getOrigin(self::SITE_ID));
+        $this->assertSame(['username' => 'u', 'password' => 'p'], $keys->getHttpAuth(self::SITE_ID));
+    }
+
+    public function testRotatingWithAnExplicitOriginReplacesIt(): void
+    {
+        $keys = $this->store();
+        $keys->addKey(self::SITE_ID, 'old', 'example.com');
+
+        $keys->addKey(self::SITE_ID, 'new', 'moved.example');
+
+        $this->assertSame('moved.example', $keys->getOrigin(self::SITE_ID));
+    }
 }

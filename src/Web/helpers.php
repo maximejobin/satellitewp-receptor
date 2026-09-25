@@ -201,6 +201,33 @@ function external_link_icon(?string $pattern, mixed $id, string $title): string
         . 'title="' . e($title) . '" aria-label="' . e($title) . '">' . icon_external_link() . '</a>';
 }
 
+/**
+ * An observation's description supports a tiny, fixed markup —
+ * **bold**, _italic_, [text](url) — the same 3 patterns the Google Docs
+ * report script (rapport-poc's analyserTexteFormate()) resolves into real
+ * bold/italic/hyperlink runs, so what an analyst sees here is what the
+ * pasted report will actually show. HTML-escapes FIRST, then turns the
+ * (now HTML-safe) markers into real tags — never the other way around, or
+ * the raw < / > / & the escaping is meant to neutralise could slip through
+ * inside a link's text or URL.
+ */
+function format_observation_text(string $text): string
+{
+    // One left-to-right pass (same alternation as the Apps Script's
+    // analyserTexteFormate()), so a marker inside a link's URL is never
+    // re-read as italic. _italic_ only at word boundaries: wp_super_cache
+    // and other snake_case names stay untouched.
+    return preg_replace_callback(
+        '/\*\*(.+?)\*\*|(?<![\p{L}\p{N}])_(.+?)_(?![\p{L}\p{N}])|\[(.+?)\]\((https?:\/\/[^\s)]+)\)/su',
+        static fn (array $m): string => match (true) {
+            $m[1] !== ''         => '<strong>' . $m[1] . '</strong>',
+            $m[2] !== ''         => '<em>' . $m[2] . '</em>',
+            default              => '<a href="' . $m[4] . '" target="_blank" rel="noopener">' . $m[3] . '</a>',
+        },
+        e($text)
+    ) ?? e($text);
+}
+
 function icon_edit(): string
 {
     return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" '
@@ -250,6 +277,49 @@ function license_select(
         // exactly what layout.php's global listener needs to intercept this
         // and save via fetch() instead of a full page reload.
         . '<select name="license" class="' . $cls . '" onchange="this.form.requestSubmit()">' . $options . '</select>'
+        . '</form>';
+}
+
+/**
+ * Per-extraction licence-KEY status for one plugin/theme row on an
+ * extraction report — a different question from license_select() above (is
+ * this component free/premium at all, a cross-site classification): is the
+ * licence on THIS install, as of THIS extraction, currently active,
+ * missing, or does it need checking. Same auto-save-on-change mechanism
+ * (.lic-form, reused by layout.php's shared interceptor), different
+ * storage (DataStore::setLicenseStatus(), licenses.json inside the
+ * extraction's own directory — set again on each new extraction, same
+ * "snapshot in time" rule findings.json/observations.json already
+ * follow) and a different capability (gated the same as /catalog's own
+ * edit — catalog_edit — rather than a new one).
+ */
+function license_status_select(
+    string $siteId,
+    string $extractionId,
+    string $type,
+    string $slug,
+    string $current,
+    string $csrf,
+    string $return
+): string {
+    $labels = [
+        'n_a'         => 'N/A',
+        'active'      => 'Active license',
+        'missing'     => 'Missing license',
+        'to_validate' => 'To validate',
+    ];
+    $options = '';
+    foreach ($labels as $status => $label) {
+        $selected = $status === $current ? ' selected' : '';
+        $options .= '<option value="' . $status . '"' . $selected . '>' . e($label) . '</option>';
+    }
+
+    return '<form method="post" action="/site/' . e($siteId) . '/extraction/' . e($extractionId) . '/licenses" class="lic-form">'
+        . '<input type="hidden" name="_csrf" value="' . e($csrf) . '">'
+        . '<input type="hidden" name="type" value="' . e($type) . '">'
+        . '<input type="hidden" name="slug" value="' . e($slug) . '">'
+        . '<input type="hidden" name="return" value="' . e($return) . '">'
+        . '<select name="status" class="lic-' . e($current) . '" onchange="this.form.requestSubmit()">' . $options . '</select>'
         . '</form>';
 }
 
@@ -406,6 +476,19 @@ function src_note(string $path): string
     }
 
     return ' <span class="xt-src" tabindex="0" title="' . e($path . ' — ' . $explain) . '">ⓘ</span>';
+}
+
+/**
+ * A small, quiet glyph — same pattern as src_note()'s ⓘ above (native
+ * title tooltip, no JS, keyboard-reachable via tabindex, deliberately
+ * muted rather than another colored badge) — for a plugin/theme row's
+ * Status cell: at a glance, is there an update, a known vulnerability, a
+ * licence to check, without repeating what the Update/Vulnerabilities/
+ * Licence columns already show in full detail.
+ */
+function status_icon(string $glyph, string $colorToken, string $tooltip): string
+{
+    return ' <span class="xt-status-icon" style="color:var(--' . e($colorToken) . ')" tabindex="0" title="' . e($tooltip) . '">' . $glyph . '</span>';
 }
 
 /**
@@ -634,7 +717,9 @@ function cvss_badge(mixed $score, ?string $rating): string
         $score >= 9.0 => 'badge-critical',
         $score >= 8.1 => 'badge-error',
         $score >= 6.1 => 'badge-warn',
-        default       => 'badge-ok',
+        // A vulnerability is never --ok green, no matter how low its
+        // score — green means "compliant", not "a low-severity flaw".
+        default => 'badge-low',
     };
     $title = 'CVSS ' . $score . ($rating ? ' — ' . $rating : '');
 

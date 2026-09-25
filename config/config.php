@@ -114,6 +114,23 @@ return [
         'charset'  => 'utf8mb4',
     ],
 
+    // /site/{id}/extraction/{id}/report.json — a script-friendly export (used
+    // by the Google Docs report template) of the same report an analyst sees
+    // on the extraction page: plain values, tables (e.g. plugins), and the
+    // translated findings with their pastille colour. Gated by a single
+    // static key, same isConfigured() pattern as blogvault/wordfence above —
+    // there is no per-user session to check for a script, so the key itself
+    // is the grant. Sent as `Authorization: Bearer <api_key>`. Null disables
+    // the route entirely (404, not "empty" — no accidental unauthenticated
+    // export of an unconfigured install).
+    'reports' => [
+        'api_key' => null, // set in config.local.php
+        // Which report contract /report.json builds against — see the
+        // shape documented at the top of that file. One entry per report
+        // type; the route always requests 'bilan_de_sante' today.
+        'bilan_de_sante' => __DIR__ . '/reports/bilan-de-sante.php',
+    ],
+
     'external_links' => [
         'teamwork_project_url'         => 'https://central.s2bsolution.com/app/projects/{id}/overview/summary', // {id} = swp_clients.teamwork_id
         'hubspot_company_url'          => 'https://app-na3.hubspot.com/contacts/2543139/record/0-2/{id}', // {id} = swp_clients.hubspot_id

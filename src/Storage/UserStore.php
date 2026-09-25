@@ -388,11 +388,14 @@ final class UserStore
             throw new RuntimeException("Cannot create directory for the users file: {$dir}");
         }
 
-        file_put_contents(
-            $this->file,
-            (string) json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n",
-            LOCK_EX
-        );
+        // Temp + rename: currentUser() re-reads this file on every request, and
+        // a half-written file would read as an empty allowlist (everyone out).
+        $json = (string) json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        $tmp  = $this->file . '.tmp.' . bin2hex(random_bytes(4));
+        if (file_put_contents($tmp, $json) === false || !chmod($tmp, 0600) || !rename($tmp, $this->file)) {
+            @unlink($tmp);
+            throw new RuntimeException("Unable to write {$this->file}");
+        }
         $this->users = $users;
     }
 

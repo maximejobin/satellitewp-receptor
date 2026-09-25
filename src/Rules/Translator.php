@@ -40,6 +40,17 @@ final class Translator
         return (string) ($this->catalog['ui'][$key] ?? ($default !== '' ? $default : $key));
     }
 
+    /**
+     * A label for the Google Docs report export (Web\ReportBuilder) —
+     * config/lang/*.php's own 'report' block, kept separate from 'ui' since
+     * that one stays English-only chrome (see CLAUDE.md) while the report
+     * genuinely follows ?lang=.
+     */
+    public function report(string $key, string $default = ''): string
+    {
+        return (string) ($this->catalog['report'][$key] ?? ($default !== '' ? $default : $key));
+    }
+
     public function status(string $status): string
     {
         return (string) ($this->catalog['status'][$status] ?? $status);

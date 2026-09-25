@@ -240,6 +240,27 @@ final class HttpProbeTest extends TestCase
      * is not the same fact as nothing being exposed (2026-08-30, user: "ce
      * n'est pas ce que c'est ok... c'est que le site n'est pas public").
      */
+    /** @return array<string, array{0: string, 1: string, 2: bool}> */
+    public static function credentialCases(): array
+    {
+        return [
+            'https, site host'            => ['https://example.com/', 'example.com', true],
+            'https, host case differs'    => ['https://Example.COM/path?x=1', 'example.com', true],
+            'plain http, site host'       => ['http://example.com/', 'example.com', false],
+            'https, other host'           => ['https://evil.test/', 'example.com', false],
+            'https, www variant'          => ['https://www.example.com/', 'example.com', false],
+            'https, suffix look-alike'    => ['https://example.com.evil.test/', 'example.com', false],
+            'malformed url'               => ['not a url', 'example.com', false],
+            'empty site host'             => ['https://example.com/', '', false],
+        ];
+    }
+
+    #[DataProvider('credentialCases')]
+    public function testCredentialsOnlyGoOverHttpsToTheSiteHost(string $url, string $siteHost, bool $expected): void
+    {
+        $this->assertSame($expected, HttpProbe::shouldSendCredentials($url, $siteHost));
+    }
+
     public function testAuthGatedExposureResultLeavesEveryCheckUnknown(): void
     {
         $result = HttpProbe::authGatedExposureResult();
@@ -249,5 +270,44 @@ final class HttpProbeTest extends TestCase
             $this->assertNull($result[$key], "{$key} must be null (not checked), not false (checked, clean)");
         }
         $this->assertSame([], $result['evidence'], 'nothing was actually requested, so there is no evidence to show');
+    }
+
+    public function testPinToVettedAddressSetsCurlResolveForEachRequest(): void
+    {
+        $seen = [];
+        $mock = static function ($request, array $options) use (&$seen) {
+            $seen[] = $options['curl'][\CURLOPT_RESOLVE] ?? null;
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(200));
+        };
+        $stack = \GuzzleHttp\HandlerStack::create($mock);
+        $stack->push(HttpProbe::pinToVettedAddress(static fn (string $h): ?string => $h === 'example.com' ? '93.184.216.34' : null));
+        $client = new \GuzzleHttp\Client(['handler' => $stack, 'http_errors' => false]);
+
+        $client->get('https://example.com/');
+        $client->get('http://example.com:8080/x');
+
+        $this->assertSame([['example.com:443:93.184.216.34'], ['example.com:8080:93.184.216.34']], $seen);
+    }
+
+    public function testPinToVettedAddressRefusesAHostWithNoPublicAddress(): void
+    {
+        $called = false;
+        $mock = static function () use (&$called) {
+            $called = true;
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(200));
+        };
+        $stack = \GuzzleHttp\HandlerStack::create($mock);
+        $stack->push(HttpProbe::pinToVettedAddress(static fn (string $h): ?string => null));
+        $client = new \GuzzleHttp\Client(['handler' => $stack]);
+
+        try {
+            $client->get('http://internal.example/');
+            $this->fail('expected a ConnectException');
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            $this->assertStringContainsString('SSRF guard', $e->getMessage());
+        }
+        $this->assertFalse($called, 'the request must never reach the handler');
     }
 }

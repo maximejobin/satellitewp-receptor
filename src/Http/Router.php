@@ -8,8 +8,10 @@ use GuzzleHttp\Client;
 use SatelliteWP\Xtractor\App;
 use SatelliteWP\Xtractor\Crm\ClientsRepository;
 use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
+use SatelliteWP\Xtractor\Web\ReportBuilder;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordPressVersions;
+use SatelliteWP\Xtractor\Rules\Translator;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\UserStore;
 use SatelliteWP\Xtractor\Support\HostGuard;
@@ -22,7 +24,7 @@ use SatelliteWP\Xtractor\Support\SiteDisplay;
  *   /                                        sites list
  *   /site/{site_id}                          site detail (history, events, trends)
  *   /site/{site_id}/extraction/{id}          extraction detail (findings + probes + payload)
- *   /site/{site_id}/extraction/{id}/raw/{f}  serve a JSON file (allowlisted)
+ *   /site/{site_id}/extraction/{id}/raw/{f}  serve a JSON file (basename-confined)
  *   /clients                                 external CRM: clients list
  *   /clients/{id}                            client detail (subscriptions + linked websites)
  *   /websites                                external CRM: websites list (filter by tag/client)
@@ -48,11 +50,23 @@ final class Router
             return;
         }
 
+        $match = self::matchRoute($path);
+
+        // A script (e.g. the Google Docs report template's Apps Script) has
+        // no browser session to hold a Google sign-in cookie, so this one
+        // route is gated by its own bearer token instead of authenticate()
+        // — same reasoning as /auth/ above, a different door for a caller
+        // that structurally cannot use the normal one.
+        if ($match['route'] === 'extraction_report_json') {
+            $this->extractionReportJson($match['params']['site_id'], $match['params']['extraction_id']);
+
+            return;
+        }
+
         if (!$this->authenticate()) {
             return;
         }
 
-        $match  = self::matchRoute($path);
         $params = $match['params'];
 
         match ($match['route']) {
@@ -184,6 +198,10 @@ final class Router
                 && $isSite(1) && $isExtraction(3)
                 => ['route' => 'extraction', 'params' => ['site_id' => $segments[1], 'extraction_id' => $segments[3]]],
 
+            count($segments) === 5 && $segments[0] === 'site' && $segments[2] === 'extraction'
+                && $segments[4] === 'report.json' && $isSite(1) && $isExtraction(3)
+                => ['route' => 'extraction_report_json', 'params' => ['site_id' => $segments[1], 'extraction_id' => $segments[3]]],
+
             count($segments) === 6 && $segments[0] === 'site' && $segments[2] === 'extraction'
                 && $segments[4] === 'raw' && $isSite(1) && $isExtraction(3)
                 => ['route' => 'raw', 'params' => [
@@ -218,6 +236,10 @@ final class Router
 
     private function statusPage(): void
     {
+        if (!$this->requireCapability('data_view')) {
+            return;
+        }
+
         $extractionCounts = $this->app->index()->statusCounts();
 
         $dataFreshness = (int) $this->app->config->get('data_sync_freshness.endoflife_seconds', 2 * 3600);
@@ -291,6 +313,10 @@ final class Router
 
     private function sitesPage(): void
     {
+        if (!$this->requireCapability('extraction_view_technical')) {
+            return;
+        }
+
         $this->render('sites', [
             'title'      => 'Extractions',
             'nav'        => 'sites',
@@ -862,6 +888,10 @@ final class Router
 
     private function sitePage(string $siteId): void
     {
+        if (!$this->requireCapability('extraction_view_technical')) {
+            return;
+        }
+
         $store  = $this->app->dataStore();
         $site   = $store->readSiteInfo($siteId);
         $keyRow = $this->app->keyStore()->all()[$siteId] ?? null;
@@ -939,12 +969,254 @@ final class Router
             'probes'       => $store->readAllProbeResults($siteId, $extractionId),
             'row'          => $row,
             'eol'          => $this->app->endOfLife(),
-            'catalog'      => $this->app->softwareCatalog(),
             'csrf'         => $this->csrfToken(),
             'blogVault'    => $blogVault,
             'httpAuth'     => $httpAuth,
             'reportAssets' => true,
+            'observations'        => (array) ($store->readObservations($siteId, $extractionId)['items'] ?? []),
+            'observationSections' => $this->observationSectionNames(),
+            'canEditObservations' => $this->currentUserCan('extraction_observations_edit'),
+            'licenseStatuses'        => $store->readLicenses($siteId, $extractionId) ?? [],
         ]);
+    }
+
+    /**
+     * Two independent ways in, checked before dispatch() would otherwise
+     * require a Google sign-in session a script cannot hold:
+     *   - the shared `reports.api_key` (config) as a Bearer header — a
+     *     standing credential, for whoever sets it up once and reuses it
+     *   - a one-hour, single-extraction token (?token=, minted by the "Report
+     *     data key" button — see issueReportToken()) — the one an analyst
+     *     actually pastes, scoped so a leaked link only ever opens the one
+     *     report it was made for, not every report forever
+     */
+    private function reportAccessGranted(string $siteId, string $extractionId): bool
+    {
+        $apiKey = (string) $this->app->config->get('reports.api_key', '');
+        if ($apiKey !== '') {
+            $header = $_SERVER['HTTP_AUTHORIZATION']
+                ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] // some Apache/CGI setups only pass it through under this name
+                ?? '';
+            $given = str_starts_with($header, 'Bearer ') ? substr($header, 7) : '';
+            if ($given !== '' && hash_equals($apiKey, $given)) {
+                return true;
+            }
+        }
+
+        $token = (string) ($_GET['token'] ?? '');
+
+        return $token !== '' && $this->app->reportTokenStore()->verify($token, $siteId, $extractionId);
+    }
+
+    /**
+     * Script-friendly export of one extraction's report — feeds the Google
+     * Docs report template's Apps Script, which cannot hold a browser
+     * session.
+     *
+     * This method only fetches data and hands it off: what a report
+     * actually contains — which value, table, or category maps to which
+     * {{variable}} — lives entirely in a contract file under
+     * config/reports/ (config `reports.bilan_de_sante`), resolved by
+     * Web\ReportBuilder. Having a piece of data and deciding it belongs in
+     * THIS report are different facts on purpose — neither this method nor
+     * the rules engine needs to change for a report's layout to change, and
+     * a second report type is a second contract file, not a second copy of
+     * this method.
+     */
+    private function extractionReportJson(string $siteId, string $extractionId): void
+    {
+        if (!$this->reportAccessGranted($siteId, $extractionId)) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'Invalid or missing credentials']);
+
+            return;
+        }
+
+        $store   = $this->app->dataStore();
+        $payload = $store->readExtractionPayload($siteId, $extractionId);
+        if ($payload === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $t     = $this->app->translator($this->locale());
+        $probe = array_map(
+            static fn (array $p): array => (array) ($p['data'] ?? []),
+            $store->readAllProbeResults($siteId, $extractionId)
+        );
+
+        // The analyst's name at report.json fetch time: read from the token
+        // itself (captured when they clicked "Report data key" — see
+        // ReportTokenStore::issue()), never from a session, since this route
+        // runs with none (that's the whole point of the token). Empty on the
+        // shared reports.api_key path, which carries no analyst identity.
+        $token    = (string) ($_GET['token'] ?? '');
+        $reportBy = $token !== '' ? $this->app->reportTokenStore()->issuedBy($token) : '';
+
+        $context = [
+            'payload'       => $payload,
+            'site'          => $store->readSiteInfo($siteId) ?? [],
+            'meta'          => $store->readMeta($siteId, $extractionId) ?? [],
+            'probe'         => $probe,
+            'host'          => (string) (parse_url((string) ($payload['home_url'] ?? $payload['site_url'] ?? ''), PHP_URL_HOST) ?? ''),
+            'extraction_id' => $extractionId,
+            'report_by'     => $reportBy,
+            // Today, not the extraction's own date — {{date}} is "when this
+            // report was filled", separate from {{extraction_date}}.
+            'today'         => gmdate('Y-m-d'),
+            // Xtractor's own independently-refreshed reference data — never
+            // something the extraction itself claims (payload.* is the
+            // site's own self-report, which can be stale/blocked).
+            'reference'     => $this->reportReferenceContext($payload, $probe),
+            // Per-extraction licence-key status (DataStore::readLicenses(),
+            // this extraction's own licenses.json) — "plugin:<slug>"/
+            // "theme:<slug>" => active/missing/to_validate/n_a, read by
+            // ReportBuilder's plugins/themes table builders for the Status
+            // icon. Never SoftwareCatalog: that's the cross-site free/premium
+            // classification, a different question entirely.
+            'licenses'      => $store->readLicenses($siteId, $extractionId) ?? [],
+        ];
+
+        $findings = $this->translatedFindings($store->readFindings($siteId, $extractionId) ?? [], $t);
+
+        $observations = (array) ($store->readObservations($siteId, $extractionId)['items'] ?? []);
+
+        $contract = $this->loadReportContract();
+        $iconBase = (self::isHttps() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '') . '/assets/report-icons';
+        $report   = (new ReportBuilder($t, $iconBase))->build($contract, $context, $findings, $observations);
+
+        header('Content-Type: application/json; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        echo json_encode([
+            'site'          => $report['fields']['site']['value'] ?? $siteId,
+            'extraction_id' => $extractionId,
+            'generated_at'  => gmdate('Y-m-d\TH:i:s\Z'),
+            // One map, keyed by the exact {{variable}} name the report
+            // template uses. Every entry carries its own 'type'
+            // ('value'/'table'/'observations') — that's what lets the
+            // Apps Script stay one generic dispatcher instead of a
+            // hardcoded loop per kind, and lets a value or a table cell
+            // carry a 'color' the same way an observation always could.
+            'fields'   => $report['fields'],
+            // Every translated finding, raw and ungrouped — the source of
+            // truth if a future report (or a pastille tally) needs
+            // something this contract didn't group into an
+            // 'observations' field.
+            'findings' => $findings,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Facts Xtractor itself works out — never the extraction's own claim
+     * about itself — for the report contract's 'reference.*' fields:
+     * wordpress.org's own latest version, and whether the reported PHP/
+     * database version is past end of life (EndOfLife::eolStatus(), the
+     * same true/false/null rules F3/H1 already read) and which HTTP
+     * version the probe's own request actually observed (a single
+     * request only ever sees one — this is "what was used just now", not
+     * a full protocol-support survey).
+     *
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $probe
+     * @return array<string, mixed>
+     */
+    private function reportReferenceContext(array $payload, array $probe): array
+    {
+        $eol = $this->app->endOfLife();
+
+        $phpVersion = (string) ($payload['php']['version'] ?? '');
+        $phpEol     = $phpVersion !== '' ? $eol->eolStatus('php', $phpVersion) : null;
+
+        $dbType    = (string) ($payload['database_type'] ?? '');
+        $dbVersion = (string) ($payload['database_version'] ?? '');
+        $dbEol     = ($dbType !== '' && $dbVersion !== '') ? $eol->eolStatus($dbType, $dbVersion) : null;
+
+        $httpVersion = (string) ($probe['http']['http_version'] ?? '');
+
+        return [
+            'wordpress_latest_version' => $this->app->wordPressVersions()->latestVersion() ?? '',
+            'php_eol'                  => $phpEol[0] ?? null,
+            'database_eol'             => $dbEol[0] ?? null,
+            // The branch's own release/EOL date (same figure /data/databases
+            // already reads from this cache), folded into {{database_status}}'s
+            // sentence — php_status wasn't asked to grow one too.
+            'database_eol_date'        => $dbEol[1] ?? '',
+            'http1'                    => $httpVersion !== '' ? str_starts_with($httpVersion, '1') : null,
+            'http2'                    => $httpVersion !== '' ? $httpVersion === '2' : null,
+            'http3'                    => $httpVersion !== '' ? $httpVersion === '3' : null,
+        ];
+    }
+
+    /** @return array<string, mixed> the active report contract (config/reports/*.php) */
+    private function loadReportContract(): array
+    {
+        $contractFile = (string) $this->app->config->get(
+            'reports.bilan_de_sante',
+            dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php'
+        );
+
+        return (array) require $contractFile;
+    }
+
+    /**
+     * Every {{variable}} in the active report contract whose type is
+     * 'observations' — the choices for the "Section" dropdown when
+     * authoring a manual observation. Reads the same contract file
+     * Web\ReportBuilder does, so a new report type or a renamed field
+     * changes what's selectable here for free, never a second list to keep
+     * in sync by hand.
+     *
+     * @return list<string>
+     */
+    private function observationSectionNames(): array
+    {
+        $names = [];
+        foreach ((array) ($this->loadReportContract()['fields'] ?? []) as $name => $spec) {
+            if (is_array($spec) && ($spec['type'] ?? null) === 'observations') {
+                $names[] = (string) $name;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Every finding translated once, with both the stable category code
+     * (SSL, DOMAIN, … — for a report contract or a script to group by,
+     * never changes with ?lang=) and its translated label (display only).
+     *
+     * @param array<string, mixed> $findingsData one extraction's findings.json
+     * @return list<array<string, mixed>>
+     */
+    private function translatedFindings(array $findingsData, Translator $t): array
+    {
+        $findings = [];
+        foreach ((array) ($findingsData['findings'] ?? []) as $f) {
+            if (!is_array($f)) {
+                continue;
+            }
+            $message = $t->message($f);
+            if ($message === null) {
+                continue; // no phrase for this status (e.g. no "pass" template) — same as the web UI's own fallback
+            }
+            $findings[] = [
+                'id'            => (string) ($f['id'] ?? ''),
+                'category_code' => (string) ($f['category'] ?? ''),
+                'category'      => $t->category((string) ($f['category'] ?? '')),
+                'pastille'      => (string) ($f['pastille'] ?? 'grey'),
+                // Translated only, same as title/message/category — the raw
+                // single-letter code (C/E/M/I) never reaches here because
+                // nothing downstream groups or filters by it (that job is
+                // already 'pastille's, since two severities share a colour).
+                'severity'      => $t->severity((string) ($f['severity'] ?? '')),
+                'title'         => $t->title((string) ($f['id'] ?? '')),
+                'message'       => $message,
+            ];
+        }
+
+        return $findings;
     }
 
     private function rawFile(string $siteId, string $extractionId, string $name): void
@@ -975,9 +1247,9 @@ final class Router
 
     /**
      * Map a requested raw-file name to its path relative to the extraction dir,
-     * or null when the name is not allowlisted. Pure and path-traversal-safe:
-     * the name is basename-stripped and matched against a fixed allowlist, so a
-     * request like "../../keys" or "payload/../meta" can never escape.
+     * or null when it is not a plain file stem. Pure and path-traversal-safe:
+     * the name is basename-stripped and pattern-checked, so a request like
+     * "../../keys" or "payload/../meta" can never escape.
      */
     public static function resolveRawFile(string $name): ?string
     {
@@ -997,7 +1269,7 @@ final class Router
             return null;
         }
 
-        return in_array($name, ['payload', 'meta', 'findings'], true)
+        return in_array($name, ['payload', 'meta', 'findings', 'observations', 'licenses'], true)
             ? "{$name}.json"
             : "probes/{$name}.json";
     }
@@ -1030,6 +1302,10 @@ final class Router
 
     private function usersPage(): void
     {
+        if (!$this->requireCapability('user_view')) {
+            return;
+        }
+
         $users = $this->app->userStore();
         $me    = $this->currentUser();
 
@@ -1039,10 +1315,22 @@ final class Router
             'users'   => $users->all(),
             'roles'   => $this->app->roleCapabilities()->roles(),
             'me'      => $me,
-            'isAdmin' => $me !== null && $users->isAdmin($me),
+            // Same rule as the POST /users handler: a real signed-in identity
+            // whose role holds that exact capability — so a control is shown
+            // exactly when submitting it would be accepted.
+            'can'     => $this->userManagementCapabilities($me),
             'csrf'    => $this->csrfToken(),
             'notice'  => (string) ($_GET['notice'] ?? ''),
         ]);
+    }
+
+    /** @return array{add: bool, edit: bool, suspend: bool, remove: bool} */
+    private function userManagementCapabilities(?string $me): array
+    {
+        $role = $me !== null ? $this->app->userStore()->roleOf($me) : null;
+        $can  = fn (string $capability): bool => $role !== null && $this->app->roleCapabilities()->can($role, $capability);
+
+        return ['add' => $can('user_add'), 'edit' => $can('user_edit'), 'suspend' => $can('user_suspend'), 'remove' => $can('user_remove')];
     }
 
     private function profilePage(): void
@@ -1106,6 +1394,24 @@ final class Router
     }
 
     /**
+     * "First Last" for the signed-in analyst, for {{report_by}} — falls back
+     * to the email when no name is on file (Basic auth/dev, or a blank
+     * profile) rather than leaving the report field empty.
+     */
+    private function currentUserDisplayName(): string
+    {
+        $email = $this->currentUser();
+        if ($email === null) {
+            return '';
+        }
+
+        $profile = $this->app->userStore()->get($email);
+        $name    = trim(((string) ($profile['first_name'] ?? '')) . ' ' . ((string) ($profile['last_name'] ?? '')));
+
+        return $name !== '' ? $name : $email;
+    }
+
+    /**
      * Whether the *browser's* connection is HTTPS. Behind a TLS-terminating
      * proxy PHP sees plain HTTP, so X-Forwarded-Proto has to be honoured — get
      * this wrong and the OAuth redirect_uri comes out as http://, which Google
@@ -1158,7 +1464,8 @@ final class Router
         match (trim($path, '/')) {
             'auth/login'    => $this->authLogin(),
             'auth/callback' => $this->authCallback(),
-            'auth/logout'   => $this->authLogout(),
+            // Sign-out is a POST (handlePost(), CSRF-checked) — a GET here
+            // would let any third-party page log an analyst out.
             default         => $this->notFound(),
         };
     }
@@ -1287,24 +1594,42 @@ final class Router
             return $unchecked;
         }
         // Same SSRF guard the probes apply: the URL comes from the payload, so
-        // a compromised site could point it at an internal address.
-        if (!HostGuard::isPubliclyRoutable($host)) {
-            return $unchecked + ['error' => 'Host does not resolve to a public address'];
-        }
-
-        $options = [
-            'connect_timeout' => 5,
-            'timeout'         => 10,
-            'http_errors'     => false,
-            'allow_redirects' => ['max' => 5],
-            'headers'         => ['User-Agent' => (string) $this->app->config->get('probes.user_agent', 'SatelliteWP-Xtractor/1.0')],
-        ];
-        if ($credentials !== null) {
-            $options['auth'] = [$credentials['username'], $credentials['password']];
-        }
-
+        // a compromised site could point it at an internal address. Every hop
+        // is re-vetted and the connection pinned to the vetted IP
+        // (CURLOPT_RESOLVE), so DNS can't answer differently to curl.
+        $siteHost = strtolower($host);
+        $status   = null;
         try {
-            $status = (new Client($options))->get($url)->getStatusCode();
+            for ($hop = 0; $hop <= 5; $hop++) {
+                $hopHost = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+                $scheme  = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+                $ip      = $hopHost !== '' ? HostGuard::publicIpFor($hopHost) : null;
+                if ($ip === null || !in_array($scheme, ['http', 'https'], true)) {
+                    return $unchecked + ['error' => 'Host does not resolve to a public address'];
+                }
+                $port = (int) (parse_url($url, PHP_URL_PORT) ?? ($scheme === 'https' ? 443 : 80));
+
+                $options = [
+                    'connect_timeout' => 5,
+                    'timeout'         => 10,
+                    'http_errors'     => false,
+                    'allow_redirects' => false,
+                    'headers'         => ['User-Agent' => (string) $this->app->config->get('probes.user_agent', 'SatelliteWP-Xtractor/1.0')],
+                    'curl'            => [\CURLOPT_RESOLVE => [HostGuard::curlResolveEntry($hopHost, $port, $ip)]],
+                ];
+                // Basic credentials only over https, and only to the site itself.
+                if ($credentials !== null && $scheme === 'https' && $hopHost === $siteHost) {
+                    $options['auth'] = [$credentials['username'], $credentials['password']];
+                }
+
+                $response = (new Client($options))->get($url);
+                $status   = $response->getStatusCode();
+                $location = $response->getHeaderLine('Location');
+                if (!in_array($status, [301, 302, 303, 307, 308], true) || $location === '' || $hop === 5) {
+                    break;
+                }
+                $url = (string) \GuzzleHttp\Psr7\UriResolver::resolve(new \GuzzleHttp\Psr7\Uri($url), new \GuzzleHttp\Psr7\Uri($location));
+            }
         } catch (\Throwable $e) {
             return $unchecked + ['error' => $e->getMessage()];
         }
@@ -1376,6 +1701,54 @@ final class Router
      */
     private function requireCapability(string $capability): bool
     {
+        if ($this->currentUserCan($capability)) {
+            return true;
+        }
+
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'You do not have permission to do this.';
+
+        return false;
+    }
+
+    /**
+     * A POST against an extraction must name one that exists (writing under a
+     * well-formed but unknown id would create a phantom directory under
+     * data/sites/) and, when $allowed is given, be in one of those statuses.
+     * Writes the 404/409 itself and returns false, same contract as
+     * requireCapability().
+     *
+     * @param list<string>|null $allowed
+     */
+    private function requireExtractionStatus(string $siteId, string $extractionId, ?array $allowed): bool
+    {
+        $row = $this->app->index()->getExtraction($siteId, $extractionId);
+        if ($row === null || $this->app->dataStore()->readExtractionPayload($siteId, $extractionId) === null) {
+            $this->notFound();
+
+            return false;
+        }
+        if ($allowed !== null && !in_array((string) ($row['status'] ?? ''), $allowed, true)) {
+            http_response_code(409);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'This action is not available for an extraction in status "' . (string) ($row['status'] ?? '?') . '".';
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * The read-only version of requireCapability() — same rule, no 403
+     * side effect — for gating whether a template even shows a control
+     * that would 403 on submit (e.g. the manual-observations edit form
+     * on an extraction page) rather than relying only on the POST route's
+     * own check.
+     */
+    private function currentUserCan(string $capability): bool
+    {
         if (!$this->app->googleAuth()->isConfigured()) {
             return true;
         }
@@ -1383,15 +1756,7 @@ final class Router
         $me   = $this->currentUser();
         $role = $me !== null ? $this->app->userStore()->roleOf($me) : null;
 
-        if ($role === null || !$this->app->roleCapabilities()->can($role, $capability)) {
-            http_response_code(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'You do not have permission to do this.';
-
-            return false;
-        }
-
-        return true;
+        return $role !== null && $this->app->roleCapabilities()->can($role, $capability);
     }
 
     /**
@@ -1485,6 +1850,12 @@ final class Router
 
         $segments = array_values(array_filter(explode('/', trim($path, '/')), static fn (string $s): bool => $s !== ''));
 
+        if ($segments === ['auth', 'logout'] && $this->app->googleAuth()->isConfigured()) {
+            $this->authLogout();
+
+            return;
+        }
+
         // Queue an extraction for analysis. The web request only flips a status;
         // the cron worker does the slow part, so nothing here can time out.
         if (count($segments) === 5
@@ -1494,6 +1865,23 @@ final class Router
         ) {
             if (!$this->requireCapability('extraction_run')) {
                 return;
+            }
+            // A done extraction is a frozen snapshot; re-queuing it would re-run
+            // every probe (quota) and overwrite it. Only pending and error runs.
+            if (!$this->requireExtractionStatus($segments[1], $segments[3], [Index::STATUS_PENDING, Index::STATUS_ERROR])) {
+                return;
+            }
+
+            // Only the first "Run analysis" (the pending-state form) carries
+            // this field — "Retry analysis" (the error-state form) doesn't,
+            // so a retry leaves whatever language was already chosen alone
+            // instead of silently resetting it back to the French default.
+            if (isset($_POST['language'])) {
+                $language = (string) $_POST['language'];
+                if (!in_array($language, ['fr', 'en'], true)) {
+                    $language = 'fr';
+                }
+                $this->app->dataStore()->updateMeta($segments[1], $segments[3], ['language' => $language]);
             }
 
             $this->app->index()->setExtractionStatus($segments[1], $segments[3], Index::STATUS_QUEUED);
@@ -1512,11 +1900,107 @@ final class Router
             if (!$this->requireCapability('extraction_run')) {
                 return;
             }
+            if (!$this->requireExtractionStatus($segments[1], $segments[3], [Index::STATUS_PENDING, Index::STATUS_QUEUED])) {
+                return;
+            }
 
             $this->app->index()->setExtractionStatus($segments[1], $segments[3], Index::STATUS_ABORTED);
             $this->redirect(self::safeReturn(
                 $_POST['return'] ?? "/site/{$segments[1]}/extraction/{$segments[3]}"
             ));
+
+            return;
+        }
+
+        // "Report data key" button on the extraction page — mints a
+        // one-hour, single-extraction token (see reportAccessGranted()) and
+        // hands back the exact URL to paste into the Google Docs report
+        // template, rather than the shared reports.api_key. JSON in, JSON
+        // out (no redirect): the button's own fetch() needs the URL back to
+        // copy it, so this is one of the few POST handlers that isn't
+        // POST/redirect/GET.
+        if (count($segments) === 5
+            && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])
+            && $segments[2] === 'extraction' && self::isExtractionId($segments[3])
+            && $segments[4] === 'report-token'
+        ) {
+            if (!$this->requireCapability('extraction_view_technical')) {
+                return;
+            }
+
+            $token = $this->app->reportTokenStore()->issue($segments[1], $segments[3], $this->currentUserDisplayName());
+            // Defaults to the language chosen on the extraction page before
+            // "Run analysis" (meta.json's 'language' — see Pipeline::run()),
+            // falling back to French for an extraction queued before that
+            // choice existed. &lang= stays a plain overridable query param
+            // (same one every other page already honours), not baked into
+            // the token itself, so pasting &lang=en still switches it by hand.
+            $meta = $this->app->dataStore()->readMeta($segments[1], $segments[3]) ?? [];
+            $lang = in_array($meta['language'] ?? null, ['fr', 'en'], true) ? $meta['language'] : 'fr';
+            $url  = (self::isHttps() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '')
+                . "/site/{$segments[1]}/extraction/{$segments[3]}/report.json?token=" . rawurlencode($token)
+                . '&lang=' . $lang;
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['url' => $url]);
+
+            return;
+        }
+
+        // Manual observations — the one piece of report content that
+        // isn't derived from a probe or the rules engine, an analyst's own
+        // words for a section the report contract already defines. Stored
+        // per extraction (DataStore::mutateObservations()), same
+        // "snapshot in time" rule as everything else there: a new
+        // extraction starts with none, on purpose.
+        if (count($segments) === 5
+            && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])
+            && $segments[2] === 'extraction' && self::isExtractionId($segments[3])
+            && $segments[4] === 'observations'
+        ) {
+            if (!$this->requireCapability('extraction_observations_edit')) {
+                return;
+            }
+            if (!$this->requireExtractionStatus($segments[1], $segments[3], null)) {
+                return;
+            }
+
+            [$siteId, $extractionId] = [$segments[1], $segments[3]];
+            $action = (string) ($_POST['action'] ?? '');
+
+            $validSections = $this->observationSectionNames();
+            $validColors   = ['green', 'orange', 'red', 'blue', 'grey'];
+            $section       = (string) ($_POST['section'] ?? '');
+            $color         = (string) ($_POST['color'] ?? '');
+            $id            = (string) ($_POST['id'] ?? '');
+            $valid         = in_array($section, $validSections, true) && in_array($color, $validColors, true);
+            $record        = static fn (string $recordId): array => [
+                'id'          => $recordId,
+                'section'     => $section,
+                'color'       => $color,
+                'title'       => trim((string) ($_POST['title'] ?? '')),
+                'description' => trim((string) ($_POST['description'] ?? '')),
+                'include'     => isset($_POST['include']),
+            ];
+
+            // Read-modify-write under the extraction's lock — two analysts
+            // saving at the same time must not drop each other's edit.
+            $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $items) use ($action, $valid, $id, $record): array {
+                if ($action === 'add' && $valid) {
+                    $items[] = $record(bin2hex(random_bytes(6)));
+                } elseif ($action === 'edit' && $valid) {
+                    foreach ($items as $k => $item) {
+                        if (is_array($item) && ($item['id'] ?? null) === $id) {
+                            $items[$k] = $record($id);
+                        }
+                    }
+                } elseif ($action === 'remove') {
+                    $items = array_filter($items, static fn (mixed $i): bool => !is_array($i) || ($i['id'] ?? null) !== $id);
+                }
+
+                return array_values($items);
+            });
+            $this->redirect("/site/{$siteId}/extraction/{$extractionId}#observations");
 
             return;
         }
@@ -1728,6 +2212,46 @@ final class Router
             return;
         }
 
+        // Per-extraction licence-key status for one plugin/theme
+        // (license_status_select() on an extraction report) — a different
+        // question from /catalog above (is this free/premium at all,
+        // cross-site): is THIS install's licence, as of THIS extraction,
+        // active, missing, or needs checking — stored in that extraction's
+        // own directory (licenses.json), same "snapshot in time" rule as
+        // findings.json/observations.json, re-set on each new
+        // extraction rather than carried forward. Same auto-save-via-
+        // fetch() contract as /catalog: a rejected save must not 303, or
+        // the dropdown's fetch() call reads it as saved.
+        if (count($segments) === 5
+            && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])
+            && $segments[2] === 'extraction' && self::isExtractionId($segments[3])
+            && $segments[4] === 'licenses'
+        ) {
+            if (!$this->requireCapability('catalog_edit')) {
+                return;
+            }
+            if (!$this->requireExtractionStatus($segments[1], $segments[3], null)) {
+                return;
+            }
+
+            $type   = (string) ($_POST['type'] ?? '');
+            $slug   = (string) ($_POST['slug'] ?? '');
+            $status = (string) ($_POST['status'] ?? '');
+            $saved  = in_array($type, ['plugin', 'theme'], true) && $slug !== ''
+                && $this->app->dataStore()->setLicenseStatus($segments[1], $segments[3], $type, $slug, $status);
+
+            if (!$saved) {
+                http_response_code(400);
+                echo 'Could not save the licence status.';
+
+                return;
+            }
+
+            $this->redirect(self::safeReturn($_POST['return'] ?? "/site/{$segments[1]}/extraction/{$segments[3]}"));
+
+            return;
+        }
+
         // Which website a subscription is linked to — the one write this app
         // makes against the external CRM database, and always an explicit,
         // deliberate action (a real form submit + full page reload, not the
@@ -1755,7 +2279,7 @@ final class Router
                 }
             }
 
-            $this->redirect(self::safeReturn($_POST['return'] ?? '/clients') . '?notice=' . $notice);
+            $this->redirect(self::withQueryParam(self::safeReturn($_POST['return'] ?? '/clients', '/clients'), 'notice', $notice));
 
             return;
         }
@@ -1769,7 +2293,7 @@ final class Router
      * normalise a backslash to a slash in the Location authority, so '/\evil.com'
      * would resolve to '//evil.com' — an off-site open redirect.
      */
-    public static function safeReturn(mixed $target): string
+    public static function safeReturn(mixed $target, string $fallback = '/catalog'): string
     {
         $target = is_string($target) ? $target : '';
 
@@ -1777,7 +2301,23 @@ final class Router
             && !str_starts_with($target, '//')
             && !str_starts_with($target, '/\\'))
             ? $target
-            : '/catalog';
+            : $fallback;
+    }
+
+    /**
+     * Adds (or replaces) one query parameter on a local URL, keeping any
+     * existing query and #fragment — "/clients?service=all" + notice must not
+     * become "/clients?service=all?notice=…".
+     */
+    public static function withQueryParam(string $url, string $key, string $value): string
+    {
+        [$beforeFragment, $fragment] = array_pad(explode('#', $url, 2), 2, null);
+        [$path, $query]              = array_pad(explode('?', $beforeFragment, 2), 2, '');
+
+        parse_str((string) $query, $params);
+        $params[$key] = $value;
+
+        return $path . '?' . http_build_query($params) . ($fragment !== null ? '#' . $fragment : '');
     }
 
     private function redirect(string $to): void

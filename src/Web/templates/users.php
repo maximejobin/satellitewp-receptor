@@ -4,7 +4,7 @@
  * @var list<string> $roles
  * @var string|null $admin
  * @var string|null $me
- * @var bool $isAdmin
+ * @var array{add: bool, edit: bool, suspend: bool, remove: bool} $can
  * @var string $csrf
  * @var string $notice
  */
@@ -50,8 +50,10 @@ if (isset($notices[$notice])):
         <td><span class="badge <?= $user['role'] === 'admin' ? 'badge-ok' : 'badge-muted' ?>"><?= e($user['role']) ?></span></td>
         <td><?= $user['status'] === 'suspended' ? '<span class="badge badge-warn">suspended</span>' : '<span class="badge badge-ok">active</span>' ?></td>
         <td>
-            <?php if ($isAdmin): ?>
+            <?php if ($can['edit']): ?>
                 <button type="button" class="row-edit-btn" data-row-id="<?= $i ?>" title="Edit"><?= icon_edit() ?></button>
+            <?php endif; ?>
+            <?php if ($can['suspend']): ?>
                 <?php if ($user['status'] === 'suspended'): ?>
                     <form method="post" action="/users" style="display:inline;margin:0">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -68,6 +70,8 @@ if (isset($notices[$notice])):
                         <button type="submit" class="btn btn-muted" style="padding:.2rem .5rem;font-size:.8rem">Suspend</button>
                     </form>
                 <?php endif; ?>
+            <?php endif; ?>
+            <?php if ($can['remove']): ?>
                 <?php if (!$isLastActiveAdmin): ?>
                     <form method="post" action="/users" style="display:inline;margin:0"
                           onsubmit="return confirm('Remove <?= e($user['email']) ?>? This cannot be undone.')">
@@ -80,7 +84,7 @@ if (isset($notices[$notice])):
             <?php endif; ?>
         </td>
     </tr>
-    <?php if ($isAdmin): ?>
+    <?php if ($can['edit']): ?>
     <tr class="row-edit-form" data-row-id="<?= $i ?>" style="display:none">
         <td colspan="5">
             <form method="post" action="/users" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:0">
@@ -105,7 +109,7 @@ if (isset($notices[$notice])):
 </tbody>
 </table>
 
-<?php if ($isAdmin): ?>
+<?php if ($can['add']): ?>
     <h3 style="margin-top:1.5rem;font-size:.9rem" class="muted">Add a user</h3>
     <form method="post" action="/users" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">

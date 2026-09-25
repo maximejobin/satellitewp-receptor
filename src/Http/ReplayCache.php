@@ -19,18 +19,35 @@ final class ReplayCache
      */
     public function seenBefore(string $signature, int $timestamp, int $windowSeconds): bool
     {
-        $cache = $this->prune($this->load());
-
-        if (isset($cache[$signature])) {
-            $this->save($cache);
-
-            return true;
+        // Load, check and record under one exclusive lock: without it two
+        // concurrent copies of the same signed request could both read "not
+        // seen" before either saved, and both pass.
+        $dir = dirname($this->file);
+        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new RuntimeException("Unable to create directory {$dir}");
+        }
+        $lock = fopen($this->file . '.lock', 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            throw new RuntimeException("Unable to lock {$this->file}");
         }
 
-        $cache[$signature] = $timestamp + $windowSeconds;
-        $this->save($cache);
+        try {
+            $cache = $this->prune($this->load());
 
-        return false;
+            if (isset($cache[$signature])) {
+                $this->save($cache);
+
+                return true;
+            }
+
+            $cache[$signature] = $timestamp + $windowSeconds;
+            $this->save($cache);
+
+            return false;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /** @return array<string, int> signature => expires-at (unix timestamp) */
@@ -45,7 +62,6 @@ final class ReplayCache
         return is_array($decoded) ? $decoded : [];
     }
 
-    /** @param array<string, int> $cache */
     /**
      * @param array<string, int> $cache
      * @return array<string, int>

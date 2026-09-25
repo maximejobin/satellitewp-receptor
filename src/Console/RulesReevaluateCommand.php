@@ -25,7 +25,8 @@ final class RulesReevaluateCommand extends Command
     {
         $this
             ->addArgument('site_id', InputArgument::OPTIONAL, 'Limit to one site (default: every site)')
-            ->addOption('extraction', null, InputOption::VALUE_REQUIRED, 'Limit to a single extraction id');
+            ->addOption('extraction', null, InputOption::VALUE_REQUIRED, 'Limit to a single extraction id')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Print the before/after diff without rewriting findings.json');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -38,6 +39,7 @@ final class RulesReevaluateCommand extends Command
         $siteIdArg         = $input->getArgument('site_id');
         $sites             = $siteIdArg !== null ? [['site_id' => $siteIdArg]] : $index->listSites();
         $extractionFilter  = $input->getOption('extraction');
+        $dryRun            = (bool) $input->getOption('dry-run');
 
         $scored  = 0;
         $changed = 0;
@@ -64,7 +66,9 @@ final class RulesReevaluateCommand extends Command
                 ));
                 $after['site_id']       = $siteId;
                 $after['extraction_id'] = $extractionId;
-                $store->writeFindings($siteId, $extractionId, $after);
+                if (!$dryRun) {
+                    $store->writeFindings($siteId, $extractionId, $after);
+                }
                 $scored++;
 
                 $diff = $this->diffLine($before, $after);
@@ -82,7 +86,8 @@ final class RulesReevaluateCommand extends Command
             return Command::FAILURE;
         }
 
-        $output->writeln("{$scored} extraction(s) re-scored, {$changed} changed.");
+        $output->writeln("{$scored} extraction(s) re-scored, {$changed} changed."
+            . ($dryRun ? ' (dry run — nothing written)' : ''));
 
         return Command::SUCCESS;
     }

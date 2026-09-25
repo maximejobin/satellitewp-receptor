@@ -37,7 +37,10 @@ PHP 8.4+, Composer, symfony/console, Guzzle. No framework.
   (BlogVault's own dashboard, a monitoring service)? The latter does not
   belong in Xtractor even as a placeholder.
 - **`data/` holds raw data + one analysis file only:** `payload.json`,
-  `meta.json`, `probes/*.json`, `findings.json`. No derived files (no summary.json).
+  `meta.json`, `probes/*.json`, `findings.json` — plus two analyst-authored,
+  per-extraction inputs: `observations.json` (manual observations, formerly
+  `recommendations.json` — renamed 2026-09-25, see below) and
+  `licenses.json` (licence-key status). No derived files (no summary.json).
   Operational output is not data: HTTP 500s go to `logs/` (gitignored), never
   under `data/`.
 - **Source files are language-neutral.** `findings.json` and probes carry only
@@ -45,6 +48,39 @@ PHP 8.4+, Composer, symfony/console, Guzzle. No framework.
   `config/lang/{en,fr}.php` and are rendered at display time by
   `Rules\Translator`. (Exception: PageSpeed locale is a probe input.)
 - Don't propose building what WP-CLI / WP core already does natively.
+
+## 2026-09-25 — rename and review pass
+
+- **"recommendations" is now "observations" everywhere**: contract type
+  `observations`, fields `*_observations` / `{{all_observations}}`,
+  `DataStore::readObservations()`, `observations.json`, POST
+  `/site/{id}/extraction/{id}/observations`, capability
+  `extraction_observations_edit`, `format_observation_text()`, Apps Script
+  v20+ (`insererObservations`). Older entries in this file still say
+  "recommendations" — that is history, not the current name.
+- A `{{…_observations}}` placeholder takes an optional `:colour[,colour]`
+  suffix in the Doc (`{{all_observations:red,orange}}`), parsed by the Apps
+  Script. No hidden default anywhere: no suffix = every colour.
+- Review fixes: DOM XSS in the tag-filter chips (layout.php), F2 now keys on
+  `core_update.minor_update_version` (a new major offer is not a missing
+  branch patch), Basic credentials only over https to the site's own host,
+  redirect-hop SSRF guard on the preflight, key rotation keeps `http_auth`
+  and `origin`, `users.json`/`report-tokens.json` written atomically at
+  0600, atomic cache writes (Wordfence/EndOfLife/WordPressVersions),
+  SoftwareCatalog re-reads under a lock before writing, POST run/abort only
+  from pending/error (resp. pending/queued) and never on an unknown
+  extraction, sign-out is a CSRF-checked POST, `/extractions` `/site/{id}`
+  `/status` `/users` are capability-gated (`user_view` = admin only),
+  `rules:reevaluate --dry-run`. Second pass: PageSpeed API key redacted
+  from every stored error (`PageSpeedProbe::redactKey()`), DNS-rebinding
+  closed (`HostGuard::publicIpFor()` + `CURLOPT_RESOLVE` pinning in
+  HttpProbe/TlsProbe/preflight, redirects followed hop by hop), per-extraction
+  `.lock` for meta/licenses/observations writes
+  (`DataStore::mutateObservations()`), atomic extraction-id claim,
+  ReplayCache under flock, `index:rebuild` marks probes-without-findings as
+  `error`, `Router::withQueryParam()` for `?notice=`, `/users` controls
+  follow the same capabilities as the POST handler. All done extractions
+  were re-scored (`rules:reevaluate`) after the F2/G3/pass-string fixes.
 
 ## Flow
 
@@ -171,8 +207,9 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   `user_suspend`/`user_remove`, `site_key_add`/`site_key_revoke`/
   `site_key_rebind`/`site_http_auth_edit`, `extraction_run`, `catalog_view`/
   `catalog_edit`, `extraction_view_technical`, `data_view`, `crm_view`,
-  `crm_subscription_edit` — full list and role assignments in
-  `config/roles.php`'s docblock). `Router::requireCapability()` is the one
+  `crm_subscription_edit`, `extraction_observations_edit`, `user_view` — full
+  list and role assignments in `config/roles.php`, a bare role → capability
+  map with no docblock). `Router::requireCapability()` is the one
   gate (writes a 403 and returns `false`): permissive when Google sign-in
   isn't configured (no per-user role exists to check under Basic auth/open
   dev — same posture every one of these actions already had before
@@ -267,12 +304,19 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   `tests/Storage/KeyStoreTest.php`.
   Gated behind needing a valid signed API key already, not otherwise
   mitigated (no private/loopback/link-local IP-range guard on the resolved
-  host) — flagged in a 2026-08-29 security review, not yet fixed.
+  host) — flagged in a 2026-08-29 security review. **Since fixed**:
+  `Support\HostGuard` now refuses every non-global address (incl. CGNAT
+  100.64.0.0/10, via `FILTER_FLAG_GLOBAL_RANGE`) and is checked on the
+  initial host and on every redirect hop (HttpProbe, TlsProbe, and the
+  extraction page's Basic-Auth preflight), and the connection is pinned to
+  the vetted IP (`CURLOPT_RESOLVE`), so DNS rebinding is closed too.
 - `src/Rules/`: `Category` (16 short English codes), `Severity` (C/E/M/I),
   `Status`, `Pastille` (green/orange/red/blue/grey, derived from status+severity),
   `Check`/`CheckResult`, `Finding` (neutral), `Rule`, `RuleCatalog`, `RuleEngine`,
   `Context` (dot paths `payload.*` / `probe.*` / reference), `Translator`.
-- `config/rules.php`: 74 rules. Ids follow the plugin's
+- `config/rules.php`: 79 active rules (H9 removed, L5 commented out; every
+  active rule has a FR and EN `pass` sentence as of 2026-09-25 — a rule
+  without one was silently dropped from report.json on a pass). Ids follow the plugin's
   `.github/validations-techniques.txt` section letters; `W*` = domain (WHOIS),
   `PS*` = Lighthouse, `BV*` = BlogVault, `WF*` = Wordfence Intelligence, `X*`
   (2026-08-29) = passive exposure checks (see below) — none of these four
@@ -1059,7 +1103,11 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
   `status === 'done'`** — pending/queued/running/error each show only a status
   message (and the "Run analysis" trigger, for pending/queued); an analyst
   must never read partial or stale data as if it were a finished report. Once
-  done: **overview** (health ring = `100 × 0.9^red × 0.97^orange`,
+  done: **overview** (NOTE 2026-09-25: the health ring, letter grade,
+  `health_score()`/`health_grade()`/`health_score_breakdown()` described
+  here and in the redesign notes above no longer exist in the code — the
+  hero now shows only the severity bar and the pastille tally. Kept below
+  as history. Was: health ring = `100 × 0.9^red × 0.97^orange`,
   `health_score()` in `helpers.php` — **not** the flat `100 − red*8 − orange*3`
   this used to be: that clipped to exactly 0 for any site with ~13+ red
   findings, which a real tracked site hit on *every single extraction*
@@ -1107,9 +1155,10 @@ Operational pairing (key provisioning, vhost redirects, clock skew) is
 ## CLI (`bin/xtractor`)
 
 `ingest:process` · `pipeline:run` · `probe:run`/`probe:list` ·
-`rules:evaluate [--lang]`/`rules:list`/`rules:reevaluate [site_id]` (re-scores
+`rules:evaluate [--lang]`/`rules:list`/`rules:reevaluate [site_id] [--dry-run]` (re-scores
 every stored "done" extraction against the current catalogue, no network —
-prints a before/after pastille-count diff per extraction that moved; this is
+prints a before/after pastille-count diff per extraction that moved; it
+REWRITES findings.json unless `--dry-run` is given; this is
 how to see a rules.php edit's real effect across the whole dataset instead of
 one extraction at a time)/`rules:doc` (renders the catalogue as Markdown to
 stdout — `php bin/xtractor rules:doc > docs/rules-catalog.md`, the generated,
@@ -1121,14 +1170,14 @@ there is nothing to drift out of sync) · `reference:refresh [--product=…]`
 (cron: **hourly** for wordpress/php/mysql/mariadb, feeds `/data/wp-versions`,
 `/data/php-versions` and `/data/databases`) · `wordfence:refresh` (suggested
 cron: **daily**) ·
-`catalog:list [--needs-license]`/`catalog:set`/`catalog:suggest` ·
+`catalog:list [--needs-license]`/`catalog:set`/`catalog:suggest`/`catalog:reindex` (rebuilds the catalogue/vulnerability cross-reference index) ·
 `keys:add [--origin]`/`list`/`revoke`/`rebind` (also manageable from each
 site's own page in the web UI, `/site/{id}` — see below) · `users:add` (seeds the web allowlist; no argument
-lists it) · `sites:list` · `extractions:list` · `index:rebuild`.
+lists it) · `users:set-role` (change a listed user's role; refuses to demote the last active admin) · `sites:list` · `extractions:list` · `index:rebuild`.
 
 ## Testing
 
-`composer test` — 359 tests, no network. Manual end-to-end: `docs/TESTING.md`.
+`composer test` — 608 tests (2026-09-25), no network. Manual end-to-end: `docs/TESTING.md`.
 `phpunit.xml.dist` excludes the `network` group, reserved for any future
 live-probe tests; none exist yet, so the suite runs fully offline.
 `composer analyse` — PHPStan, see "Conventions" below.

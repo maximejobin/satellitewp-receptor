@@ -39,29 +39,27 @@ final class SoftwareCatalog
      */
     public function recordExtraction(array $payload): int
     {
-        $new = 0;
+        return $this->mutate(function () use ($payload): array {
+            $new = 0;
 
-        foreach (['plugin' => $payload['plugins'] ?? [], 'theme' => $payload['themes'] ?? []] as $type => $items) {
-            if (!is_array($items)) {
-                continue;
-            }
-            foreach ($items as $item) {
-                if (!is_array($item)) {
+            foreach (['plugin' => $payload['plugins'] ?? [], 'theme' => $payload['themes'] ?? []] as $type => $items) {
+                if (!is_array($items)) {
                     continue;
                 }
-                $slug = self::normalizeSlug($type, (string) ($item['slug'] ?? ''));
-                if ($slug === '') {
-                    continue;
+                foreach ($items as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $slug = self::normalizeSlug($type, (string) ($item['slug'] ?? ''));
+                    if ($slug === '') {
+                        continue;
+                    }
+                    $new += $this->upsert($type, $slug, (string) ($item['name'] ?? $slug));
                 }
-                $new += $this->upsert($type, $slug, (string) ($item['name'] ?? $slug));
             }
-        }
 
-        if ($new > 0 || $this->entries !== null) {
-            $this->save();
-        }
-
-        return $new;
+            return [$new, true];
+        });
     }
 
     /**
@@ -70,7 +68,6 @@ final class SoftwareCatalog
      */
     private function upsert(string $type, string $slug, string $name): int
     {
-        $this->load();
         $key = $type . ':' . $slug;
 
         if (isset($this->entries[$key])) {
@@ -104,16 +101,16 @@ final class SoftwareCatalog
         if (!in_array($license, self::LICENSES, true)) {
             return false;
         }
-        $this->load();
         $key = $type . ':' . self::normalizeSlug($type, $slug);
-        if (!isset($this->entries[$key])) {
-            return false;
-        }
 
-        $this->entries[$key]['license'] = $license;
-        $this->save();
+        return $this->mutate(function () use ($key, $license): array {
+            if (!isset($this->entries[$key])) {
+                return [false, false];
+            }
+            $this->entries[$key]['license'] = $license;
 
-        return true;
+            return [true, true];
+        });
     }
 
     /**
@@ -127,24 +124,33 @@ final class SoftwareCatalog
      */
     public function suggest(callable $isOnWporg, bool $recheck = false): int
     {
-        $this->load();
-        $updated = 0;
-
-        foreach ($this->entries as $key => $entry) {
+        // The wp.org lookups are slow network calls — run them on a snapshot,
+        // outside the lock, then merge only the two fields they decide.
+        $this->reload();
+        $results = [];
+        foreach ((array) $this->entries as $key => $entry) {
             if (!$recheck && ($entry['source'] ?? 'unknown') !== 'unknown') {
                 continue;
             }
-            $onRepo = $isOnWporg($entry['type'], $entry['slug']);
-            $this->entries[$key]['source']    = $onRepo ? 'wporg' : 'absent';
-            $this->entries[$key]['suggested'] = $onRepo ? self::LICENSE_FREE : self::LICENSE_PREMIUM;
-            $updated++;
+            $results[$key] = (bool) $isOnWporg($entry['type'], $entry['slug']);
+        }
+        if ($results === []) {
+            return 0;
         }
 
-        if ($updated > 0) {
-            $this->save();
-        }
+        return $this->mutate(function () use ($results): array {
+            $updated = 0;
+            foreach ($results as $key => $onRepo) {
+                if (!isset($this->entries[$key])) {
+                    continue;
+                }
+                $this->entries[$key]['source']    = $onRepo ? 'wporg' : 'absent';
+                $this->entries[$key]['suggested'] = $onRepo ? self::LICENSE_FREE : self::LICENSE_PREMIUM;
+                $updated++;
+            }
 
-        return $updated;
+            return [$updated, $updated > 0];
+        });
     }
 
     /**
@@ -273,6 +279,11 @@ final class SoftwareCatalog
         if ($this->entries !== null) {
             return;
         }
+        $this->reload();
+    }
+
+    private function reload(): void
+    {
         $this->entries = [];
         if (is_file($this->file)) {
             $decoded = json_decode((string) file_get_contents($this->file), true);
@@ -282,17 +293,52 @@ final class SoftwareCatalog
         }
     }
 
-    private function save(): void
+    /**
+     * Every write goes through here: exclusive lock, fresh read from disk,
+     * change, atomic save. A long-lived instance (ingest:process runs for
+     * minutes) otherwise saves its stale in-memory copy over whatever an
+     * analyst classified in the UI meanwhile.
+     *
+     * @template T
+     * @param callable(): array{0: T, 1: bool} $change returns [result, whether to save]
+     * @return T
+     */
+    private function mutate(callable $change): mixed
     {
         $dir = dirname($this->file);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
+        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Cannot create {$dir}");
         }
-        $tmp = $this->file . '.tmp';
-        file_put_contents($tmp, json_encode(
+
+        $lock = fopen($this->file . '.lock', 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            throw new \RuntimeException("Cannot lock {$this->file}");
+        }
+
+        try {
+            $this->reload();
+            [$result, $dirty] = $change();
+            if ($dirty) {
+                $this->save();
+            }
+
+            return $result;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    private function save(): void
+    {
+        $json = json_encode(
             $this->entries,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-        ));
-        rename($tmp, $this->file);
+        );
+        $tmp = $this->file . '.tmp.' . bin2hex(random_bytes(4));
+        if ($json === false || file_put_contents($tmp, $json) === false || !rename($tmp, $this->file)) {
+            @unlink($tmp);
+            throw new \RuntimeException("Unable to write {$this->file}");
+        }
     }
 }

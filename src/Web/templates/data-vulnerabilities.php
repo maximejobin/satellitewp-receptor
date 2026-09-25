@@ -76,7 +76,9 @@
                 if (type !== 'display') { return data === null ? '' : data; }
                 if (data === null || data === undefined || data === '') { return '—'; }
                 var score = parseFloat(data);
-                var cls = score >= 9.0 ? 'badge-critical' : score >= 8.1 ? 'badge-error' : score >= 6.1 ? 'badge-warn' : 'badge-ok';
+                // A vulnerability is never --ok green, however low its
+                // score — badge-low mirrors cvss_badge() in helpers.php.
+                var cls = score >= 9.0 ? 'badge-critical' : score >= 8.1 ? 'badge-error' : score >= 6.1 ? 'badge-warn' : 'badge-low';
                 var rating = row[7];
                 var title = 'CVSS ' + score + (rating ? ' — ' + rating : '');
                 return '<span class="badge ' + cls + '" title="' + xtEscapeHtml(title) + '">' + score + '</span>';
