@@ -57,6 +57,46 @@ final class RuleCatalogTest extends TestCase
         }
     }
 
+    /**
+     * A finding's title/fail/pass text is shown as-is, including in the
+     * client-facing report — it must never name which third-party source
+     * (BlogVault, Wordfence) produced the verdict.
+     */
+    public function testNoRuleTextNamesAThirdPartyVendor(): void
+    {
+        $en = (array) require self::LANG . '/en.php';
+        $fr = (array) require self::LANG . '/fr.php';
+
+        foreach (['en' => $en, 'fr' => $fr] as $lang => $catalog) {
+            foreach ((array) $catalog['rules'] as $id => $strings) {
+                foreach (['title', 'title_success', 'title_failure', 'fail', 'pass'] as $key) {
+                    $text = (string) ($strings[$key] ?? '');
+                    foreach (['BlogVault', 'Wordfence'] as $vendor) {
+                        $this->assertStringNotContainsStringIgnoringCase($vendor, $text, "{$lang} {$id}.{$key}");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Every active rule needs a verdict-specific headline for both outcomes
+     * — "Website infected" reads nothing like "No hacking detected", so
+     * these can never be derived from one another or left unset.
+     */
+    public function testEveryRuleHasSuccessAndFailureTitlesInBothLanguages(): void
+    {
+        $en = (array) require self::LANG . '/en.php';
+        $fr = (array) require self::LANG . '/fr.php';
+
+        foreach (RuleCatalog::load(self::CATALOG) as $rule) {
+            foreach (['title_success', 'title_failure'] as $key) {
+                $this->assertNotSame('', (string) ($en['rules'][$rule->id][$key] ?? ''), "{$rule->id} EN {$key}");
+                $this->assertNotSame('', (string) ($fr['rules'][$rule->id][$key] ?? ''), "{$rule->id} FR {$key}");
+            }
+        }
+    }
+
     public function testEmptyPayloadYieldsNoFailuresOnlyUnknowns(): void
     {
         $result = $this->engine()->evaluate(new Context([]));

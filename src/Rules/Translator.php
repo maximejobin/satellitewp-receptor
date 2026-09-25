@@ -72,10 +72,31 @@ final class Translator
         return (string) ($this->catalog['categories'][$code] ?? $code);
     }
 
-    /** The short title of a rule. */
-    public function title(string $ruleId): string
+    /**
+     * The short title of a rule. Pass a finding's status ('pass'/'fail') to
+     * get the verdict-specific headline (config/lang/*.php's 'title_success'/
+     * 'title_failure' — e.g. "Website infected" on fail vs. "No hacking
+     * detected" on pass, deliberately different sentences, not one neutral
+     * label plus a colour) instead of the neutral catalogue title. Falls
+     * back to the plain 'title' when $status is omitted (catalogue listings:
+     * rules:list, rules:doc — no finding, no verdict to headline), the
+     * status is neither pass nor fail (unknown/na — no verdict to assert
+     * either way), or the rule has no title_success/title_failure of its own
+     * yet.
+     */
+    public function title(string $ruleId, ?string $status = null): string
     {
-        return (string) ($this->catalog['rules'][$ruleId]['title'] ?? $ruleId);
+        $rule = (array) ($this->catalog['rules'][$ruleId] ?? []);
+        $key  = match ($status) {
+            'pass'  => 'title_success',
+            'fail'  => 'title_failure',
+            default => null,
+        };
+        if ($key !== null && is_string($rule[$key] ?? null) && $rule[$key] !== '') {
+            return $rule[$key];
+        }
+
+        return (string) ($rule['title'] ?? $ruleId);
     }
 
     /**

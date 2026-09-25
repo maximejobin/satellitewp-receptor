@@ -1214,8 +1214,8 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### BV1 — Site non signalé comme piraté
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** L'analyse antimaliciel de BlogVault ne signale rien.
-- **Échec (FR) :** BlogVault signale ce site comme piraté : {detections} détection(s) non résolue(s).
+- **Réussite (FR) :** Aucun signe de piratage détecté sur ce site.
+- **Échec (FR) :** Ce site est signalé comme piraté : {detections} détection(s) non résolue(s).
 
 ```php
         'check' => static function (Context $c) {
@@ -1234,8 +1234,8 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### BV2 — Aucune vulnérabilité connue
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** BlogVault ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
-- **Échec (FR) :** BlogVault recense {observed} vulnérabilités connues sur {components} composant(s).
+- **Réussite (FR) :** Aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
+- **Échec (FR) :** {observed} vulnérabilités connues recensées sur {components} composant(s).
 
 ```php
         'check' => static function (Context $c) {
@@ -1257,11 +1257,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## WF. Wordfence Intelligence
 
-### WF1 — Aucune vulnérabilité connue (Wordfence)
+### WF1 — Aucune vulnérabilité connue
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Wordfence Intelligence ne recense aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
-- **Échec (FR) :** Wordfence Intelligence recense {observed} vulnérabilités connues sur {components} composant(s).
+- **Réussite (FR) :** Aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
+- **Échec (FR) :** {observed} vulnérabilités connues recensées sur {components} composant(s).
 
 ```php
         'check' => static function (Context $c) {
