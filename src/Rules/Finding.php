@@ -23,6 +23,7 @@ final readonly class Finding
         public mixed $observed = null,
         public mixed $threshold = null,
         public array $data = [],
+        public bool $clientAction = false,
     ) {
     }
 
@@ -31,10 +32,10 @@ final readonly class Finding
         return $this->status === Status::Fail;
     }
 
-    /** The analyst-facing coloured pastille, derived from status + severity. */
+    /** The analyst-facing coloured pastille, derived from status + severity (+ clientAction). */
     public function pastille(): Pastille
     {
-        return Pastille::for($this->status, $this->severity);
+        return Pastille::for($this->status, $this->severity, $this->clientAction);
     }
 
     /** @return array<string, mixed> */

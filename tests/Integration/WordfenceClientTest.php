@@ -57,7 +57,7 @@ final class WordfenceClientTest extends TestCase
         $request = $this->sent[0];
         $this->assertSame('GET', $request->getMethod());
         $this->assertSame('/api/intelligence/v3/vulnerabilities/production', $request->getUri()->getPath());
-        // No "cli-" prefix — confirmed live against the real API.
+        // Account keys take no "cli-" prefix (that is wordfence-cli's own key namespace).
         $this->assertSame('Bearer secret-key', $request->getHeaderLine('Authorization'));
     }
 

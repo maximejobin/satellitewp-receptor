@@ -12,18 +12,9 @@ final readonly class SiteContext
     /**
      * @param list<array<string, mixed>> $plugins raw payload.plugins entries (unnormalized slugs)
      * @param list<array<string, mixed>> $themes  raw payload.themes entries
-     * @param array{username: string, password: string}|null $httpAuth HTTP Basic Auth this
-     *        server should send when probing the site directly (HttpProbe). Not part of the
-     *        extraction payload — set by hand per site (KeyStore::setHttpAuth(), the site's
-     *        own "⚙ Site settings" panel) for a site that sits behind Basic Auth (a staging
-     *        environment, an IP-restriction bypass, …). Without it, HttpProbe's passive
-     *        exposure checks (xmlrpc/REST-enum/sensitive-files/…) would all 401 and read as
-     *        a false "clean" instead of "couldn't check" — see HttpProbe::exposureCheck().
-     * @param ?string $locale the analyst's chosen language for this extraction
-     *        (meta.json's 'language', set on the extraction page before "Run
-     *        analysis" — see Pipeline::run()), null for one run before that
-     *        choice existed. PageSpeedProbe reads it for PSI's own locale
-     *        param, falling back to its configured default when null.
+     * @param array{username: string, password: string}|null $httpAuth per-site Basic Auth for
+     *        HttpProbe (KeyStore::setHttpAuth()), not part of the payload
+     * @param ?string $locale the analyst's chosen report language (meta.json), null = config default
      */
     public function __construct(
         public string $siteId,
@@ -40,16 +31,13 @@ final readonly class SiteContext
     }
 
     /**
-     * Public suffixes that take **two** labels, not one — the exceptions a
-     * plain "last two labels" rule gets wrong (`example.co.uk` would
-     * otherwise come out as `co.uk`). Not the full Mozilla Public Suffix
-     * List (thousands of entries, almost all single-label and already
-     * handled correctly by the default): a curated set of the ccTLDs likely
-     * to show up for this project's actual client base. Extend as a real
-     * site surfaces one that's missing rather than importing the whole PSL
-     * pre-emptively.
+     * Public suffixes spanning more than one label, where "last two labels"
+     * is wrong (example.co.uk, example.qc.ca). A curated subset of the Public
+     * Suffix List for this client base, not the full list.
      */
-    private const array TWO_LABEL_SUFFIXES = [
+    private const array MULTI_LABEL_SUFFIXES = [
+        'qc.ca', 'on.ca', 'bc.ca', 'ab.ca', 'mb.ca', 'nb.ca', 'nl.ca', 'ns.ca', 'pe.ca', 'sk.ca', 'nt.ca', 'nu.ca', 'yk.ca',
+        'gouv.qc.ca',
         'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'gov.uk', 'ltd.uk', 'plc.uk', 'net.uk', 'sch.uk',
         'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'id.au',
         'co.nz', 'net.nz', 'org.nz', 'govt.nz',
@@ -57,7 +45,7 @@ final readonly class SiteContext
         'co.jp', 'or.jp', 'ne.jp', 'ac.jp', 'go.jp',
         'com.br', 'net.br', 'org.br',
         'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in',
-        'com.mx', 'com.ar', 'com.co', 'com.pe', 'com.br',
+        'com.mx', 'com.ar', 'com.co', 'com.pe',
         'co.il', 'org.il', 'net.il',
         'com.sg', 'com.hk', 'co.kr', 'co.id', 'co.th',
         'com.tw', 'org.tw',
@@ -95,31 +83,22 @@ final readonly class SiteContext
     }
 
     /**
-     * The registered domain a WHOIS/RDAP lookup and NS/MX/CAA/DMARC DNS
-     * queries must target — never the full hostname. A leading "www." is
-     * stripped like any other subdomain rather than as a special case.
-     *
-     * Was previously "strip a leading www., otherwise use the host
-     * verbatim" — correct only for a bare or www-prefixed domain. Any other
-     * subdomain depth (`latest.1.example.ca`, a hosting panel's internal
-     * vhost alias, live) was queried as-is: RDAP/WHOIS have no record of a
-     * "domain" with three extra subdomain labels prepended, so the probe
-     * always came back empty for a site behind one — silently, since an
-     * empty-but-well-formed WHOIS/RDAP response isn't a probe error.
+     * The registered domain WHOIS/RDAP and NS/MX/CAA/DMARC lookups must
+     * target, never the full hostname: the public suffix plus one label.
      */
     public static function registrableDomain(string $host): string
     {
         $labels = array_values(array_filter(explode('.', strtolower($host)), static fn (string $s): bool => $s !== ''));
         $count  = count($labels);
 
-        if ($count <= 2) {
-            return implode('.', $labels);
+        $suffixLabels = 1;
+        foreach (self::MULTI_LABEL_SUFFIXES as $suffix) {
+            $length = substr_count($suffix, '.') + 1;
+            if ($length > $suffixLabels && $count > $length && implode('.', array_slice($labels, -$length)) === $suffix) {
+                $suffixLabels = $length;
+            }
         }
 
-        $lastTwo = $labels[$count - 2] . '.' . $labels[$count - 1];
-        $take    = in_array($lastTwo, self::TWO_LABEL_SUFFIXES, true) ? 3 : 2;
-        $take    = min($take, $count);
-
-        return implode('.', array_slice($labels, -$take));
+        return implode('.', array_slice($labels, -min($count, $suffixLabels + 1)));
     }
 }

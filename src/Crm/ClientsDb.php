@@ -7,15 +7,8 @@ namespace SatelliteWP\Xtractor\Crm;
 use PDO;
 
 /**
- * Connection to the external CRM/billing MySQL database (clients,
- * subscriptions, products, websites, website items — see the schema this
- * was built against). Read-only from this app's side: nothing here ever
- * writes to it, the sync that populates it runs elsewhere.
- *
- * Same "isConfigured() gate, nullable service" pattern as BlogVault/Wordfence
- * in App.php — a fresh install with no host/database set in config.local.php
- * gets a clean "not connected" page instead of a connection error, since a
- * real connection may only be handed over later.
+ * Connection to the external CRM/billing MySQL database, populated by a sync
+ * elsewhere. Unconfigured (no host/database) means "not connected", not an error.
  */
 final class ClientsDb
 {

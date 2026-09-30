@@ -234,12 +234,6 @@ final class HttpProbeTest extends TestCase
         $this->assertFalse(HttpProbe::isDirectoryListing(200, '<html>Page not found</html>'));
     }
 
-    /**
-     * A site that requires HTTP auth we don't have must read as "not
-     * checked" everywhere, never as "checked, clean" — a 401 on every path
-     * is not the same fact as nothing being exposed (2026-08-30, user: "ce
-     * n'est pas ce que c'est ok... c'est que le site n'est pas public").
-     */
     /** @return array<string, array{0: string, 1: string, 2: bool}> */
     public static function credentialCases(): array
     {
@@ -261,6 +255,7 @@ final class HttpProbeTest extends TestCase
         $this->assertSame($expected, HttpProbe::shouldSendCredentials($url, $siteHost));
     }
 
+    /** A 401 on every path is "not checked", never "checked, clean". */
     public function testAuthGatedExposureResultLeavesEveryCheckUnknown(): void
     {
         $result = HttpProbe::authGatedExposureResult();
@@ -309,5 +304,143 @@ final class HttpProbeTest extends TestCase
             $this->assertStringContainsString('SSRF guard', $e->getMessage());
         }
         $this->assertFalse($called, 'the request must never reach the handler');
+    }
+
+    private function followRedirects(\GuzzleHttp\Client $client, string $url): array
+    {
+        $probe  = new HttpProbe(5, 10, 'test-agent', null, static fn (string $h): string => '93.184.216.34');
+        $method = new \ReflectionMethod(HttpProbe::class, 'followRedirects');
+        $errors = [];
+
+        return $method->invokeArgs($probe, [$client, $url, &$errors]);
+    }
+
+    public function testFollowRedirectsUsesGetSoAHostThatRejectsHeadStillResolves(): void
+    {
+        $mock   = new \GuzzleHttp\Handler\MockHandler([
+            new \GuzzleHttp\Psr7\Response(301, ['Location' => 'https://example.com/']),
+            new \GuzzleHttp\Psr7\Response(200),
+        ]);
+        // allow_redirects false, as in collect(): Guzzle must not follow the 301 itself.
+        $client = new \GuzzleHttp\Client(['handler' => \GuzzleHttp\HandlerStack::create($mock), 'http_errors' => false, 'allow_redirects' => false]);
+
+        $result = $this->followRedirects($client, 'http://example.com/');
+
+        $this->assertTrue($result['forces_https']);
+        $this->assertSame('https://example.com/', $result['final_url']);
+        $this->assertSame(1, $result['hops']);
+    }
+
+    public function testFollowRedirectsRecordsABareErrorStatusAsTheFinalNonRedirectingHop(): void
+    {
+        $mock   = new \GuzzleHttp\Handler\MockHandler([new \GuzzleHttp\Psr7\Response(500)]);
+        $client = new \GuzzleHttp\Client(['handler' => \GuzzleHttp\HandlerStack::create($mock), 'http_errors' => false, 'allow_redirects' => false]);
+
+        $result = $this->followRedirects($client, 'http://example.com/');
+
+        $this->assertFalse($result['forces_https']);
+        $this->assertSame(0, $result['hops']);
+        $this->assertSame([['url' => 'http://example.com/', 'status' => 500]], $result['chain']);
+    }
+
+    public function testPickMainStartUrlPrefersTheHomeUrl(): void
+    {
+        $this->assertSame(
+            'https://example.com/',
+            HttpProbe::pickMainStartUrl('https://example.com/', 'https://example.com/wp', 'example.com')
+        );
+    }
+
+    public function testPickMainStartUrlFallsBackToSiteUrlThenTheHost(): void
+    {
+        $this->assertSame('https://example.com/wp', HttpProbe::pickMainStartUrl('', 'https://example.com/wp', 'example.com'));
+        $this->assertSame('https://example.com/', HttpProbe::pickMainStartUrl('', '', 'example.com'));
+    }
+
+    /**
+     * collect() against a site whose plain-HTTP vhost is broken but whose
+     * home_url is healthy: A10 reads the http:// chain, everything else the
+     * homepage.
+     */
+    public function testCollectMeasuresTheHomepageNotTheHttpVhost(): void
+    {
+        $handler = static function (\Psr\Http\Message\RequestInterface $request): \GuzzleHttp\Promise\PromiseInterface {
+            $uri = (string) $request->getUri();
+            $response = match (true) {
+                str_starts_with($uri, 'http://')                        => new \GuzzleHttp\Psr7\Response(500),
+                $uri === 'https://example.com/' && $request->getMethod() === 'GET'
+                    => new \GuzzleHttp\Psr7\Response(200, ['Content-Type' => 'text/html', 'Set-Cookie' => ['a=1; Secure; HttpOnly; SameSite=Lax', 'b=2']], '<html></html>'),
+                default                                                => new \GuzzleHttp\Psr7\Response(404, ['Content-Type' => 'text/html'], '<!doctype html><p>Not found</p>'),
+            };
+
+            return \GuzzleHttp\Promise\Create::promiseFor($response);
+        };
+
+        $probe = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+        $site  = new \SatelliteWP\Xtractor\Domain\SiteContext('site-1', 'https://example.com/wp', 'https://example.com/', 'example.com', 'example.com');
+
+        $data = $probe->run($site)->data;
+
+        $this->assertSame(200, $data['status_code']);
+        $this->assertSame('https://example.com/', $data['final_url']);
+        $this->assertFalse($data['redirects']['forces_https']);
+        $this->assertSame(500, $data['redirects']['chain'][0]['status']);
+        $this->assertSame(['secure' => false, 'httponly' => false, 'samesite' => false], $data['cookies'], 'the second cookie carries no flag');
+        $this->assertSame([], $data['exposure']['sensitive_files'], 'HTML 404 pages are never exposures');
+    }
+
+    public function testCollectRefusesAHostThatDoesNotResolveToAPublicAddress(): void
+    {
+        $probe  = new HttpProbe(5, 10, 'test-agent', null, static fn (string $h): ?string => null);
+        $result = $probe->run(new \SatelliteWP\Xtractor\Domain\SiteContext('s', 'https://internal.example', 'https://internal.example', 'internal.example', 'internal.example'));
+
+        $this->assertSame('error', $result->status);
+        $this->assertStringContainsString('SSRF guard', $result->errors[0]);
+    }
+
+    /** @return array<string, array{0: string, 1: int, 2: string, 3: string, 4: bool}> */
+    public static function sensitiveFiles(): array
+    {
+        return [
+            'real .env'                   => ['.env', 200, 'text/plain', "APP_ENV=production\nDB_PASSWORD=x\n", true],
+            'html page answered for .env' => ['.env', 200, 'text/html; charset=utf-8', '<!DOCTYPE html><html>…', false],
+            'html without content type'   => ['.env', 200, '', "  <html><body>Error</body></html>", false],
+            'real wp-config backup'       => ['wp-config.php.bak', 200, 'application/octet-stream', "<?php\ndefine( 'DB_NAME', 'wp' );", true],
+            'git config'                  => ['.git/config', 206, 'text/plain', "[core]\n\trepositoryformatversion = 0", true],
+            'debug log'                   => ['wp-content/debug.log', 200, 'text/plain', "[01-Jan-2026 00:00:00 UTC] PHP Warning:  x", true],
+            'sql dump'                    => ['backup.sql', 206, 'application/sql', "-- MySQL dump 10.13\nCREATE TABLE `wp_posts`", true],
+            'a 200 with unrelated text'   => ['backup.sql', 200, 'text/plain', 'OK', false],
+            'not found'                   => ['.env', 404, 'text/plain', 'APP_ENV=x', false],
+            'unknown path'                => ['nope.txt', 200, 'text/plain', 'A=1', false],
+        ];
+    }
+
+    #[DataProvider('sensitiveFiles')]
+    public function testASensitiveFileCountsOnlyWhenItsContentIsServed(string $path, int $status, string $type, string $head, bool $expected): void
+    {
+        $this->assertSame($expected, HttpProbe::isSensitiveFileExposed($path, $status, $type, $head));
+    }
+
+    public function testCookieFlagsHoldOnlyWhenEveryCookieCarriesThem(): void
+    {
+        $this->assertNull(HttpProbe::cookieFlags([]));
+        $this->assertSame(
+            ['secure' => true, 'httponly' => true, 'samesite' => true],
+            HttpProbe::cookieFlags(['a=1; Path=/; Secure; HttpOnly; SameSite=Strict', 'b=2; secure; httponly; samesite=lax'])
+        );
+        $this->assertSame(
+            ['secure' => false, 'httponly' => true, 'samesite' => false],
+            HttpProbe::cookieFlags(['a=1; Secure; HttpOnly; SameSite=None', 'b=2; HttpOnly; SameSite=Lax'])
+        );
+        $this->assertFalse(HttpProbe::cookieFlags(['secure_token=1; HttpOnly'])['secure'], 'a cookie NAME containing "secure" is not the flag');
+    }
+
+    public function testResolveUrlKeepsThePortOnRelativeRedirects(): void
+    {
+        $this->assertSame('https://example.com:8443/login', HttpProbe::resolveUrl('https://example.com:8443/a/b', '/login'));
+        $this->assertSame('https://example.com:8443/a/c', HttpProbe::resolveUrl('https://example.com:8443/a/b', 'c'));
+        $this->assertSame('https://cdn.example/x.css', HttpProbe::resolveUrl('https://example.com/', '//cdn.example/x.css'));
+        $this->assertSame('https://other.example/', HttpProbe::resolveUrl('https://example.com/', 'https://other.example/'));
+        $this->assertSame('https://example.com/c', HttpProbe::resolveUrl('https://example.com/b', 'c'));
     }
 }

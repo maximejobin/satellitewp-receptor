@@ -121,13 +121,7 @@ final class WordfenceIndexTest extends TestCase
         $this->assertCount(1, $index->vulnerabilitiesFor('PLUGIN', 'Opening-Hours', '1.0'));
     }
 
-    /**
-     * One Wordfence record can list the same slug more than once — a plugin
-     * sold in editions gets one software entry per edition. When those ranges
-     * overlap, the same vulnerability id matched repeatedly and rendered as
-     * "N CVE" for a single issue: seen live on
-     * miniorange-oauth-oidc-single-sign-on 18.5.3, counted 7 times.
-     */
+    /** A record lists a slug once per edition; overlapping ranges must not multiply one vulnerability. */
     public function testSameVulnerabilityListedTwiceIsCountedOnce(): void
     {
         $record = [
@@ -233,13 +227,7 @@ final class WordfenceIndexTest extends TestCase
         $index->refresh();
     }
 
-    /**
-     * Real-world case hit live on the very first refresh: both feeds came
-     * back 429 (rate limited) before any cache ever existed. refresh() must
-     * NOT leave behind an empty-but-present file — that would make
-     * isAvailable() lie "refreshed" and the probe would report every site
-     * clean instead of surfacing the real operational gap.
-     */
+    /** An empty-but-present cache would make isAvailable() claim a refresh and every site read clean. */
     public function testFirstRefreshThatFullyFailsLeavesNoCacheFile(): void
     {
         $mock  = new MockHandler([
@@ -261,13 +249,7 @@ final class WordfenceIndexTest extends TestCase
         $this->assertFileDoesNotExist($this->cacheFile());
     }
 
-    /**
-     * A partial failure must carry forward ONLY the failing variant's old
-     * entries. Feeding the whole previous cache back in re-appended the other
-     * variant's stale entries on top of the fresh ones, so every
-     * partial-failure run duplicated the variant that had just succeeded —
-     * a week of scanner rate-limiting would have shown each CVE seven times.
-     */
+    /** Only the failing variant's old entries are carried forward, never the successful variant's. */
     public function testPartialFailureDoesNotDuplicateTheSuccessfulVariant(): void
     {
         $sample = $this->samples()['single_plugin_wildcard'];
@@ -300,7 +282,30 @@ final class WordfenceIndexTest extends TestCase
         $this->assertSame(1, $bySource['scanner'], 'stale scanner entry must be preserved');
     }
 
-    /** A partial failure that still has real data to write must write it. */
+    public function testATotalFailureNeverRewritesAnExistingCache(): void
+    {
+        $sample = $this->samples()['single_plugin_wildcard'];
+        mkdir(dirname($this->cacheFile()), 0775, true);
+        WordfenceIndex::write($this->cacheFile(), WordfenceIndex::buildIndex([$sample['id'] => $sample], 'production'));
+        touch($this->cacheFile(), time() - 86400);
+        $before = [(string) file_get_contents($this->cacheFile()), filemtime($this->cacheFile())];
+
+        $mock = new MockHandler([
+            new Response(429, [], (string) json_encode(['error' => 'rate limited'])),
+            new Response(429, [], (string) json_encode(['error' => 'rate limited'])),
+        ]);
+        $client = WordfenceClient::fromConfig(
+            ['base_url' => 'https://www.wordfence.test/api/intelligence/v3', 'api_key' => 'k'],
+            new Client(['handler' => HandlerStack::create($mock), 'http_errors' => false])
+        );
+
+        $result = (new WordfenceIndex($this->cacheFile(), $client))->refresh();
+
+        clearstatcache();
+        $this->assertCount(2, $result['errors']);
+        $this->assertSame($before, [(string) file_get_contents($this->cacheFile()), filemtime($this->cacheFile())]);
+    }
+
     public function testPartialFailureStillWritesTheSuccessfulVariant(): void
     {
         $sample = $this->samples()['single_plugin_wildcard'];

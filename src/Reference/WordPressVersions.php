@@ -7,20 +7,13 @@ namespace SatelliteWP\Xtractor\Reference;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
-
-// EndOfLife::branch() (used below) is in this same namespace, no import needed.
+use SatelliteWP\Xtractor\Support\AtomicFile;
 
 /**
- * Every WordPress version core itself considers a real release, straight from
- * wordpress.org's own "stable check" service — the same list core uses to
- * decide whether an install needs a security nag. This is a different, more
- * precise source than endoflife.date's `cycles('wordpress')` (EndOfLife.php):
- * endoflife.date tracks one row per minor *branch* ("6.4"), while this tracks
- * every *explicit* release ("6.4.3") with wordpress.org's own verdict on it —
- * exactly the distinction needed for a per-version secure/insecure/latest
- * status. Cached locally under data/reference/wordpress-versions.json,
- * refreshed by `reference:refresh` alongside the endoflife.date cycle data
- * whenever "wordpress" is among the refreshed products.
+ * Every WordPress release with wordpress.org's own verdict on it (the
+ * "stable check" core uses for its security nag). Per explicit version
+ * ("6.4.3"), unlike endoflife.date's per-branch cycles. Cached under
+ * data/reference/wordpress-versions.json by `reference:refresh`.
  */
 final class WordPressVersions
 {
@@ -56,15 +49,9 @@ final class WordPressVersions
     }
 
     /**
-     * The 3-state badge this project displays, collapsed from wordpress.org's
-     * own 4 raw values: "insecure" is the only one that means an update
-     * actually matters for security, so it alone becomes "unsecure"; "latest"
-     * becomes "uptodate"; everything else ("outdated" — a supported older
-     * release with a newer one available — and "" — supported, no update
-     * offered) becomes "secure", since neither implies a known vulnerability
-     * (the UI labels this bucket "Outdated" rather than "Secure" — old but
-     * safe is not the same as current, and the label should not read like
-     * the recommended state).
+     * wordpress.org's 4 raw values collapsed to 3: only "insecure" implies a
+     * security update ("unsecure"); "latest" is "uptodate"; "outdated" and ""
+     * (supported, older) are "secure" — displayed as "Outdated".
      */
     public static function status(string $rawStatus): string
     {
@@ -76,13 +63,9 @@ final class WordPressVersions
     }
 
     /**
-     * The single version wordpress.org's stable-check currently marks
-     * "latest" — Xtractor's own independently-refreshed reference cache,
-     * not the extraction's own payload.core_update.available_version
-     * (what the site's own WordPress install self-reported, which can be
-     * stale if that install hasn't checked for updates recently, or has
-     * update checks blocked). Null when the cache is empty/not yet
-     * refreshed, or if nothing in it happens to be tagged "latest".
+     * The version wordpress.org marks "latest" — independent of the site's
+     * self-reported update offer, which can be stale or blocked. Null when
+     * the cache is empty.
      */
     public function latestVersion(): ?string
     {
@@ -154,19 +137,9 @@ final class WordPressVersions
             throw new RuntimeException('wordpress.org stable-check: invalid JSON');
         }
 
-        self::writeAtomically($this->cacheFile, $body);
+        AtomicFile::write($this->cacheFile, $body);
         $this->loaded = $decoded;
 
         return count($decoded);
-    }
-
-    /** Temp file + rename: a concurrent reader sees the old cache or the new one, never a truncated file. */
-    private static function writeAtomically(string $file, string $body): void
-    {
-        $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
-        if (file_put_contents($tmp, $body) === false || !rename($tmp, $file)) {
-            @unlink($tmp);
-            throw new RuntimeException("Cannot write reference cache: {$file}");
-        }
     }
 }

@@ -131,8 +131,7 @@
             <button type="submit" class="btn"><?= $keyRow === null ? 'Create key' : 'Create new key (rotate)' ?></button>
         </form>
 
-        <?php if ($keyRow !== null): // needs an existing keys.json record to attach to — same
-            // requirement as rebind/revoke above; a not-yet-paired site has nowhere to save this. ?>
+        <?php if ($keyRow !== null): // stored on the site's key record ?>
             <?php $httpAuth = is_array($keyRow['http_auth'] ?? null) ? $keyRow['http_auth'] : null; ?>
             <hr style="margin:1.1rem 0;border:none;border-top:1px solid var(--border)">
             <p class="muted" style="font-size:.85rem;margin:0 0 .5rem">

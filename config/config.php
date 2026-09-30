@@ -7,10 +7,13 @@
 declare(strict_types=1);
 
 return [
-    // Shown in the sidebar footer (e.g. "v1"). Bump by hand on a real release —
-    // this is a display label, not a semver/build tracker.
     'app' => [
-        'version' => 'v1',
+        // Sidebar footer label, bumped by hand on a release.
+        'version'  => 'v1',
+        // Public origin of the admin UI (e.g. https://xtractor.example.com) for
+        // absolute links handed outside the browser (report data key, report
+        // icons, OAuth callback). Empty: derived from the request's Host header.
+        'base_url' => '',
     ],
 
     // Absolute path to the runtime data directory.
@@ -32,6 +35,11 @@ return [
     // Accept unsigned payloads (no X-SWP-Signature). Dev only.
     'allow_unsigned' => false,
 
+    // Dev only: a "Debugging tools" panel on the extraction page that re-runs
+    // chosen probes on demand, even on a done (frozen) extraction, spending
+    // real probe quota. Never enable in production.
+    'debugging_tools' => false,
+
     // Max age (seconds) of X-SWP-Timestamp, in both directions.
     'replay_window_seconds' => 300,
 
@@ -40,7 +48,7 @@ return [
 
     // Probes executed by the pipeline, in order.
     'probes' => [
-        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'wordfence'],
+        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'wordfence', 'wporg', 'mail'],
         'connect_timeout' => 5,
         'timeout' => 15,
         'user_agent' => 'SatelliteWP-Xtractor/1.0',
@@ -64,10 +72,7 @@ return [
         'min_score' => 90,
     ],
 
-    // BlogVault API v6 — the decided source for vulnerabilities/malware/backup.
-    // The client is generic: set base_url, auth scheme and any always-present
-    // params here (fill them from BlogVault's v6 docs), then call any endpoint
-    // by path. api_key belongs in config.local.php.
+    // BlogVault API v6 (generic client: base_url, auth scheme, default params).
     'blogvault' => [
         'base_url' => 'https://api.blogvault.net/api/v6',
         'api_key'  => null,     // set in config.local.php
@@ -80,31 +85,38 @@ return [
         'default_headers' => [],
     ],
 
-    // Wordfence Intelligence v3 — second, independent vulnerability source
-    // alongside BlogVault. Confirmed live: the feed is a full dump (~100+ MB,
-    // no pagination) with a strict rate limit, not a per-site API — never
-    // called during a site scan. `wordfence:refresh` (suggested: daily cron)
-    // downloads it into data/reference/wordfence.json; WordfenceProbe reads
-    // that local cache only.
+    // Wordfence Intelligence v3: a rate-limited full dump, never called during
+    // a scan — `wordfence:refresh` (daily cron) caches it under data/reference/
+    // and WordfenceProbe reads that cache only.
     'wordfence' => [
         'base_url' => 'https://www.wordfence.com/api/intelligence/v3',
         'api_key'  => null,     // set in config.local.php
         'timeout'  => 120,      // the feed is tens of MB per variant
     ],
 
-    // Server-side reference data (SOURCE 14). endoflife.date products cached
-    // under data/reference/ by `reference:refresh` and read offline by rules.
+    // Validation mailbox the plugin's test email is sent to (MailProbe). Gmail
+    // IMAP with an app password (Google account → Security → 2-Step Verification
+    // → App passwords); username and password belong in config.local.php.
+    'mail' => [
+        'host'          => 'imap.gmail.com',
+        'port'          => 993,
+        'username'      => null,
+        'password'      => null,
+        'timeout'       => 15,
+        // A test email older than this is ignored.
+        'max_age_hours' => 24,
+        // Searched in order; a failing SPF/DKIM message is often filed as spam.
+        'mailboxes'     => ['INBOX', '[Gmail]/Spam'],
+    ],
+
+    // endoflife.date products cached by `reference:refresh`, read offline by rules.
     'reference' => [
         'products' => ['php', 'wordpress', 'mysql', 'mariadb'],
     ],
 
-    // External CRM/billing database (clients, subscriptions, products,
-    // websites, website items) — a separate MySQL database this app only
-    // ever reads from, never writes to. Fill host/database/username/password
-    // in config.local.php; until 'host' and 'database' are both set, every
-    // CRM page (/clients, /websites, /products, /items) shows "not connected"
-    // instead of erroring (same isConfigured() pattern as blogvault/wordfence
-    // above).
+    // External CRM/billing MySQL database — read-only except re-linking a
+    // subscription to a website. Credentials in config.local.php; until host
+    // and database are set, the CRM pages show "not connected".
     'crm_db' => [
         'host'     => null,
         'port'     => 3306,
@@ -114,20 +126,12 @@ return [
         'charset'  => 'utf8mb4',
     ],
 
-    // /site/{id}/extraction/{id}/report.json — a script-friendly export (used
-    // by the Google Docs report template) of the same report an analyst sees
-    // on the extraction page: plain values, tables (e.g. plugins), and the
-    // translated findings with their pastille colour. Gated by a single
-    // static key, same isConfigured() pattern as blogvault/wordfence above —
-    // there is no per-user session to check for a script, so the key itself
-    // is the grant. Sent as `Authorization: Bearer <api_key>`. Null disables
-    // the route entirely (404, not "empty" — no accidental unauthenticated
-    // export of an unconfigured install).
+    // report.json (the Google Docs report feed) accepts a one-hour token from
+    // the "Report data key" button, or this standing key as
+    // `Authorization: Bearer <api_key>` (null: token only).
     'reports' => [
         'api_key' => null, // set in config.local.php
-        // Which report contract /report.json builds against — see the
-        // shape documented at the top of that file. One entry per report
-        // type; the route always requests 'bilan_de_sante' today.
+        // Report contract report.json resolves against.
         'bilan_de_sante' => __DIR__ . '/reports/bilan-de-sante.php',
     ],
 
@@ -136,16 +140,28 @@ return [
         'hubspot_company_url'          => 'https://app-na3.hubspot.com/contacts/2543139/record/0-2/{id}', // {id} = swp_clients.hubspot_id
         'blogvault_client_url'         => null, // {id} = swp_clients.blogvault_client_id
         'blogvault_view_website'       => null, // {id} = swp_websites.blogvault_site_id, first 8 characters only
-        'wordpress_edit_user'          => null, // {id} = swp_clients.id — TBD, confirm with user what WordPress actually expects here
+        'wordpress_edit_user'          => null, // {id} = swp_clients.id (unconfirmed: may need the WordPress user id instead)
         'wordpress_edit_subscription'  => null, // {id} = swp_subscriptions.id
     ],
 
-    // Display language. Findings and raw data stay language-neutral; sentences
-    // are rendered from config/lang/<locale>.php. UI default is English; the
-    // web UI accepts ?lang=fr to switch.
+    // Findings stay language-neutral; sentences come from config/lang/<locale>.php (?lang=fr|en).
     'lang' => [
         'dir'     => __DIR__ . '/lang',
         'default' => 'en',
+    ],
+
+    // Vulnerabilities deliberately left out of findings, reports and the
+    // extraction page. One Wordfence Intelligence id each (the UUID shown in
+    // the row's JSON on /data/vulnerabilities; a BlogVault id works too). They
+    // stay visible, tagged "Ignored", in the /data/vulnerabilities catalogue.
+    // Edit the list here: a list in config.local.php is merged by position with
+    // this one, not appended. Re-score stored extractions afterwards with
+    // `bin/xtractor rules:reevaluate`.
+    'vulnerabilities' => [
+        'ignored' => [
+            '112ed4f2-fe91-4d83-a3f7-eaf889870af4',
+            '9fda5e15-fdf9-4b67-93d3-2dbfa94aefe9',
+        ],
     ],
 
     // Rule engine. The catalogue itself lives in config/rules.php; thresholds
@@ -177,16 +193,12 @@ return [
             // Both values belong in config.local.php, never here.
             'client_id'     => null,
             'client_secret' => null,
-            // Must match an "Authorised redirect URI" registered on that client,
-            // exactly, scheme and all. Leave null to derive it from the incoming
-            // request (scheme://host/auth/callback) — fine behind a correctly
-            // configured vhost, set it explicitly if you terminate TLS upstream.
+            // Must match a registered redirect URI exactly; null derives it
+            // from app.base_url (or the request host) + /auth/callback.
             'redirect_uri'  => null,
         ],
 
-        // Allowed accounts, one email per entry. The FIRST entry is the admin:
-        // the only one who may add or remove users from the web UI.
-        // Created on first use if absent; seed it with your own address.
+        // Allowed accounts with their roles; seed the first admin with `users:add`.
         'users_file' => dirname(__DIR__) . '/data/users.json',
     ],
 ];

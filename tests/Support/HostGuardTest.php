@@ -8,12 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SatelliteWP\Xtractor\Support\HostGuard;
 
 /**
- * The SSRF guard (2026-08-31): a probe must refuse to connect to a private,
- * loopback, link-local or otherwise reserved address, no matter what a
- * (possibly compromised) site's home_url claims. Only the IP-literal paths
- * are exercised here — no network, per project convention; the hostname
- * branch's dns_get_record() call is exactly the same filter_var() check
- * applied to whatever it resolves to.
+ * A probe must refuse any private, loopback, link-local or reserved address,
+ * whatever a (possibly compromised) site's home_url claims. Only IP literals
+ * are exercised — no network in tests.
  */
 final class HostGuardTest extends TestCase
 {

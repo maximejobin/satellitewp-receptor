@@ -6,6 +6,7 @@ namespace SatelliteWP\Xtractor\Console;
 
 use SatelliteWP\Xtractor\App;
 use SatelliteWP\Xtractor\Rules\Context;
+use SatelliteWP\Xtractor\Rules\Pastille;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -104,7 +105,7 @@ final class RulesReevaluateCommand extends Command
         $afterCounts  = (array) ($after['counts']['by_pastille'] ?? []);
 
         $parts = [];
-        foreach (['red', 'orange', 'blue', 'green', 'grey'] as $pastille) {
+        foreach (Pastille::values() as $pastille) {
             $b = (int) ($beforeCounts[$pastille] ?? 0);
             $a = (int) ($afterCounts[$pastille] ?? 0);
             if ($b !== $a) {

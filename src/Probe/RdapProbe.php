@@ -173,7 +173,7 @@ final class RdapProbe extends AbstractProbe
         }
 
         $server = null;
-        if (preg_match('/^\s*(?:whois|refer):\s*(\S+)/mi', $referral, $m)) {
+        if (preg_match('/^[ \t]*(?:whois|refer):[ \t]*(\S+)/mi', $referral, $m)) {
             $server = strtolower($m[1]);
         }
         if ($server === null) {
@@ -197,35 +197,26 @@ final class RdapProbe extends AbstractProbe
      */
     public static function parseWhoisText(string $raw): array
     {
+        // [ \t]* rather than \s*: \s would cross a line break and capture the
+        // next line's label when a field is empty.
         $registrar = null;
-        if (preg_match('/^\s*Registrar:\s*(.+)$/mi', $raw, $m)) {
+        if (preg_match('/^[ \t]*Registrar:[ \t]*(\S.*)$/mi', $raw, $m)) {
             $registrar = trim($m[1]);
+        } elseif (preg_match('/^[ \t]*Registrar:[ \t]*\R[ \t]+Name:[ \t]*(\S.*)$/mi', $raw, $m)) {
+            $registrar = trim($m[1]); // block format: "Registrar:" then an indented "Name:"
         }
 
-        $createdAt = null;
-        if (preg_match('/^\s*Creation Date:\s*(\S+)/mi', $raw, $m)) {
-            $createdAt = $m[1];
-        }
+        $createdAt = preg_match('/^[ \t]*Creation Date:[ \t]*(\S+)/mi', $raw, $m) ? $m[1] : null;
+        $expiresAt = preg_match('/^[ \t]*(?:Registry Expiry Date|Expiry Date|Expiration Date):[ \t]*(\S+)/mi', $raw, $m) ? $m[1] : null;
+        $updatedAt = preg_match('/^[ \t]*(?:Updated Date|Last Updated On|Last Modified):[ \t]*(\S+)/mi', $raw, $m) ? $m[1] : null;
 
-        $expiresAt = null;
-        if (preg_match('/^\s*(?:Registry Expiry Date|Expiry Date|Expiration Date):\s*(\S+)/mi', $raw, $m)) {
-            $expiresAt = $m[1];
-        }
+        $statuses = preg_match_all('/^[ \t]*Domain Status:[ \t]*(\S+)/mi', $raw, $m)
+            ? array_values(array_unique($m[1]))
+            : [];
 
-        $updatedAt = null;
-        if (preg_match('/^\s*(?:Updated Date|Last Updated On|Last Modified):\s*(\S+)/mi', $raw, $m)) {
-            $updatedAt = $m[1];
-        }
-
-        $statuses = [];
-        if (preg_match_all('/^\s*Domain Status:\s*(\S+)/mi', $raw, $m)) {
-            $statuses = array_values(array_unique($m[1]));
-        }
-
-        $nameservers = [];
-        if (preg_match_all('/^\s*Name Server:\s*(\S+)/mi', $raw, $m)) {
-            $nameservers = array_values(array_unique(array_map('strtolower', $m[1])));
-        }
+        $nameservers = preg_match_all('/^[ \t]*Name Server:[ \t]*(\S+)/mi', $raw, $m)
+            ? array_values(array_unique(array_map('strtolower', $m[1])))
+            : [];
 
         return [
             'source'         => 'whois',

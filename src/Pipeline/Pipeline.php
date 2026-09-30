@@ -45,10 +45,6 @@ final class Pipeline
         $payload = $this->store->readExtractionPayload($siteId, $extractionId)
             ?? throw new RuntimeException("Extraction {$siteId}/{$extractionId} not found");
 
-        // The analyst's chosen language (extraction page, before "Run
-        // analysis") — null for a CLI-triggered run or one queued before
-        // this existed; SiteContext/PageSpeedProbe fall back to the
-        // configured default in that case.
         $meta   = $this->store->readMeta($siteId, $extractionId) ?? [];
         $locale = is_string($meta['language'] ?? null) && $meta['language'] !== '' ? $meta['language'] : null;
 
@@ -60,30 +56,36 @@ final class Pipeline
 
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_RUNNING);
 
-        // Feed the cross-site plugin/theme catalogue with any newly seen slugs.
-        $this->catalog?->recordExtraction($payload);
+        // Anything that escapes (unknown probe, storage failure) must not leave
+        // the extraction stuck in "running" — probe throws are already isolated.
+        try {
+            $this->catalog?->recordExtraction($payload);
 
-        $results = [];
-        foreach ($this->selectProbes($onlyProbes) as $probe) {
-            $result = $this->runProbe($probe, $context->site);
+            $results = [];
+            foreach ($this->selectProbes($onlyProbes) as $probe) {
+                $result = $this->runProbe($probe, $context->site);
 
-            $this->store->writeProbeResult($siteId, $extractionId, $probe->name(), $result->toArray());
-            $this->index->upsertProbeRun(
-                $siteId,
-                $extractionId,
-                $probe->name(),
-                $result->status,
-                $result->ranAt,
-                $result->durationMs
-            );
+                $this->store->writeProbeResult($siteId, $extractionId, $probe->name(), $result->toArray());
+                $this->index->upsertProbeRun(
+                    $siteId,
+                    $extractionId,
+                    $probe->name(),
+                    $result->status,
+                    $result->ranAt,
+                    $result->durationMs
+                );
 
-            $results[$probe->name()] = $result;
+                $results[$probe->name()] = $result;
+            }
+
+            // Findings reflect every probe file on disk, including earlier passes.
+            $allProbes = $this->store->readAllProbeResults($siteId, $extractionId);
+            $this->evaluateRules($siteId, $extractionId, $payload, $allProbes);
+        } catch (Throwable $e) {
+            $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_ERROR);
+
+            throw $e;
         }
-
-        // Findings always reflect every probe file on disk (including probes
-        // run in a previous pass), not just this run.
-        $allProbes = $this->store->readAllProbeResults($siteId, $extractionId);
-        $this->evaluateRules($siteId, $extractionId, $payload, $allProbes);
 
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_DONE);
 

@@ -17,11 +17,7 @@
     <label><input type="checkbox" id="items-vulnerable"> Vulnerable only</label>
     <label><input type="checkbox" id="items-update"> Update available only</label>
     <button type="button" class="btn btn-secondary js-apply-filters" id="items-filter-btn">Filter</button>
-    <?php // A plain reload, same as every GET-param filter bar's own reset link
-          // — simpler and more reliable here than reaching into the enhanced
-          // Type dropdown's own internal chip state from outside it (nothing
-          // is actually persisted in the URL on this client-side-only page,
-          // so reloading already IS the reset). ?>
+    <?php // Nothing is in the URL here, so a reload is the reset. ?>
     <a href="/items" class="search-reset">Reset filter</a>
 </form>
 

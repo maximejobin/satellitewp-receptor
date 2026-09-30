@@ -7,20 +7,16 @@ namespace SatelliteWP\Xtractor\Reference;
 use RuntimeException;
 use SatelliteWP\Xtractor\Integration\WordfenceClient;
 use SatelliteWP\Xtractor\Integration\WordfenceException;
+use SatelliteWP\Xtractor\Support\AtomicFile;
 
 /**
- * Wordfence Intelligence vulnerability data, cached locally under
- * data/reference/wordfence.json as **JSON Lines** (one component per line,
- * `{"k":"plugin:woocommerce","v":[…]}`) so a site scan can stream the handful
- * of components it needs instead of decoding all ~18 000. Server-side reference data (mirrors
- * EndOfLife's role for endoflife.date): refreshed on a schedule by
- * `wordfence:refresh` (suggested: daily — the feed changes continuously and
- * the API is strictly rate-limited), matched offline during a site's scan.
+ * Local Wordfence Intelligence cache (data/reference/wordfence.json), refreshed
+ * daily by `wordfence:refresh` and matched offline during a scan.
  *
- * The two raw feeds ("production" ~117 MB, "scanner" ~78 MB, confirmed live)
- * are never stored as-is: refresh() reduces them to a compact index keyed by
- * "{type}:{slug}" (type: plugin|theme|core), which is what actually gets
- * matched against a site's installed plugins/themes/core version.
+ * Stored as JSON Lines, one component per line (`{"k":"plugin:slug","v":[…]}`),
+ * so a scan streams the few components it needs instead of decoding the
+ * whole ~18 000-component file. The raw feeds (~100 MB each) are reduced to
+ * this "{type}:{slug}" index and never stored as-is.
  */
 final class WordfenceIndex
 {
@@ -59,15 +55,9 @@ final class WordfenceIndex
         }
         $entries = $this->loaded[$key] ?? [];
 
-        // One Wordfence record can list the same slug several times — a plugin
-        // sold in editions (Business 7.x / Developer 20.x) gets one software
-        // entry per edition, each with its own range and patched versions. Those
-        // ranges usually do not overlap, but sometimes they do, and then the
-        // same vulnerability id matches more than once: miniorange-oauth-oidc-
-        // single-sign-on 18.5.3 matched one vulnerability 7 times, which would
-        // render as "7 CVE" for a single issue. Keep the first range that
-        // matches for a given id — a site runs one edition, and inflated counts
-        // are exactly the kind of false alarm that discredits the report.
+        // A record lists a slug once per product edition, each with its own
+        // range; overlapping ranges would count one vulnerability several
+        // times. Keep the first matching range per id.
         $matched = [];
         foreach ($entries as $vuln) {
             if (!self::rangesInclude((array) ($vuln['affected_versions'] ?? []), $version)) {
@@ -98,10 +88,10 @@ final class WordfenceIndex
     }
 
     /**
-     * Download both feed variants and rebuild the local index. A variant that
-     * fails (e.g. 429 — the API allows very few requests) does not abort the
-     * other: the cache keeps yesterday's data for that variant rather than
-     * going empty. Mirrors ReferenceRefreshCommand's per-product tolerance.
+     * Download both feed variants and rebuild the local index. A failing
+     * variant (the API is strictly rate-limited) keeps its previous entries;
+     * when every variant fails nothing is written, so refreshedAt() never
+     * claims a refresh that did not happen.
      *
      * @return array{production: int, scanner: int, index_entries: int, errors: list<string>}
      */
@@ -116,39 +106,31 @@ final class WordfenceIndex
             throw new RuntimeException("Cannot create reference cache dir: {$dir}");
         }
 
-        $counts = ['production' => 0, 'scanner' => 0];
-        $errors = [];
-        $index  = [];
+        $counts    = ['production' => 0, 'scanner' => 0];
+        $errors    = [];
+        $index     = [];
+        $succeeded = false;
 
         foreach ([WordfenceClient::VARIANT_PRODUCTION, WordfenceClient::VARIANT_SCANNER] as $variant) {
             try {
                 $raw = $this->client->fetch($variant);
             } catch (WordfenceException $e) {
                 $errors[] = "{$variant}: {$e->getMessage()}";
-                // Keep what THIS variant already contributed to the cache from a
-                // previous successful refresh, rather than wiping it. Only this
-                // variant's old entries — feeding the whole old cache back in
-                // would re-append the other variant's stale entries on top of
-                // the fresh ones just fetched, duplicating them on every
-                // partial-failure run.
+                // Only this variant's old entries: the whole old cache would
+                // duplicate the other variant's fresh ones.
                 $index = self::mergeVariant($index, self::entriesFrom($this->readAll(), $variant), $variant);
                 continue;
             }
 
             $counts[$variant] = count($raw);
-            $index = self::mergeVariant($index, self::buildIndex($raw, $variant), $variant);
+            $index     = self::mergeVariant($index, self::buildIndex($raw, $variant), $variant);
+            $succeeded = true;
         }
 
-        // A brand-new cache that fetched nothing (e.g. both variants rate
-        // limited on the very first run) must NOT produce an empty-but-present
-        // file: isAvailable() would then lie "refreshed" to the probe, which
-        // would report every site clean instead of surfacing the real gap.
-        // (When old data already exists, mergeVariant() above has already
-        // carried it forward per-variant, so $index is not actually empty here.)
-        if ($index === [] && $errors !== []) {
+        if (!$succeeded) {
             return [
-                'production'    => $counts['production'],
-                'scanner'       => $counts['scanner'],
+                'production'    => 0,
+                'scanner'       => 0,
                 'index_entries' => 0,
                 'errors'        => $errors,
             ];
@@ -185,11 +167,8 @@ final class WordfenceIndex
     }
 
     /**
-     * Streams the JSON Lines cache and decodes only the requested components.
-     * Decoding the whole file instead cost 243 MB to read 35 components out of
-     * 18 000 — a hard OOM at PHP's usual 128M default, which killed the whole
-     * pipeline process rather than failing one probe. Memory here stays flat
-     * however far Wordfence's database grows.
+     * Streams the cache and decodes only the requested components: decoding
+     * the whole file needs hundreds of MB and would OOM the pipeline process.
      *
      * @param list<string> $keys
      */
@@ -240,29 +219,11 @@ final class WordfenceIndex
      */
     public static function write(string $file, array $index): void
     {
-        // Written beside the target then renamed over it: a scan preloading
-        // during the daily refresh reads the old file or the new one, never a
-        // truncated one (which would silently read as "no vulnerabilities").
-        $tmp    = $file . '.tmp.' . bin2hex(random_bytes(4));
-        $handle = fopen($tmp, 'wb');
-        if ($handle === false) {
-            throw new RuntimeException("Cannot write Wordfence cache: {$file}");
-        }
-
-        $ok = true;
-        foreach ($index as $key => $entries) {
-            $line = (string) json_encode(['k' => $key, 'v' => $entries], JSON_UNESCAPED_SLASHES) . "\n";
-            if (fwrite($handle, $line) !== strlen($line)) {
-                $ok = false;
-                break;
+        AtomicFile::writeChunks($file, (static function () use ($index): \Generator {
+            foreach ($index as $key => $entries) {
+                yield json_encode(['k' => $key, 'v' => $entries], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
             }
-        }
-        $ok = fclose($handle) && $ok;
-
-        if (!$ok || !rename($tmp, $file)) {
-            @unlink($tmp);
-            throw new RuntimeException("Cannot write Wordfence cache: {$file}");
-        }
+        })());
     }
 
     /**
@@ -307,9 +268,6 @@ final class WordfenceIndex
         $index = [];
 
         foreach ($raw as $id => $record) {
-            if (!is_array($record)) {
-                continue;
-            }
             $cvss = (array) ($record['cvss'] ?? []);
 
             $entry = [
@@ -417,9 +375,8 @@ final class WordfenceIndex
     }
 
     /**
-     * True when $version falls inside any of the given ranges. "*" means
-     * unbounded on that side (confirmed live: Wordfence uses it for both
-     * "any version up to X" and, more rarely, "X and everything after").
+     * True when $version falls inside any of the given ranges; "*" means
+     * unbounded on that side.
      *
      * @param list<array<string, mixed>> $ranges
      */

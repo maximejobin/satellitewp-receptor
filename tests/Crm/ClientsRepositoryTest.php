@@ -9,14 +9,8 @@ use PHPUnit\Framework\TestCase;
 use SatelliteWP\Xtractor\Crm\ClientsRepository;
 
 /**
- * ClientsRepository is written in portable SQL on purpose (no MySQL-only
- * syntax such as GROUP_CONCAT's SEPARATOR keyword) so it can be exercised
- * here against a SQLite :memory: database instead of a real MySQL server —
- * this project's test suite runs fully offline (phpunit.xml.dist excludes
- * the 'network' group) and a live external CRM database will only exist
- * later. The schema below is a portable-DDL translation of the real MySQL
- * dump this repository was built against (AUTO_INCREMENT/ENGINE/COLLATE
- * stripped, tinyint(1) -> INTEGER) — same columns and relationships.
+ * ClientsRepository sticks to portable SQL so it runs here on SQLite. The
+ * schema is a portable translation of the CRM's MySQL DDL.
  */
 final class ClientsRepositoryTest extends TestCase
 {
@@ -181,6 +175,19 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertSame([], array_column($this->repo->listClients(search: 'nobody-matches-this'), 'id'));
     }
 
+    public function testLikeWildcardsInASearchAreMatchedLiterally(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("INSERT INTO swp_clients (id, email, first_name, last_name, company, date_sync) VALUES
+            (3, 'c@example.com', 'Cy', 'Percent', '100% Web', '2026-01-01 00:00:00')");
+
+        $this->assertSame([3], array_column($this->repo->listClients(search: '100%'), 'id'));
+        $this->assertSame([3], array_column($this->repo->listClients(search: '%'), 'id'), 'a bare % matches only a literal percent sign, not everyone');
+        $this->assertSame([], $this->repo->searchClients('_'), 'a bare _ is not a single-character wildcard');
+        $this->assertSame([], $this->repo->searchTags('_'));
+        $this->assertSame(0, $this->repo->searchItems(['q' => '%'], 0, 50)['filtered']);
+    }
+
     public function testCountOrphanSubscriptionsIsUnaffectedByAnyFilter(): void
     {
         $this->seedBasicPortfolio();
@@ -204,7 +211,7 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertSame('2026-06-15 10:00:00', $this->repo->clientsLastSyncedAt());
     }
 
-    /** The status page's (2026-09-03) per-table sync freshness check. */
+    /** The status page's per-table sync freshness check. */
     public function testLastSyncByTableReturnsMaxDateSyncPerTableExcludingSubscriptionsWebsites(): void
     {
         $this->seedBasicPortfolio();
@@ -316,7 +323,7 @@ final class ClientsRepositoryTest extends TestCase
     /**
      * Maintenance plans first, then everything else, then licenses last —
      * licenses alphabetical by product name regardless of when they were
-     * created (2026-09-10, user request).
+     * created.
      */
     public function testSubscriptionsForClientOrdersMaintenanceThenOtherThenAlphabeticalLicenses(): void
     {

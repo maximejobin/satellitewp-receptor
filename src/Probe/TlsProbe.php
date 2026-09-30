@@ -32,7 +32,7 @@ final class TlsProbe extends AbstractProbe
 
     public function version(): string
     {
-        return '1.0';
+        return '1.1';
     }
 
     protected function collect(SiteContext $site): array
@@ -49,11 +49,12 @@ final class TlsProbe extends AbstractProbe
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['Host does not resolve to a public address — refusing to connect (SSRF guard)']];
         }
 
-        // Full handshake with verification, capturing the certificate.
+        // Chain verification only: the hostname is checked separately against
+        // the certificate (hostname_covered), so a name mismatch is never
+        // misreported as a broken chain.
         [$cert, $chainValid, $handshakeError] = $this->fetchCertificate($host, $ip, verify: true);
 
         if ($cert === null) {
-            // Retry without verification: cert may be self-signed or chain broken.
             [$cert, , $handshakeError2] = $this->fetchCertificate($host, $ip, verify: false);
             $chainValid = false;
 
@@ -147,7 +148,7 @@ final class TlsProbe extends AbstractProbe
         $context = stream_context_create(['ssl' => [
             'capture_peer_cert' => true,
             'verify_peer'       => $verify,
-            'verify_peer_name'  => $verify,
+            'verify_peer_name'  => false,
             'allow_self_signed' => !$verify,
             'SNI_enabled'       => true,
             'peer_name'         => $host,
@@ -174,7 +175,15 @@ final class TlsProbe extends AbstractProbe
         return [$cert instanceof \OpenSSLCertificate ? $cert : null, $verify, null];
     }
 
-    /** @return array<string, bool|null> */
+    /**
+     * Which TLS versions the server accepts, one pinned handshake each.
+     *
+     * Security level 0: at the system default (SECLEVEL=2) OpenSSL itself
+     * refuses TLS 1.0/1.1, so the server would always read as "not accepting
+     * them" whatever it really does.
+     *
+     * @return array<string, bool|null> null = could not be tested
+     */
     private function probeProtocols(string $host, string $ip): array
     {
         $support = [];
@@ -187,6 +196,8 @@ final class TlsProbe extends AbstractProbe
                 'allow_self_signed' => true,
                 'SNI_enabled'       => true,
                 'peer_name'         => $host,
+                'security_level'    => 0,
+                'ciphers'           => 'DEFAULT@SECLEVEL=0',
             ]]);
 
             $client = @stream_socket_client(
@@ -204,7 +215,39 @@ final class TlsProbe extends AbstractProbe
             }
         }
 
-        return $support;
+        return self::interpretProtocolResults($support, self::legacyTlsTestable());
+    }
+
+    /**
+     * Pure. A refused handshake only means "not accepted" when a modern one
+     * went through (the server was reachable) and, for 1.0/1.1, when the
+     * local OpenSSL can speak them at all.
+     *
+     * @param array<string, bool> $handshakes label => handshake succeeded
+     * @return array<string, bool|null>
+     */
+    public static function interpretProtocolResults(array $handshakes, bool $legacyTestable): array
+    {
+        $reachable = ($handshakes['tls1_2'] ?? false) || ($handshakes['tls1_3'] ?? false);
+
+        $result = [];
+        foreach ($handshakes as $label => $ok) {
+            $legacy         = in_array($label, ['tls1_0', 'tls1_1'], true);
+            $result[$label] = match (true) {
+                $ok                        => true,
+                !$reachable                => null,
+                $legacy && !$legacyTestable => null,
+                default                    => false,
+            };
+        }
+
+        return $result;
+    }
+
+    /** security_level needs OpenSSL >= 1.1.0; without it TLS 1.0/1.1 cannot be negotiated here. */
+    private static function legacyTlsTestable(): bool
+    {
+        return OPENSSL_VERSION_NUMBER >= 0x10100000;
     }
 
     /** Pure: the stream_socket_client() target for a vetted IP — IPv6 in brackets. */

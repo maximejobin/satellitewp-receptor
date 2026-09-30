@@ -17,6 +17,7 @@
     --error: #d6453f;  --bg-error:#fbe5e4;
     --error-2: #8f1214; /* CVSS "critical", distinct from "high" (--error) — deliberately more red than brown */
     --info:  #2f7fe0;  --bg-info: #e6f0fc;
+    --purple: #7c5cd6; --bg-purple: #ece7fb; /* pastille: client action needed, distinct from --info (pure FYI) */
     --pending: #92720c; --bg-pending: #fdf4cf;
     --low: #7c7556; --bg-low: #f1efe0; /* CVSS "low" — a vulnerability, even a minor one, is never --ok green */
 
@@ -149,6 +150,7 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 .badge-critical { color: #fff; background: var(--error-2, #8f1214); }
 .badge-muted { color: var(--muted); background: var(--surface-2); }
 .badge-pending { color: var(--pending); background: var(--bg-pending); }
+.badge-purple { color: var(--purple); background: var(--bg-purple); }
 .badge-low { color: var(--low); background: var(--bg-low); }
 
 .status-dot { display: inline-flex; align-items: center; gap: .4rem; font-weight: 600; font-size: .85rem; }
@@ -191,6 +193,7 @@ tr.row-inactive { background: var(--bg-error); }
 .pastille-green  .dot { background: var(--ok); }    .pastille-green  { color: var(--ok); }
 .pastille-orange .dot { background: var(--warn); }  .pastille-orange { color: var(--warn); }
 .pastille-red    .dot { background: var(--error); } .pastille-red    { color: var(--error); }
+.pastille-purple .dot { background: var(--purple); } .pastille-purple { color: var(--purple); }
 .pastille-blue   .dot { background: var(--info); }  .pastille-blue   { color: var(--info); }
 .pastille-grey   .dot { background: var(--faint); } .pastille-grey   { color: var(--muted); }
 
@@ -222,7 +225,7 @@ table.kv td { text-align: left; word-break: break-word; font-variant-numeric: ta
 .chip { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid var(--border); border-radius: 999px; padding: .32rem .8rem .32rem .55rem; font-size: .84rem; background: var(--surface-2); }
 .chip .dot { width: .66rem; height: .66rem; border-radius: 50%; }
 .chip b { font-variant-numeric: tabular-nums; }
-.dot-red{background:var(--error);} .dot-orange{background:var(--warn);} .dot-blue{background:var(--info);} .dot-green{background:var(--ok);} .dot-grey{background:var(--faint);}
+.dot-red{background:var(--error);} .dot-orange{background:var(--warn);} .dot-purple{background:var(--purple);} .dot-blue{background:var(--info);} .dot-green{background:var(--ok);} .dot-grey{background:var(--faint);}
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .9rem; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .8rem 1rem; box-shadow: var(--shadow); }
@@ -253,6 +256,7 @@ table.kv td { text-align: left; word-break: break-word; font-variant-numeric: ta
 .frow.sev-red td:first-child { box-shadow: inset 3px 0 0 var(--error); }
 .frow.sev-orange td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .frow.sev-blue td:first-child { box-shadow: inset 3px 0 0 var(--info); }
+.frow.sev-purple td:first-child { box-shadow: inset 3px 0 0 var(--purple); }
 
 /* per-section findings strip */
 .sec-findings { display: flex; flex-direction: column; gap: .35rem; margin: 0 0 .9rem; }

@@ -29,8 +29,15 @@
         "sort-packages": true,
         "optimize-autoloader": true
     },
+    "suggest": {
+        "ext-pdo_mysql": "Required only when the CRM database (crm_db.*) is configured"
+    },
     "scripts": {
         "test": "phpunit",
-        "analyse": "phpstan analyse"
+        "analyse": "phpstan analyse",
+        "check": [
+            "@test",
+            "@analyse"
+        ]
     }
 }

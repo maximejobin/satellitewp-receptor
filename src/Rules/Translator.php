@@ -7,11 +7,8 @@ namespace SatelliteWP\Xtractor\Rules;
 use RuntimeException;
 
 /**
- * Renders language-neutral findings into sentences, in a chosen locale, from
- * the translation catalogue (config/lang/<locale>.php). This is the ONLY place
- * language enters the rules pipeline: source data and findings.json stay
- * neutral, and any consumer (English UI, French report) renders with the
- * locale it wants.
+ * Renders language-neutral findings into sentences from config/lang/<locale>.php —
+ * the only place language enters the rules pipeline.
  */
 final class Translator
 {
@@ -40,12 +37,7 @@ final class Translator
         return (string) ($this->catalog['ui'][$key] ?? ($default !== '' ? $default : $key));
     }
 
-    /**
-     * A label for the Google Docs report export (Web\ReportBuilder) —
-     * config/lang/*.php's own 'report' block, kept separate from 'ui' since
-     * that one stays English-only chrome (see CLAUDE.md) while the report
-     * genuinely follows ?lang=.
-     */
+    /** A label from the client report's own 'report' block (follows the report locale, unlike 'ui'). */
     public function report(string $key, string $default = ''): string
     {
         return (string) ($this->catalog['report'][$key] ?? ($default !== '' ? $default : $key));
@@ -61,7 +53,7 @@ final class Translator
         return (string) ($this->catalog['severity'][$code] ?? $code);
     }
 
-    /** Label for a pastille colour (green/orange/red/blue/grey). */
+    /** Label for a pastille colour. */
     public function pastille(string $color): string
     {
         return (string) ($this->catalog['pastille'][$color] ?? $color);
@@ -73,16 +65,8 @@ final class Translator
     }
 
     /**
-     * The short title of a rule. Pass a finding's status ('pass'/'fail') to
-     * get the verdict-specific headline (config/lang/*.php's 'title_success'/
-     * 'title_failure' — e.g. "Website infected" on fail vs. "No hacking
-     * detected" on pass, deliberately different sentences, not one neutral
-     * label plus a colour) instead of the neutral catalogue title. Falls
-     * back to the plain 'title' when $status is omitted (catalogue listings:
-     * rules:list, rules:doc — no finding, no verdict to headline), the
-     * status is neither pass nor fail (unknown/na — no verdict to assert
-     * either way), or the rule has no title_success/title_failure of its own
-     * yet.
+     * A rule's title — the verdict-specific 'title_success'/'title_failure'
+     * for a pass/fail status, else the neutral 'title'.
      */
     public function title(string $ruleId, ?string $status = null): string
     {
@@ -100,29 +84,35 @@ final class Translator
     }
 
     /**
-     * The rendered sentence for a finding: the pass/fail template for its rule,
-     * interpolated with {observed}, {threshold} and any named data values.
-     * Returns null when no template exists for that status (e.g. a rule with no
-     * "pass" phrase — the UI then shows the status label instead).
+     * The rendered sentence for a finding, or null when the rule has no
+     * template for its status. A finding whose data carries a 'variant'
+     * uses "<status>_<variant>" when that template exists.
      *
      * @param array<string, mixed> $finding one entry of findings.json
      */
     public function message(array $finding): ?string
     {
-        $id     = (string) ($finding['id'] ?? '');
-        $status = (string) ($finding['status'] ?? '');
-        $key    = match ($status) {
-            'fail'  => 'fail',
-            'pass'  => 'pass',
-            default => $status,
-        };
+        $template = $this->template($finding);
 
-        $template = $this->catalog['rules'][$id][$key] ?? null;
-        if (!is_string($template)) {
-            return null;
+        return $template === null ? null : $this->interpolate($template, $finding);
+    }
+
+    /**
+     * The raw template message() would render, placeholders untouched.
+     *
+     * @param array<string, mixed> $finding
+     */
+    public function template(array $finding): ?string
+    {
+        $rule    = (array) ($this->catalog['rules'][(string) ($finding['id'] ?? '')] ?? []);
+        $status  = (string) ($finding['status'] ?? '');
+        $variant = $finding['data']['variant'] ?? null;
+
+        if (is_string($variant) && $variant !== '' && is_string($rule["{$status}_{$variant}"] ?? null)) {
+            return $rule["{$status}_{$variant}"];
         }
 
-        return $this->interpolate($template, $finding);
+        return is_string($rule[$status] ?? null) ? $rule[$status] : null;
     }
 
     /** @param array<string, mixed> $finding */
@@ -132,9 +122,18 @@ final class Translator
             'observed'  => $this->scalar($finding['observed'] ?? null),
             'threshold' => $this->scalar($finding['threshold'] ?? null),
         ];
+        $raw = ['observed' => $finding['observed'] ?? null, 'threshold' => $finding['threshold'] ?? null];
         foreach ((array) ($finding['data'] ?? []) as $name => $value) {
             $values[(string) $name] = $this->scalar($value);
+            $raw[(string) $name]    = $value;
         }
+
+        // {name|singular|plural} first: its text contains no braces, so the plain pass below can't touch it.
+        $template = preg_replace_callback(
+            '/\{(\w+)\|([^{}|]*)\|([^{}|]*)\}/u',
+            fn (array $m): string => $this->isSingular($raw[$m[1]] ?? null) ? $m[2] : $m[3],
+            $template
+        ) ?? $template;
 
         return preg_replace_callback(
             '/\{(\w+)\}/',
@@ -143,14 +142,56 @@ final class Translator
         ) ?? $template;
     }
 
+    /** French treats 0 and 1 as singular; English only 1. Anything non-numeric reads as plural. */
+    private function isSingular(mixed $value): bool
+    {
+        if (is_array($value)) {
+            $value = count($value);
+        }
+        if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+            return false;
+        }
+        $n = abs((float) $value);
+
+        return str_starts_with($this->locale, 'fr') ? $n < 2 : $n == 1.0;
+    }
+
     private function scalar(mixed $value): string
     {
         return match (true) {
             $value === null  => '?',
             is_bool($value)  => $value ? '1' : '0',
-            is_float($value) => rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.'),
+            is_int($value), is_float($value) => $this->number($value),
             is_array($value) => (string) count($value),
+            is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 => $this->date($value),
             default          => (string) $value,
         };
+    }
+
+    /** "2026-07-06" as "6 juillet 2026" / "July 6, 2026". */
+    private function date(string $iso): string
+    {
+        [$y, $m, $d] = array_map('intval', explode('-', $iso));
+        if (!checkdate($m, $d, $y)) {
+            return $iso;
+        }
+        if (str_starts_with($this->locale, 'fr')) {
+            $months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+            return ($d === 1 ? '1er' : (string) $d) . ' ' . $months[$m - 1] . ' ' . $y;
+        }
+        $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        return $months[$m - 1] . " {$d}, {$y}";
+    }
+
+    /** Up to 2 decimals, locale separators; thousands grouped only from 10 000 so years stay intact. */
+    private function number(int|float $value): string
+    {
+        [$decimal, $thousands] = str_starts_with($this->locale, 'fr') ? [',', "\u{202F}"] : ['.', ','];
+        $decimals = is_float($value) && floor($value) !== $value ? 2 : 0;
+        $text     = number_format($value, $decimals, $decimal, abs($value) >= 10000 ? $thousands : '');
+
+        return $decimals > 0 ? rtrim(rtrim($text, '0'), $decimal) : $text;
     }
 }

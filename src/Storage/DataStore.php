@@ -157,13 +157,9 @@ final class DataStore
     }
 
     /**
-     * Analyst-authored observations, one file per extraction, same
-     * "JSON file is the source of truth" convention as findings.json — the
-     * only piece of report content that isn't derived from a probe or the
-     * rules engine. {"items": [{id, section, color, title, description,
-     * include}]} — 'section' names one of the active report contract's own
-     * 'observations'-type fields, resolved by Web\ReportBuilder exactly
-     * like a rule finding would be.
+     * observations.json — analyst-authored report lines:
+     * {"items": [{id, section, color, title, description, include}]}, where
+     * 'section' is one of the report contract's 'observations' fields.
      *
      * @param array<string, mixed> $data
      */
@@ -181,8 +177,8 @@ final class DataStore
     /**
      * Read-modify-write of observations.json under the extraction's lock:
      * $fn gets the current item list (a list, [] when nothing is stored yet)
-     * and returns the new one, which is written back as {"items": [...]}.
-     * Two analysts saving at once can no longer drop each other's edit.
+     * and returns the new one, written back as {"items": [...]}, so
+     * concurrent saves never drop an edit.
      *
      * @param callable(list<mixed>): list<mixed> $fn
      */
@@ -195,14 +191,8 @@ final class DataStore
     }
 
     /**
-     * Per-extraction licence-key status for each plugin/theme — is the
-     * licence active on the install THIS extraction snapshotted, missing,
-     * or does it need checking. Deliberately scoped like every other
-     * extraction fact (findings.json, observations.json): re-set on
-     * each new extraction rather than carried forward, same "an extraction
-     * is a snapshot in time" rule the rest of data/ already follows —
-     * not SoftwareCatalog's cross-site classification (free/premium,
-     * shared by every site) and not a per-site file either.
+     * This extraction's licence-key status per plugin/theme (a snapshot, not
+     * carried forward; unrelated to SoftwareCatalog's free/premium class).
      *
      * licenses.json: {"plugin:<slug>"/"theme:<slug>" => "active"|"missing"|"to_validate"|"n_a"}.
      *
@@ -238,11 +228,8 @@ final class DataStore
     }
 
     /**
-     * Merges $patch into an extraction's existing meta.json (e.g. the
-     * analyst's chosen report/PageSpeed language, set from the extraction
-     * page before "Run analysis" — meta.json is written once at ingest
-     * time, before that choice exists, so this is a real merge, not an
-     * overwrite).
+     * Merges $patch into meta.json (written at ingest, before choices such as
+     * the report language exist).
      *
      * @param array<string, mixed> $patch
      */
@@ -384,14 +371,9 @@ final class DataStore
     }
 
     /**
-     * Refreshes the `latest` shortcut. Nothing reads it — the index and the
-     * directory listing both know which extraction is newest — so it exists only
-     * to make data/ pleasant to walk by hand, and any failure is harmless.
-     *
-     * Hence the catch: `symlink()` is a standard entry in disable_functions on
-     * managed hosting, and a disabled function raises an Error, which `@` does
-     * NOT suppress — it silences diagnostics, not throwables. Without this, a
-     * host that forbids symlinks turned every stored extraction into an HTTP 500.
+     * The `latest` shortcut, for browsing data/ by hand only — nothing reads it.
+     * symlink() is often in disable_functions, which raises an Error that `@`
+     * does not suppress, hence the catch.
      */
     private function updateLatestLink(string $siteId, string $extractionId): void
     {

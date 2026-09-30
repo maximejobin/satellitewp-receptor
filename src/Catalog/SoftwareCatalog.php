@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Catalog;
 
+use SatelliteWP\Xtractor\Support\AtomicFile;
+
 /**
  * A growing, cross-site reference of every plugin and theme ever seen, keyed by
  * type + wp.org-style slug. Each extraction feeds it new slugs; an analyst then
@@ -175,13 +177,8 @@ final class SoftwareCatalog
     }
 
     /**
-     * Datatables server-side search: same filters as all(), plus a free-text
-     * query (matched against slug/name) and pagination. The catalogue is
-     * expected to grow into the thousands of entries, too many to hand the
-     * whole rendered table to the browser at once — this is what backs the
-     * AJAX-mode /catalog table. Unlike WordfenceIndex's streamed search, the
-     * catalogue file is small enough that loading it whole and
-     * filtering/sorting/slicing in PHP is not a real cost.
+     * Datatables server-side search for /catalog: all()'s filters plus a
+     * slug/name query and pagination. The file is small enough to filter in PHP.
      *
      * @param 'plugin'|'theme'|null $type
      * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
@@ -335,10 +332,9 @@ final class SoftwareCatalog
             $this->entries,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );
-        $tmp = $this->file . '.tmp.' . bin2hex(random_bytes(4));
-        if ($json === false || file_put_contents($tmp, $json) === false || !rename($tmp, $this->file)) {
-            @unlink($tmp);
-            throw new \RuntimeException("Unable to write {$this->file}");
+        if ($json === false) {
+            throw new \RuntimeException("Unable to encode {$this->file}");
         }
+        AtomicFile::write($this->file, $json);
     }
 }

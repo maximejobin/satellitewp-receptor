@@ -79,4 +79,19 @@ final class RdapProbeTest extends TestCase
         $this->assertNull($data['days_to_expiry']);
         $this->assertSame([], $data['nameservers']);
     }
+
+    public function testAnEmptyRegistrarLineNeverCapturesTheNextLabel(): void
+    {
+        $data = RdapProbe::parseWhoisText("Registrar:\nCreation Date: 2008-09-05T00:00:00Z\n");
+
+        $this->assertNull($data['registrar']);
+        $this->assertNotNull($data['created_at']);
+    }
+
+    public function testBlockFormatRegistrarReadsTheIndentedName(): void
+    {
+        $data = RdapProbe::parseWhoisText("Registrar:\n    Name: Example Registrar Inc.\n    Number: 123\n");
+
+        $this->assertSame('Example Registrar Inc.', $data['registrar']);
+    }
 }

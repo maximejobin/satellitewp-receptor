@@ -19,11 +19,13 @@ use SatelliteWP\Xtractor\Pipeline\Pipeline;
 use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
 use SatelliteWP\Xtractor\Probe\DnsProbe;
 use SatelliteWP\Xtractor\Probe\HttpProbe;
+use SatelliteWP\Xtractor\Probe\MailProbe;
 use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
 use SatelliteWP\Xtractor\Probe\ProbeRegistry;
 use SatelliteWP\Xtractor\Probe\RdapProbe;
 use SatelliteWP\Xtractor\Probe\TlsProbe;
 use SatelliteWP\Xtractor\Probe\WordfenceProbe;
+use SatelliteWP\Xtractor\Probe\WporgProbe;
 use SatelliteWP\Xtractor\Reference\CatalogIndex;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordfenceIndex;
@@ -31,6 +33,7 @@ use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\RuleEngine;
 use SatelliteWP\Xtractor\Rules\Translator;
+use SatelliteWP\Xtractor\Rules\VulnerabilityMerge;
 use SatelliteWP\Xtractor\Storage\DataStore;
 use SatelliteWP\Xtractor\Storage\Index;
 use SatelliteWP\Xtractor\Storage\KeyStore;
@@ -152,22 +155,22 @@ final class App
                 $userAgent
             ));
 
-            // Null when unconfigured: the probe reports a configuration error
-            // instead of the registry blowing up at boot. Both base_url and
-            // api_key must be present — base_url alone has a usable default, so
-            // gating on it only would send every keyless install through a
-            // pointless round-trip that comes back 401.
+            // Null when unconfigured (base_url has a default, so the key decides):
+            // the probe then reports a configuration error instead of a 401.
             $registry->register(new BlogVaultProbe(
                 $this->isConfigured('blogvault') ? $this->blogVault() : null
             ));
 
-            // The Wordfence probe reads the local cache and never calls the API,
-            // so it only needs the index; the index needs a client for
-            // `wordfence:refresh` alone. Unlike BlogVault, "configured but never
-            // refreshed" is its own distinct state, which the probe reports.
+            // Reads the local cache only; the API client is for wordfence:refresh.
             $registry->register(new WordfenceProbe(
                 $this->isConfigured('wordfence') ? $this->wordfenceIndex() : null
             ));
+
+            // Reads the newest test email in the validation mailbox over IMAP.
+            $registry->register(new MailProbe((array) $this->config->get('mail', [])));
+
+            // Unauthenticated wp.org lookups (F8, abandoned plugins/themes).
+            $registry->register(new WporgProbe($connectTimeout, $timeout, $userAgent));
 
             $this->services[ProbeRegistry::class] = $registry;
         }
@@ -263,11 +266,7 @@ final class App
         );
     }
 
-    /**
-     * Rebuildable SQLite index over the Wordfence cache + software catalogue
-     * (never the source of truth — see the class docblock). Same file the
-     * two JSON sources already sit next to.
-     */
+    /** Rebuildable SQLite index over the Wordfence cache and the software catalogue. */
     public function catalogIndex(): CatalogIndex
     {
         return $this->services[CatalogIndex::class] ??= new CatalogIndex(
@@ -289,7 +288,22 @@ final class App
      */
     public function referenceData(): array
     {
-        return ['eol' => $this->endOfLife(), 'wordpress_versions' => $this->wordPressVersions()];
+        return [
+            'eol'                     => $this->endOfLife(),
+            'wordpress_versions'      => $this->wordPressVersions(),
+            'ignored_vulnerabilities' => $this->ignoredVulnerabilities(),
+        ];
+    }
+
+    /**
+     * Vulnerability ids (config: vulnerabilities.ignored) left out of findings,
+     * reports and the extraction page.
+     *
+     * @return list<string>
+     */
+    public function ignoredVulnerabilities(): array
+    {
+        return VulnerabilityMerge::normalizeIgnored((array) $this->config->get('vulnerabilities.ignored', []));
     }
 
     public function crmDb(): ClientsDb
@@ -299,11 +313,7 @@ final class App
         );
     }
 
-    /**
-     * Null when crm_db is not configured yet — every CRM page (clients,
-     * websites, products, items: see Router::withCrmRepository()) must check
-     * this.
-     */
+    /** Null until crm_db is configured. */
     public function crmRepository(): ?ClientsRepository
     {
         if (!$this->crmDb()->isConfigured()) {

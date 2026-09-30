@@ -8,21 +8,10 @@ use PDO;
 use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 
 /**
- * SQLite index over the Wordfence vulnerability cache and the software
- * catalogue — rebuildable at any time, never the source of truth (the same
- * relationship Storage\Index already has to data/sites/*.json). The two JSON
- * sources stay exactly as they are (data/reference/wordfence.json,
- * data/catalog/software.json); this only adds a queryable, joinable copy so
- * the two can be cross-referenced (e.g. "which catalogued plugins currently
- * have an open vulnerability") and so /data/vulnerabilities can be sorted by
- * column instead of streaming the whole cache on every request.
- *
- * The "notes" column on software_catalog has no writer yet — it is schema
- * groundwork for a later per-plugin annotation feature. rebuildCatalog()/
- * upsertCatalogEntry() deliberately never touch it, so it survives a
- * rebuild; whichever feature ends up writing it will need to decide whether
- * notes belong in software.json too (to stay rebuildable) or whether this
- * table becomes their real store.
+ * Rebuildable SQLite copy of the Wordfence cache and the software catalogue —
+ * never the source of truth (the JSON files are). It makes the two joinable
+ * and lets /data/vulnerabilities sort by column without streaming the cache.
+ * software_catalog.notes has no writer; rebuilds deliberately preserve it.
  */
 final class CatalogIndex
 {
@@ -167,16 +156,11 @@ final class CatalogIndex
     }
 
     /**
-     * Server-side search for /data/vulnerabilities, backed by a real indexed
-     * table instead of a full sequential scan of the cache file — this is
-     * what makes column sorting possible (WordfenceIndex::search() could not
-     * support it without buffering the whole filtered set first).
+     * Server-side search for /data/vulnerabilities. $orderColumn is untrusted
+     * request input: checked against an allowlist, never interpolated as-is.
      *
-     * $orderColumn is untrusted input (whatever the caller resolved from a
-     * request param) — validated against an allowlist below, not typed as a
-     * literal union, so it falls through to the default order instead of
-     * ever reaching raw SQL unchecked.
-     *
+     * @param list<string> $ignored lowercase vulnerability ids; rows matching one come back with 'ignored' => true
+     * @param 'all'|'only'|'hide' $ignoredMode restrict to (only) or exclude (hide) the ignored rows
      * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
      */
     public function searchVulnerabilities(
@@ -185,18 +169,32 @@ final class CatalogIndex
         int $length,
         string $orderColumn = 'published_at',
         string $orderDir = 'desc',
+        array $ignored = [],
+        string $ignoredMode = 'all',
     ): array {
         $pdo = $this->pdo();
 
         $total = (int) $pdo->query('SELECT COUNT(*) FROM vulnerabilities')->fetchColumn();
 
-        $where  = '';
-        $params = [];
-        $needle = trim($query);
+        $conditions = [];
+        $params     = [];
+        $needle     = trim($query);
         if ($needle !== '') {
-            $where = 'WHERE slug LIKE :q OR name LIKE :q OR title LIKE :q OR cve_id LIKE :q OR vuln_id LIKE :q';
-            $params['q'] = '%' . $needle . '%';
+            $conditions[] = '(slug LIKE :q OR name LIKE :q OR title LIKE :q OR cve_id LIKE :q OR vuln_id LIKE :q)';
+            $params['q']  = '%' . $needle . '%';
         }
+
+        $ignoredSql = $ignored === [] ? '0' : 'LOWER(vuln_id) IN (' . implode(',', array_map(
+            static fn (int $i): string => ':ig' . $i,
+            array_keys($ignored)
+        )) . ')';
+        if ($ignoredMode === 'only' || $ignoredMode === 'hide') {
+            $conditions[] = $ignoredMode === 'only' ? $ignoredSql : "NOT ({$ignoredSql})";
+            foreach ($ignored as $i => $id) {
+                $params['ig' . $i] = $id;
+            }
+        }
+        $where = $conditions === [] ? '' : 'WHERE ' . implode(' AND ', $conditions);
 
         $filtered = (int) self::bound(
             $pdo->prepare("SELECT COUNT(*) FROM vulnerabilities {$where}"),
@@ -222,9 +220,10 @@ final class CatalogIndex
         $stmt->bindValue('start', $start, PDO::PARAM_INT);
         $stmt->execute();
 
-        $rows = array_map(static function (array $row): array {
+        $rows = array_map(static function (array $row) use ($ignored): array {
             $row['patched']          = (bool) $row['patched'];
             $row['informational']    = (bool) $row['informational'];
+            $row['ignored']          = in_array(strtolower((string) ($row['vuln_id'] ?? '')), $ignored, true);
             $row['patched_versions'] = (array) json_decode((string) $row['patched_versions'], true);
 
             return $row;
@@ -245,11 +244,8 @@ final class CatalogIndex
     }
 
     /**
-     * Insert or refresh one catalogue entry — the type/slug/name/license/
-     * suggested fields only, never "notes" (nothing writes that yet; see the
-     * class docblock). Used both for a full rebuildCatalog() pass and for a
-     * single-row write right after an analyst saves a licence classification,
-     * so the index never waits for the next scheduled rebuild to see it.
+     * Insert or refresh one catalogue entry (never "notes") — for a full
+     * rebuild and for the single row an analyst just classified.
      *
      * @param array<string, mixed> $entry a SoftwareCatalog record (type, slug, name, license, suggested, source)
      */

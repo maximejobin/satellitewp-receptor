@@ -10,15 +10,9 @@ use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
 
 /**
- * Google sign-in, OAuth 2.0 authorization-code flow.
- *
- * The email is read from Google's userinfo endpoint using the access token,
- * rather than by decoding the id_token ourselves. Both are equally valid; this
- * way Google validates the token and we need no JWT signature verification, no
- * JWKS cache and no extra dependency — which for a tool this size is the
- * difference between ~40 lines and a library.
- *
- * Identity only: the address returned here still has to appear in UserStore.
+ * Google sign-in (OAuth 2.0 authorization code). The email comes from the
+ * userinfo endpoint, so Google validates the token and no JWT/JWKS handling
+ * is needed. Identity only: the address must still be listed in UserStore.
  */
 final class GoogleAuth
 {

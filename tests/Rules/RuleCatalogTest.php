@@ -109,6 +109,24 @@ final class RuleCatalogTest extends TestCase
         $this->assertGreaterThan(0, $result['counts']['unknown']);
     }
 
+    public function testW2AndW3AreClientActionAdvisoriesRenderedPurple(): void
+    {
+        $findings = array_column(
+            $this->engine()->evaluate(new Context([]))['findings'],
+            null,
+            'id'
+        );
+
+        foreach (['W2', 'W3'] as $id) {
+            $this->assertSame(Status::Pass->value, $findings[$id]['status']);
+            $this->assertSame(
+                'purple',
+                $findings[$id]['pastille'],
+                "{$id} is a standing client-action advisory, not a plain Info blue"
+            );
+        }
+    }
+
     public function testHealthySiteFixturePassesTheDataRules(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
@@ -121,15 +139,8 @@ final class RuleCatalogTest extends TestCase
         $payload['filesystem']['core_writable'] = false;
         // plugins/themes arrive keyed by plugin file / stylesheet, never as lists.
         $payload['plugins']['woocommerce/woocommerce.php']['new_version'] = '';
-        // Fixture default (512000) sits at I1's new 500 KB boundary
-        // (2026-09-05: banded, green is strictly under 500 KB) — make it
-        // unambiguously healthy rather than relying on it landing on a line.
+        // The fixture's 512000 sits exactly on I1's 500 KB boundary.
         $payload['autoload']['total_bytes'] = 400_000;
-
-        // F1 (2026-09-07: counts major branches behind, not point releases —
-        // see WordPressVersionsTest) needs its own reference data now,
-        // unlike the plain core_update signal it replaced. The fixture's own
-        // wp_version (6.8.1) marked "latest" here means zero branches behind.
         mkdir($this->tmpDir . '/reference', 0775, true);
         file_put_contents(
             $this->tmpDir . '/reference/wordpress-versions.json',
@@ -177,13 +188,7 @@ final class RuleCatalogTest extends TestCase
         }
     }
 
-    /**
-     * G3: post_max_size / upload_max_filesize should match (PHP silently
-     * caps an upload at whichever is smaller, so a mismatch is always dead
-     * weight on one side) AND the effective limit should clear a real
-     * working threshold (default 50 MB), or a normal upload risks silently
-     * failing partway through.
-     */
+    /** G3: the two upload limits must match and clear the working threshold. */
     public function testUploadLimitsConsistencyRule(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
@@ -277,11 +282,7 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(Status::Fail->value, $findings['B7a']['status'], 'public site with no headers still fails');
     }
 
-    /**
-     * ConstantsCollector sends the string "N/A" for a constant that is not
-     * defined, and (bool) "N/A" is true — which used to turn "no hardening at
-     * all" into a green K4/K6. An undefined constant is false in WordPress.
-     */
+    /** "N/A" (undefined constant) reads as false, as in WordPress — (bool) "N/A" would be true. */
     public function testUndefinedConstantsAreReadAsFalseNotTrue(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
@@ -323,11 +324,6 @@ final class RuleCatalogTest extends TestCase
 
     public function testThresholdOverrideIsApplied(): void
     {
-        // I1 used to be the id exercised here, but it's banded now (2026-09-05
-        // — fixed 500 KB / 2 MB boundaries, no longer driven by $rule->threshold)
-        // so overriding its config threshold no longer changes its outcome.
-        // H5 (expired transients, still a plain atMost($rule->threshold)) is
-        // still a real test of the override mechanism itself.
         $payload = $this->fixtureArray('extraction-valid.json'); // transients.expired = 14
 
         $strict   = $this->engine(['H5' => 5])->evaluate(new Context($payload));
@@ -361,16 +357,61 @@ final class RuleCatalogTest extends TestCase
         );
 
         $this->assertSame(Status::Pass->value, $findings['F3']['status'], 'PHP 8.3 still supported');
-        $this->assertSame(Status::Fail->value, $findings['F2']['status'], 'WordPress 6.8 is EOL');
-        // The EOL date rides along as neutral data (for later interpolation).
-        $this->assertSame('2025-12-02', $findings['F2']['data']['eol_date']);
+        $this->assertSame('2027-12-31', $findings['F3']['data']['eol_date']);
         $this->assertSame(Status::Fail->value, $findings['H1']['status'], 'MySQL 8.0 is EOL');
+        $this->assertSame('MySQL 8.0', $findings['H1']['observed']);
     }
 
-    /**
-     * F2 fails on a missing same-branch patch (minor_update_version), never
-     * just because a newer major release is offered (available_version).
-     */
+    /** F8 flags only wp.org-hosted software idle past the threshold; premium/custom items are skipped. */
+    public function testF8FlagsOnlyAWporgHostedPluginOrThemeIdleBeyondTheThreshold(): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        // Fixture: plugins woocommerce/woocommerce.php + akismet/akismet.php,
+        // theme storefront (+ storefront-child, no 'slug' collision risk).
+        $f8 = function (array $wporgData) use ($payload): array {
+            $probes   = ['wporg' => ['status' => 'ok', 'data' => $wporgData]];
+            $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
+
+            return $findings['F8'];
+        };
+
+        $this->assertSame(Status::Unknown->value, $f8([])['status'], 'the probe never ran / nothing matched');
+
+        $recent = gmdate('Y-m-d\TH:i:s\Z', time() - 30 * 86400);
+        $stale  = gmdate('Y-m-d\TH:i:s\Z', time() - 400 * 86400);
+
+        $allRecent = $f8([
+            'plugins' => [
+                'woocommerce' => ['on_wporg' => true, 'last_updated' => $recent],
+                'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
+            ],
+            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
+        ]);
+        $this->assertSame(Status::Pass->value, $allRecent['status']);
+
+        $oneStale = $f8([
+            'plugins' => [
+                'woocommerce' => ['on_wporg' => true, 'last_updated' => $stale],
+                'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
+            ],
+            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
+        ]);
+        $this->assertSame(Status::Fail->value, $oneStale['status']);
+        $this->assertSame(1, $oneStale['observed']);
+        $this->assertStringContainsString('WooCommerce', $oneStale['data']['names']);
+
+        // Not on wp.org at all (a premium plugin) — skipped, not flagged,
+        // even though it has no last_updated to check.
+        $notOnWporg = $f8([
+            'plugins' => [
+                'woocommerce' => ['on_wporg' => false, 'last_updated' => null],
+                'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
+            ],
+            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
+        ]);
+        $this->assertSame(Status::Pass->value, $notOnWporg['status']);
+    }
+
     public function testF2IgnoresAMajorReleaseOfferAndFailsOnlyOnABranchPatch(): void
     {
         mkdir($this->tmpDir . '/reference', 0775, true);
@@ -395,11 +436,7 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame('6.8.3', $branchPatch['data']['available']);
     }
 
-    /**
-     * F1 (rewritten 2026-09-07) fails only on a 4+ major-branch gap, not on
-     * "a newer point release exists" — that narrower signal is F2/core_update
-     * now. See WordPressVersionsTest for majorVersionsBehind() itself.
-     */
+    /** F1 fails only on a 4+ major-branch gap; a missing point release is F2's concern. */
     public function testF1FailsOnlyFourOrMoreMajorBranchesBehind(): void
     {
         mkdir($this->tmpDir . '/reference', 0775, true);
@@ -426,12 +463,7 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(4, $findings['F1']['data']['major_versions_behind']);
     }
 
-    /**
-     * WP_DEBUG_DISPLAY / WP_DEBUG_LOG have no real effect while WP_DEBUG
-     * itself is off (2026-09-07, user: "n'a pas d'importance ... si WP_DEBUG
-     * est à false") — K2/K3 must not fail on a stray true left over in
-     * wp-config.php in that case.
-     */
+    /** WP_DEBUG_DISPLAY / WP_DEBUG_LOG have no effect while WP_DEBUG is off. */
     public function testK2AndK3IgnoreOwnValueWhenWpDebugIsOff(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
@@ -498,12 +530,7 @@ final class RuleCatalogTest extends TestCase
         }
     }
 
-    /**
-     * page_count is a bare integer on every real extraction checked (never
-     * the full draft/trash breakdown posts_count carries) — N2/N4 read
-     * posts_count only, and must stay unknown rather than guess when even
-     * that is missing.
-     */
+    /** N2/N4 read posts_count only (page_count is a bare integer) and stay unknown without it. */
     public function testN2AndN4AreUnknownWithoutPostsCount(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');

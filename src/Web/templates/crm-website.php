@@ -32,14 +32,7 @@ $versionField = static function (string $label, mixed $version, ?array $eolStatu
     return field_raw($label, e($version) . $tags);
 };
 $eolPhp = $eol->eolStatus('php', (string) ($website['php_version'] ?? ''));
-// No engine column on swp_websites to tell MySQL from MariaDB apart (unlike
-// Xtractor's own extraction payload, which has database_type) — but the
-// version string itself does carry the tell (confirmed live: real rows read
-// like "10.6.27-MariaDB" vs "8.4.9"), so the engine is sniffed from that
-// instead of always assuming MySQL — most real websites in this database
-// are MariaDB, and assuming MySQL would look up the wrong cycle for all of
-// them (e.g. "10.6" is not a MySQL branch at all, so it would silently
-// never match and never warn).
+// swp_websites has no engine column; the version string carries it ("10.6.27-MariaDB").
 $dbVersionRaw = (string) ($website['mysql_version'] ?? '');
 $dbEngine     = str_contains(strtolower($dbVersionRaw), 'mariadb') ? 'mariadb' : 'mysql';
 $eolMysql     = $eol->eolStatus($dbEngine, $dbVersionRaw);
@@ -141,12 +134,7 @@ $orderThemes = static function (array $themes): array {
     $active = $themes[$activeIndex];
     unset($themes[$activeIndex]);
 
-    // Case-insensitive, and matched against the candidate's name too, not
-    // just its slug: confirmed live against the real database that a
-    // parent theme's own "slug" column here isn't reliably a true lowercase
-    // WP slug (a real row: child slug "avada-child", but its parent's own
-    // "slug" value is literally "Avada" — matching its display name, not a
-    // normalized slug).
+    // A parent's CRM "slug" can hold its display name ("Avada"): match name too, case-insensitively.
     $parentIndex = null;
     $childSlug   = strtolower((string) ($active['slug'] ?? ''));
     if (str_ends_with($childSlug, '-child')) {

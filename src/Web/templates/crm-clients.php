@@ -67,9 +67,7 @@ use SatelliteWP\Xtractor\Crm\ClientsRepository;
     </table>
     <script>
       $(function () {
-        // The search box above already queries company/contact/email
-        // server-side (Router::crmClientsPage()) — no separate in-table
-        // quick-search box needed here, unlike the client-side-only tables.
+        // Searched server-side by the form above, so no in-table search box.
         $('#clients-table').DataTable({ pageLength: 50, dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>' });
       });
     </script>

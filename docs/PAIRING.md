@@ -165,12 +165,13 @@ gros payload.
 
 ---
 
-## 3. Pas de nonce : les retries ne sont pas idempotents
+## 3. Anti-rejeu : une signature ne sert qu'une fois
 
-L'anti-rejeu repose uniquement sur `X-SWP-Timestamp`. Il n'y a pas de registre de
-nonce. Une requête signée rejouée à l'identique dans les 300 s est acceptée une
-seconde fois et crée une extraction en double (répertoire suffixé `-2`). À garder
-en tête avant d'ajouter une logique de réessai côté plugin ou côté supervision.
+Une requête est refusée si `X-SWP-Timestamp` sort de la fenêtre de ±300 s, ou
+si sa signature a déjà été reçue dans cette fenêtre (`ReplayCache`). Une
+requête rejouée à l'identique reçoit donc un 401 au lieu de créer une
+extraction en double. Un réessai légitime côté plugin doit re-signer avec un
+nouvel horodatage.
 
 ---
 
@@ -194,6 +195,7 @@ ci-dessous relie chaque message à sa cause.
 | 401 | `No API key registered for this site` | site inconnu du `keys:add`, ou clé révoquée |
 | 401 | `Missing X-SWP-Signature` | clé connue du serveur mais en-tête absent |
 | 401 | `Invalid X-SWP-Signature` | clés différentes de part et d'autre, ou corps modifié en transit |
+| 401 | `X-SWP-Signature already used (replay rejected)` | la même requête signée a déjà été reçue — re-signer avec un nouvel horodatage |
 | 422 | `Body is not a JSON object` | JSON invalide |
 | 422 | `Missing schema_version` | absent, vide, ou envoyé autrement qu'en chaîne |
 | 422 | `Body site_id does not match X-SWP-Site header` | comparaison stricte, sensible à la casse |

@@ -89,11 +89,7 @@ final class RulesDocCommand extends Command
                 $out[] = '';
                 $out[] = "- **Catégorie :** {$rule->category} · **Source :** {$rule->source} · "
                     . "**Sévérité de base :** {$fr->severity($rule->severity->value)} · **Seuil configurable :** {$threshold}";
-                // Not resolved against a real finding — 'observed'/'threshold' are
-                // fed back their own placeholder name so the template renders
-                // literally (any other {named} value used by a specific rule's
-                // template, e.g. {eol_date}, falls through Translator's own
-                // "leave unknown placeholders as-is" behaviour the same way).
+                // No real finding: placeholders render literally ({observed}, {eol_date}…).
                 $template = ['id' => $rule->id, 'observed' => '{observed}', 'threshold' => '{threshold}', 'data' => []];
                 $out[] = "- **Réussite (FR) :** " . ($fr->message($template + ['status' => 'pass']) ?? '_(pas de texte dédié — voir le code)_');
                 $out[] = "- **Échec (FR) :** " . ($fr->message($template + ['status' => 'fail']) ?? '_(pas de texte dédié — voir le code)_');

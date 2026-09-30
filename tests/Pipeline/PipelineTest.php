@@ -115,6 +115,32 @@ final class PipelineTest extends TestCase
         $this->assertNull($this->store->readProbeResult(self::SITE_ID, $this->extractionId, 'a'));
     }
 
+    public function testAFailureMidRunMarksTheExtractionErrorNotRunning(): void
+    {
+        $registry = new ProbeRegistry(['a']);
+        $registry->register(new StubProbe('a', ProbeResult::STATUS_OK));
+
+        try {
+            $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId, ['does-not-exist']);
+            $this->fail('expected the unknown probe to throw');
+        } catch (\InvalidArgumentException) {
+        }
+
+        $this->assertSame('error', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+    }
+
+    public function testOnlyProbesRunInTheRequestedOrder(): void
+    {
+        $registry = new ProbeRegistry(['a', 'b', 'c']);
+        foreach (['a', 'b', 'c'] as $name) {
+            $registry->register(new StubProbe($name, ProbeResult::STATUS_OK));
+        }
+
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId, ['c', 'a']);
+
+        $this->assertSame(['c', 'a'], array_keys($results));
+    }
+
     public function testUnknownExtractionThrows(): void
     {
         $registry = new ProbeRegistry([]);

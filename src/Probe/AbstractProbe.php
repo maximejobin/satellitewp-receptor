@@ -29,7 +29,7 @@ abstract class AbstractProbe implements ProbeInterface
             durationMs: (int) ((hrtime(true) - $start) / 1_000_000),
             status: (string) ($collected['status'] ?? ProbeResult::STATUS_OK),
             data: (array) ($collected['data'] ?? []),
-            errors: array_values((array) ($collected['errors'] ?? [])),
+            errors: $collected['errors'] ?? [],
         );
     }
 

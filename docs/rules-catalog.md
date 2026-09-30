@@ -9,15 +9,15 @@ republier cette page après un changement de règle :
 php bin/xtractor rules:doc > docs/rules-catalog.md
 ```
 
-79 règles, 18 groupes.
+79 règles, 17 groupes.
 
 ## A. TLS / SSL
 
 ### A1 — Certificat SSL valide
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le certificat SSL est valide.
-- **Échec (FR) :** Le certificat SSL est expiré. Le renouveler immédiatement.
+- **Réussite (FR) :** Le certificat SSL de votre site est valide.
+- **Échec (FR) :** Le certificat SSL de votre site est expiré : les navigateurs affichent un avertissement de sécurité à vos visiteurs. Renouvelez-le sans délai.
 
 ```php
         'check' => static function (Context $c) {
@@ -27,17 +27,17 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### A2 — Expiration du certificat non imminente
+### A2 — Échéance du certificat SSL
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 30
-- **Réussite (FR) :** Le certificat est valide encore {observed} jours.
-- **Échec (FR) :** Le certificat expire dans {observed} jours. Vérifier le renouvellement automatique.
+- **Réussite (FR) :** Le certificat SSL est valide encore {observed} jours.
+- **Échec (FR) :** Le certificat SSL expire dans {observed} jours ; ensuite, vos visiteurs verront un avertissement de sécurité. Vérifiez que son renouvellement automatique fonctionne.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
             $days = $c->number('probe.tls.days_to_expiry');
             if ($days !== null && $days <= 0) {
-                return Check::na(); // covered by A1
+                return Check::na(); // A1 reports an expired certificate
             }
 
             return Check::graded($days, [[15, Severity::High], [(float) $rule->threshold, Severity::Medium]]);
@@ -47,38 +47,38 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### A3 — Chaîne de certification complète
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** La chaîne de certification est complète.
-- **Échec (FR) :** La chaîne de certification est incomplète (intermédiaire manquant).
+- **Réussite (FR) :** La chaîne de certification est complète : tous les navigateurs peuvent valider le certificat.
+- **Échec (FR) :** Un certificat intermédiaire manque dans la configuration du serveur : certains navigateurs et appareils mobiles refuseront la connexion. Faites installer la chaîne complète par votre hébergeur.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.tls.chain_valid')),
 ```
 
-### A4 — Nom d'hôte couvert par le certificat
+### A4 — Certificat émis pour l'adresse du site
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le nom d'hôte du site est couvert par le certificat.
-- **Échec (FR) :** Le nom d'hôte du site n'est pas couvert par le certificat (CN/SAN).
+- **Réussite (FR) :** Le certificat SSL couvre bien l'adresse de votre site.
+- **Échec (FR) :** Le certificat SSL n'est pas émis pour l'adresse de votre site : les navigateurs affichent une erreur de sécurité. Faites émettre un certificat qui couvre ce nom de domaine.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.tls.hostname_covered')),
 ```
 
-### A5 — Émetteur de confiance (pas auto-signé)
+### A5 — Certificat émis par une autorité reconnue
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Le certificat est émis par une autorité de confiance.
-- **Échec (FR) :** Le certificat est auto-signé : les navigateurs afficheront un avertissement.
+- **Réussite (FR) :** Le certificat est émis par une autorité de certification reconnue.
+- **Échec (FR) :** Le certificat est auto-signé : aucun navigateur ne lui fait confiance et vos visiteurs voient un avertissement. Installez un certificat d'une autorité reconnue (Let's Encrypt est gratuit).
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.tls.self_signed')),
 ```
 
-### A6 — TLS 1.0/1.1 obsolètes désactivés
+### A6 — Anciennes versions du chiffrement désactivées
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Seules les versions TLS modernes sont acceptées.
-- **Échec (FR) :** Le serveur accepte encore {observed}. Désactiver TLS 1.0 et 1.1.
+- **Réussite (FR) :** Seules les versions modernes du chiffrement (TLS 1.2 et plus récentes) sont acceptées.
+- **Échec (FR) :** Le serveur accepte encore {observed}, des versions du chiffrement obsolètes et vulnérables. Demandez à votre hébergeur de les désactiver.
 
 ```php
         'check' => static function (Context $c) {
@@ -86,37 +86,35 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if (!is_array($protocols)) {
                 return Check::unknown();
             }
-            $legacy = array_keys(array_filter([
-                'TLS 1.0' => $protocols['tls1_0'] ?? false,
-                'TLS 1.1' => $protocols['tls1_1'] ?? false,
-            ]));
+            $legacy = ['TLS 1.0' => $protocols['tls1_0'] ?? null, 'TLS 1.1' => $protocols['tls1_1'] ?? null];
 
-            return $legacy === [] ? Check::pass('none') : Check::fail(implode(' & ', $legacy));
+            $accepted = array_keys(array_filter($legacy, static fn ($v): bool => $v === true));
+            if ($accepted !== []) {
+                return Check::fail(implode(', ', $accepted));
+            }
+
+            // null = the probe could not negotiate that version locally: not proof it's disabled.
+            return in_array(null, $legacy, true) ? Check::unknown() : Check::pass('none');
         },
 ```
 
-### A8 — En-tête HSTS présent
+### A8 — Connexion sécurisée imposée aux navigateurs (HSTS)
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'en-tête Strict-Transport-Security est présent.
-- **Échec (FR) :** L'en-tête Strict-Transport-Security est absent.
+- **Réussite (FR) :** Le site demande aux navigateurs de toujours utiliser une connexion sécurisée (HSTS).
+- **Échec (FR) :** Le site ne demande pas aux navigateurs de toujours utiliser une connexion sécurisée : une première visite en HTTP peut être interceptée. Faites ajouter l'en-tête Strict-Transport-Security (HSTS).
 
 ```php
-        'check' => static function (Context $c) use ($headersReadable) {
-            if (!$headersReadable($c)) {
-                return Check::unknown();
-            }
-
-            return $c->get('probe.http.security_headers.strict-transport-security') !== null
-                ? Check::pass() : Check::fail();
-        },
+        'check' => static fn (Context $c) => $homepageReadable($c)
+            ? ($c->get('probe.http.security_headers.strict-transport-security') !== null ? Check::pass() : Check::fail())
+            : Check::unknown(),
 ```
 
 ### A10 — Redirection HTTP vers HTTPS
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le HTTP est redirigé vers HTTPS.
-- **Échec (FR) :** Le site répond en HTTP sans rediriger vers HTTPS. Ajouter une redirection 301.
+- **Réussite (FR) :** Les visites en HTTP sont redirigées vers HTTPS.
+- **Échec (FR) :** Les visites en HTTP ne sont pas redirigées vers HTTPS : une partie de votre trafic circule sans chiffrement. Faites ajouter une redirection permanente (301) vers HTTPS.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.redirects.forces_https')),
@@ -127,8 +125,8 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B1 — Compression Gzip
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le serveur retourne du contenu compressé en gzip quand on le demande.
-- **Échec (FR) :** Le serveur ne retourne pas de gzip quand gzip est le seul encodage proposé. Activer la compression gzip.
+- **Réussite (FR) :** Le serveur compresse les pages avec Gzip.
+- **Échec (FR) :** Le serveur ne compresse pas les pages avec Gzip : elles sont plus lourdes et plus lentes à charger. Faites activer la compression Gzip.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.gzip')),
@@ -137,48 +135,48 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 ### B2 — Compression Brotli
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le serveur retourne du contenu compressé en Brotli quand on le demande.
-- **Échec (FR) :** Le serveur ne retourne pas de Brotli quand Brotli est le seul encodage proposé ; il compresse mieux que gzip.
+- **Réussite (FR) :** Le serveur compresse les pages avec Brotli.
+- **Échec (FR) :** Le serveur n'offre pas la compression Brotli, plus efficace que Gzip : vos pages pourraient se charger plus vite. Faites activer Brotli si votre hébergeur le permet.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.brotli')),
 ```
 
-### B3 — HTTP/2 supporté
+### B3 — Protocole HTTP/2
 
-- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le site négocie HTTP/2.
-- **Échec (FR) :** Le site ne négocie pas HTTP/2. L'activer accélère le chargement.
+- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Le serveur utilise HTTP/2, qui accélère le chargement des pages.
+- **Échec (FR) :** Le serveur n'utilise pas HTTP/2, qui charge plusieurs fichiers en parallèle : vos pages s'affichent moins vite. Faites activer HTTP/2 par votre hébergeur.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http2')),
 ```
 
-### B4 — HTTP/1.1 supporté
+### B4 — Compatibilité HTTP/1.1
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le site répond en HTTP/1.1 quand on le demande.
-- **Échec (FR) :** Le site ne répond pas en HTTP/1.1 quand cette version est explicitement demandée.
+- **Réussite (FR) :** Le serveur répond aussi en HTTP/1.1, pour les navigateurs et outils plus anciens.
+- **Échec (FR) :** Le serveur ne répond pas en HTTP/1.1 : d'anciens navigateurs ou outils pourraient ne pas accéder au site.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http1_1')),
 ```
 
-### B5 — HTTP/3 annoncé
+### B5 — Protocole HTTP/3
 
-- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le site annonce un support HTTP/3 (Alt-Svc : h3).
-- **Échec (FR) :** Le site n'annonce pas de support HTTP/3 (aucune entrée « h3 » dans son en-tête Alt-Svc).
+- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Le serveur annonce HTTP/3, la version la plus récente du protocole web.
+- **Échec (FR) :** Le serveur n'annonce pas HTTP/3, la version la plus récente du protocole web. C'est une optimisation facultative.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http3_advertised')),
 ```
 
-### B6 — En-têtes de cache sur les assets
+### B6 — Mise en cache des images, styles et scripts
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 86400
-- **Réussite (FR) :** Les assets statiques ont un cache de {observed}s (au moins {threshold}s).
-- **Échec (FR) :** Les assets statiques ont un cache de {observed}s (attendu au moins {threshold}s).
+- **Réussite (FR) :** Les navigateurs conservent vos images, styles et scripts {cache_days} jours.
+- **Échec (FR) :** Les navigateurs ne conservent vos images, styles et scripts que {cache_days} jours (recommandé : au moins {threshold_days} jours) : les visiteurs réguliers les téléchargent à nouveau inutilement. Faites allonger la durée de cache sur le serveur.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -186,33 +184,39 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if (!is_array($asset) || ($asset['checked'] ?? false) !== true) {
                 return Check::na();
             }
-            $maxAge = $asset['max_age'] ?? null;
+            $maxAge = (int) ($asset['max_age'] ?? 0);
+            $data   = [
+                'cache_days'     => round($maxAge / 86400, 1),
+                'cache_hours'    => round($maxAge / 3600, 1),
+                'threshold_days' => round((float) $rule->threshold / 86400, 1),
+                'variant'        => $maxAge <= 0 ? 'none' : ($maxAge < 86400 ? 'hours' : 'days'),
+            ];
 
-            return $maxAge === null ? Check::fail(0) : Check::atLeast((float) $maxAge, (float) $rule->threshold);
+            return $maxAge >= (float) $rule->threshold ? Check::pass($maxAge, $data) : Check::fail($maxAge, $data);
         },
 ```
 
-### B7a — X-Content-Type-Options: nosniff
+### B7a — Protection contre l'exécution de fichiers déguisés
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'en-tête X-Content-Type-Options est présent.
-- **Échec (FR) :** L'en-tête X-Content-Type-Options est absent.
+- **Réussite (FR) :** L'en-tête X-Content-Type-Options empêche l'exécution de fichiers déguisés.
+- **Échec (FR) :** L'en-tête X-Content-Type-Options est absent : un navigateur pourrait exécuter comme un script un fichier déguisé. Faites ajouter « X-Content-Type-Options: nosniff ».
 
 ```php
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
-### B7b — Protection contre le clickjacking
+### B7b — Protection contre le détournement de clics
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le site est protégé contre le clickjacking (X-Frame-Options ou Content-Security-Policy).
-- **Échec (FR) :** Ni X-Frame-Options ni Content-Security-Policy ne sont présents.
+- **Réussite (FR) :** Votre site ne peut pas être affiché à l'intérieur d'un autre site.
+- **Échec (FR) :** Votre site peut être affiché à l'intérieur d'un autre site à l'insu du visiteur, pour lui faire cliquer sur autre chose (détournement de clics). Faites ajouter l'en-tête X-Frame-Options ou une politique de sécurité du contenu.
 
 ```php
-        'check' => static function (Context $c) use ($headersReadable) {
-            if (!$headersReadable($c)) {
+        'check' => static function (Context $c) use ($homepageReadable) {
+            if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
             $xfo = $c->get('probe.http.security_headers.x-frame-options');
@@ -222,47 +226,47 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### B7c — Content-Security-Policy présent
+### B7c — Politique de sécurité du contenu (CSP)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Une Content-Security-Policy est définie.
-- **Échec (FR) :** Aucune Content-Security-Policy n'est définie.
+- **Réussite (FR) :** Une politique de sécurité du contenu limite les ressources que vos pages peuvent charger.
+- **Échec (FR) :** Aucune politique de sécurité du contenu (Content-Security-Policy) ne limite les scripts que vos pages peuvent charger, ce qui aggrave l'impact d'une injection de code. Elle se met en place progressivement, avec votre développeur.
 
 ```php
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
-### B7d — Referrer-Policy définie
+### B7d — Politique de transmission de l'adresse (Referrer-Policy)
 
-- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** L'en-tête Referrer-Policy est présent.
-- **Échec (FR) :** L'en-tête Referrer-Policy est absent.
+- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Une Referrer-Policy limite les informations transmises aux sites externes.
+- **Échec (FR) :** Aucune Referrer-Policy n'est définie : l'adresse complète de vos pages peut être transmise aux sites vers lesquels vous faites des liens.
 
 ```php
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
-### B7e — Permissions-Policy définie
+### B7e — Accès aux fonctions sensibles du navigateur (Permissions-Policy)
 
-- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** L'en-tête Permissions-Policy est présent.
-- **Échec (FR) :** L'en-tête Permissions-Policy est absent.
+- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Une Permissions-Policy restreint l'accès aux fonctions sensibles du navigateur.
+- **Échec (FR) :** Aucune Permissions-Policy ne restreint l'accès des scripts à la caméra, au micro ou à la géolocalisation.
 
 ```php
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
-### B9 — Aucune divulgation de version serveur
+### B9 — Version du serveur non divulguée
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le serveur ne divulgue pas sa version.
-- **Échec (FR) :** Le serveur divulgue sa version : {observed}.
+- **Réussite (FR) :** Le serveur ne divulgue pas sa version logicielle.
+- **Échec (FR) :** Le serveur affiche publiquement sa version logicielle ({observed}), ce qui aide un attaquant à cibler des failles connues. Faites masquer cette information dans la configuration du serveur.
 
 ```php
         'check' => static function (Context $c) {
@@ -273,25 +277,25 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             foreach (['server', 'x-powered-by'] as $header) {
                 $value = $c->string("probe.http.fingerprint.{$header}");
                 if ($value !== null && preg_match('/\d+\.\d+/', $value)) {
-                    $leaks[] = "{$header}: {$value}";
+                    $leaks[] = $value;
                 }
             }
 
-            return $leaks === [] ? Check::pass('none') : Check::fail(implode(' ; ', $leaks));
+            return $leaks === [] ? Check::pass('none') : Check::fail(implode(', ', $leaks));
         },
 ```
 
 ## C. DNS & disponibilité
 
-### C1 — IPv6 (enregistrement AAAA)
+### C1 — Accessibilité en IPv6
 
-- **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le site est joignable en IPv6 ({observed} enregistrement(s) AAAA).
-- **Échec (FR) :** Aucun enregistrement AAAA : le site n'est pas joignable en IPv6.
+- **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** Le site est accessible en IPv6 ({observed} adresses).
+- **Échec (FR) :** Le site n'a pas d'adresse IPv6 ; il reste accessible à tous en IPv4. C'est une amélioration facultative.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'aaaa')) {
                 return Check::unknown();
             }
             $aaaa = $c->list('probe.dns.aaaa');
@@ -300,15 +304,15 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C2 — Enregistrement CAA présent
+### C2 — Autorités autorisées à émettre un certificat (CAA)
 
 - **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** {observed} enregistrement(s) CAA limitent les autorités pouvant émettre un certificat.
-- **Échec (FR) :** Aucun enregistrement CAA : n'importe quelle autorité peut émettre un certificat.
+- **Réussite (FR) :** Un enregistrement DNS CAA limite les autorités pouvant émettre un certificat pour votre domaine.
+- **Échec (FR) :** Aucun enregistrement DNS CAA ne précise quelles autorités peuvent émettre un certificat pour votre domaine. C'est une protection supplémentaire facultative.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'caa')) {
                 return Check::unknown();
             }
             $caa = $c->list('probe.dns.caa');
@@ -317,32 +321,33 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C5 — Chaîne de redirection courte
+### C5 — Nombre de redirections
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2
-- **Réussite (FR) :** La chaîne de redirection est courte ({observed} redirection(s), au plus {threshold}).
-- **Échec (FR) :** La chaîne de redirection est trop longue ou boucle ({observed}).
+- **Réussite (FR) :** Redirections avant d'atteindre votre page d'accueil : {observed}, ce qui est raisonnable.
+- **Échec (FR) :** L'accès à votre page d'accueil passe par {observed} redirections (maximum recommandé : {threshold}) : chaque étape ralentit le chargement. Faites simplifier les redirections.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
-            if (($c->bool('probe.http.redirects.loop_detected')) === true) {
-                return Check::fail('loop', [], Severity::High);
+            if ($c->bool('probe.http.redirects.loop_detected') === true) {
+                return Check::fail('loop', ['variant' => 'loop'], Severity::High);
             }
+            $hops = $c->number('probe.http.redirects.hops');
 
-            return Check::atMost($c->number('probe.http.redirects.hops'), (float) $rule->threshold);
+            return $hops === null ? Check::unknown() : Check::atMost($hops, (float) $rule->threshold);
         },
 ```
 
-### C7 — Site disponible
+### C7 — Disponibilité du site
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le site est disponible (HTTP {observed}).
-- **Échec (FR) :** Le site répond un code HTTP {observed}.
+- **Réussite (FR) :** Votre page d'accueil répond normalement (code HTTP {observed}).
+- **Échec (FR) :** Votre page d'accueil répond par une erreur (code HTTP {observed}) : vos visiteurs ne peuvent pas la consulter. Vérifiez le site sans délai.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $code = $c->number('probe.http.status_code');
-            if ($code === null) {
+            if ($code === null || !$homepageReadable($c)) {
                 return Check::unknown();
             }
 
@@ -350,16 +355,16 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C8 — Page 404 correcte
+### C8 — Pages introuvables correctement signalées
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Une URL inexistante répond correctement 404.
-- **Échec (FR) :** Une URL inexistante répond 200 au lieu de 404 (soft 404).
+- **Réussite (FR) :** Une adresse qui n'existe pas renvoie bien une erreur « 404 ».
+- **Échec (FR) :** Une adresse qui n'existe pas affiche une page normale au lieu d'une erreur « 404 » : les moteurs de recherche peuvent indexer des pages vides. Faites corriger la configuration du site.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $soft = $c->get('probe.http.soft_404');
-            if (!is_array($soft) || ($soft['checked'] ?? false) !== true) {
+            if (!$homepageReadable($c) || !is_array($soft) || ($soft['checked'] ?? false) !== true) {
                 return Check::unknown();
             }
 
@@ -367,16 +372,16 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C9 — robots.txt présent
+### C9 — Fichier robots.txt
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** robots.txt est présent.
-- **Échec (FR) :** robots.txt est absent.
+- **Réussite (FR) :** Le fichier robots.txt, qui guide les moteurs de recherche, est présent.
+- **Échec (FR) :** Le fichier robots.txt, qui guide les moteurs de recherche, est absent. Faites-en publier un qui indique l'adresse de votre plan du site.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
-            if (!is_array($robots)) {
+            if (!$homepageReadable($c) || !is_array($robots)) {
                 return Check::unknown();
             }
 
@@ -384,15 +389,18 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C9a — robots.txt ne bloque pas tout
+### C9a — Exploration du site autorisée
 
-- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** robots.txt n'interdit pas l'ensemble du site.
-- **Échec (FR) :** robots.txt contient une règle « Disallow: / » globale : tout crawl est bloqué (peut-être volontaire, ex. site de test).
+- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Le fichier robots.txt n'empêche pas l'exploration du site.
+- **Échec (FR) :** Le fichier robots.txt interdit aux moteurs de recherche d'explorer tout le site : il n'apparaîtra pas dans Google. Si ce n'est pas voulu (site de test), retirez la règle « Disallow: / ».
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
+            if (!$homepageReadable($c)) {
+                return Check::unknown();
+            }
             if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
                 return Check::na();
             }
@@ -401,23 +409,20 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C10 — Sitemap référencé dans robots.txt
+### C10 — Plan du site
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** {observed} sitemap(s) déclaré(s) et joignable(s).
-- **Échec (FR) :** Aucun sitemap n'est référencé dans robots.txt, ou le sitemap déclaré n'est pas joignable.
+- **Réussite (FR) :** {observed} plans du site déclarés et accessibles.
+- **Échec (FR) :** Aucun plan du site accessible n'est déclaré dans robots.txt : les moteurs de recherche découvrent vos pages moins efficacement. Déclarez-y l'adresse de votre plan du site.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
-            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+            if (!$homepageReadable($c) || !is_array($robots) || ($robots['present'] ?? false) !== true) {
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
-            if ($sitemaps === []) {
-                return Check::fail(0, [], Severity::Info);
-            }
-            if (($robots['sitemap_reachable'] ?? null) === false) {
+            if ($sitemaps === [] || ($robots['sitemap_reachable'] ?? null) === false) {
                 return Check::fail(count($sitemaps), [], Severity::Info);
             }
 
@@ -427,62 +432,62 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## D. Délivrabilité e-mail (DNS)
 
-### D1 — Enregistrement SPF efficace
+### D1 — Protection contre l'usurpation du domaine (SPF)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** SPF applique un mécanisme restrictif ({observed}).
-- **Échec (FR) :** SPF est {observed}. Publier un mécanisme restrictif (~all ou -all) — ?all et +all ne protègent rien.
+- **Réussite (FR) :** L'enregistrement SPF limite les serveurs autorisés à envoyer des courriels au nom de votre domaine ({observed}).
+- **Échec (FR) :** Aucun enregistrement SPF n'indique quels serveurs peuvent envoyer des courriels au nom de votre domaine : n'importe qui peut usurper votre adresse et vos courriels risquent de finir en indésirables. Faites publier un enregistrement SPF.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
+            if (!$dnsKnown($c, 'spf')) {
                 return Check::unknown();
             }
             if ($c->bool('probe.dns.spf.present') !== true) {
-                return Check::fail('absent');
+                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
             }
             $record = $c->string('probe.dns.spf.record') ?? '';
             if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
-                return Check::fail('no all mechanism', [], Severity::Medium);
+                return Check::fail('no all', ['variant' => 'no_all'], Severity::Medium);
             }
 
             return in_array($m[1], ['-', '~'], true)
                 ? Check::pass($m[1] . 'all')
-                : Check::fail($m[1] . 'all', [], Severity::Medium);
+                : Check::fail($m[1] . 'all', ['variant' => 'weak'], Severity::Medium);
         },
 ```
 
-### D3 — DMARC avec politique active
+### D3 — Politique contre les courriels frauduleux (DMARC)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** DMARC est actif (p={observed}).
-- **Échec (FR) :** DMARC est {observed}. Publier une politique (p=quarantine ou p=reject).
+- **Réussite (FR) :** La politique DMARC demande d'isoler ou de rejeter les courriels frauduleux (p={observed}).
+- **Échec (FR) :** Aucune politique DMARC n'indique aux fournisseurs de courriel quoi faire des messages frauduleux envoyés en votre nom. Faites publier un enregistrement DMARC.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
+            if (!$dnsKnown($c, 'dmarc')) {
                 return Check::unknown();
             }
             if ($c->bool('probe.dns.dmarc.present') !== true) {
-                return Check::fail('absent');
+                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
             }
-            $policy = $c->string('probe.dns.dmarc.policy');
+            $policy = $c->string('probe.dns.dmarc.policy') ?? 'none';
 
             return in_array($policy, ['quarantine', 'reject'], true)
                 ? Check::pass($policy)
-                : Check::fail($policy ?? 'none', [], Severity::Medium);
+                : Check::fail($policy, ['variant' => 'weak'], Severity::Medium);
         },
 ```
 
-### D4 — Enregistrements MX résolvables
+### D4 — Réception des courriels (MX)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** {observed} enregistrement(s) MX : le domaine peut recevoir du courriel.
-- **Échec (FR) :** Aucun enregistrement MX : le domaine ne peut recevoir de courriel.
+- **Réussite (FR) :** Votre domaine peut recevoir des courriels ({observed} serveurs de réception).
+- **Échec (FR) :** Aucun enregistrement MX : votre domaine ne peut recevoir aucun courriel. Si des adresses courriel l'utilisent, faites corriger la zone DNS sans délai.
 
 ```php
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'mx')) {
                 return Check::unknown();
             }
             $mx = $c->list('probe.dns.mx');
@@ -493,11 +498,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## W. Domaine (WHOIS/RDAP)
 
-### W1 — Expiration du domaine non imminente
+### W1 — Échéance du nom de domaine
 
 - **Catégorie :** DOMAIN · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** 30
-- **Réussite (FR) :** Le domaine est valide encore {observed} jours.
-- **Échec (FR) :** Le domaine expire dans {observed} jours. Le renouveler sans tarder.
+- **Réussite (FR) :** Votre nom de domaine est valide encore {observed} jours.
+- **Échec (FR) :** Votre nom de domaine expire dans {observed} jours : ensuite, votre site et vos courriels cessent de fonctionner. Renouvelez-le sans tarder.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -506,28 +511,28 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             if ($days < 0) {
-                return Check::fail($days, [], Severity::Critical);
+                return Check::fail($days, ['variant' => 'expired'], Severity::Critical);
             }
 
             return Check::graded($days, [[15, Severity::Critical], [(float) $rule->threshold, Severity::High]]);
         },
 ```
 
-### W2 — Renouvellement de noms de domaine
+### W2 — Vérifier que la carte de crédit au dossier du registraire du domaine n'est pas expirée
 
 - **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Il est important de renouveler vos noms de domaine avant la date d'expiration ou d'activer le renouvellement automatique. Si celui-ci est activé, pensez à vérifier les informations de carte de crédit, dont la date d'expiration de la carte. L'oubli de renouvellement peut avoir de lourdes conséquences sur votre site web et la gestion de vos courriels.
-- **Échec (FR) :** Le renouvellement du domaine mérite votre attention.
+- **Réussite (FR) :** Un renouvellement manqué peut interrompre votre site et vos courriels.
+- **Échec (FR) :** Le renouvellement du domaine mérite votre attention : la carte de crédit au dossier du registraire pourrait être expirée.
 
 ```php
         'check' => static fn () => Check::pass(),
 ```
 
-### W3 — Propriété des noms de domaine
+### W3 — Vérifier que les informations du propriétaire du nom de domaine sont à jour
 
 - **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** La propriété d'un nom de domaine appartient à la personne ou entité dont le nom est inscrit au registraire. Il faut donc s'assurer que les informations soient à jour afin d'éviter les complications en cas de problème.
-- **Échec (FR) :** La propriété du domaine mérite votre attention.
+- **Réussite (FR) :** Des informations à jour évitent des complications en cas de problème avec le domaine.
+- **Échec (FR) :** La propriété du domaine mérite votre attention : les informations pourraient être désuètes.
 
 ```php
         'check' => static fn () => Check::pass(),
@@ -535,83 +540,71 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## PS. Performance (Lighthouse/PageSpeed)
 
-### PS1 — Performance Lighthouse (desktop)
+### PS1 — Performance sur ordinateur
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score de performance desktop ({observed}/100).
-- **Échec (FR) :** Score de performance desktop de {observed}/100 (seuil {threshold}).
+- **Réussite (FR) :** La note de performance Google (Lighthouse) de votre page d'accueil sur ordinateur est de {observed}/100.
+- **Échec (FR) :** La note de performance Google (Lighthouse) de votre page d'accueil sur ordinateur est de {observed}/100 (objectif : {threshold}) : un site lent perd des visiteurs et du classement dans Google. Faites optimiser les images, le cache et les extensions.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.performance'), (float) $rule->threshold),
 ```
 
-### PS1a — Performance Lighthouse (mobile)
+### PS1a — Performance sur mobile
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score de performance mobile ({observed}/100).
-- **Échec (FR) :** Score de performance mobile de {observed}/100 (seuil {threshold}).
+- **Réussite (FR) :** La note de performance Google (Lighthouse) de votre page d'accueil sur mobile est de {observed}/100.
+- **Échec (FR) :** La note de performance Google (Lighthouse) de votre page d'accueil sur mobile est de {observed}/100 (objectif : {threshold}) : la majorité des visiteurs naviguent sur mobile et quittent un site lent. Faites optimiser les images, le cache et les extensions.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.performance'), (float) $rule->threshold),
 ```
 
-### PS2 — Accessibilité Lighthouse (desktop)
+### PS2 — Accessibilité
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score d'accessibilité desktop ({observed}/100).
-- **Échec (FR) :** Score d'accessibilité desktop de {observed}/100 (seuil {threshold}).
+- **Réussite (FR) :** La note d'accessibilité Google (Lighthouse) de votre page d'accueil est de {observed}/100.
+- **Échec (FR) :** La note d'accessibilité Google (Lighthouse) de votre page d'accueil est de {observed}/100 (objectif : {threshold}) : certaines personnes, notamment en situation de handicap, ont du mal à utiliser le site. Faites corriger les contrastes, textes alternatifs et libellés signalés.
 
 ```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.accessibility'), (float) $rule->threshold),
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'accessibility'), (float) $rule->threshold),
 ```
 
-### PS2a — Accessibilité Lighthouse (mobile)
-
-- **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score d'accessibilité mobile ({observed}/100).
-- **Échec (FR) :** Score d'accessibilité mobile de {observed}/100 (seuil {threshold}).
-
-```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.accessibility'), (float) $rule->threshold),
-```
-
-### PS3 — SEO Lighthouse (desktop)
+### PS3 — Référencement technique
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score SEO desktop ({observed}/100).
-- **Échec (FR) :** Score SEO desktop de {observed}/100 (seuil {threshold}).
+- **Réussite (FR) :** La note de référencement technique Google (Lighthouse) de votre page d'accueil est de {observed}/100.
+- **Échec (FR) :** La note de référencement technique Google (Lighthouse) de votre page d'accueil est de {observed}/100 (objectif : {threshold}) : des éléments de base (titre, description, liens) nuisent à votre visibilité. Faites corriger les points signalés.
 
 ```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.seo'), (float) $rule->threshold),
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'seo'), (float) $rule->threshold),
 ```
 
-### PS3a — SEO Lighthouse (mobile)
-
-- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
-- **Réussite (FR) :** Bon score SEO mobile ({observed}/100).
-- **Échec (FR) :** Score SEO mobile de {observed}/100 (seuil {threshold}).
-
-```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.seo'), (float) $rule->threshold),
-```
-
-### PS4 — LCP sous le seuil
+### PS4 — Vitesse d'affichage sur mobile
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2500
-- **Réussite (FR) :** Le LCP mobile est de {observed} ms (seuil {threshold} ms).
-- **Échec (FR) :** Le LCP mobile est de {observed} ms (seuil {threshold} ms).
+- **Réussite (FR) :** Sur mobile, le contenu principal de votre page d'accueil s'affiche en {lcp_s} s (objectif : moins de {threshold_s} s).
+- **Échec (FR) :** Sur mobile, le contenu principal de votre page d'accueil met {lcp_s} s à s'afficher (objectif : moins de {threshold_s} s) : les visiteurs impatients quittent le site. Faites optimiser les images et le chargement de la page.
 
 ```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('probe.pagespeed.mobile.lab.lcp.value'), (float) $rule->threshold),
+        'check' => static function (Context $c, Rule $rule) {
+            $lcp = $c->number('probe.pagespeed.mobile.lab.lcp.value');
+            if ($lcp === null) {
+                return Check::unknown();
+            }
+            $data = ['lcp_s' => round($lcp / 1000, 1), 'threshold_s' => round((float) $rule->threshold / 1000, 1)];
+
+            return $lcp <= (float) $rule->threshold ? Check::pass($lcp, $data) : Check::fail($lcp, $data);
+        },
 ```
 
 ## F. Versions, mises à jour & fin de vie
 
-### F1 — WordPress pas trop en retard sur les versions majeures
+### F1 — Version majeure de WordPress
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** WordPress {observed} n'est pas loin derrière la version majeure actuelle.
-- **Échec (FR) :** WordPress {observed} a {major_versions_behind} versions majeures de retard — les mises à jour ont peut-être cessé complètement.
+- **Réussite (FR) :** WordPress {observed} est sur une version majeure récente.
+- **Échec (FR) :** WordPress {observed} a {major_versions_behind} versions majeures de retard : les mises à jour semblent arrêtées depuis longtemps. Planifiez une mise à jour majeure.
 
 ```php
         'check' => static function (Context $c) {
@@ -631,45 +624,40 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F2 — Version WordPress sécurisée et à jour
+### F2 — Correctifs de sécurité de WordPress
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** WordPress {observed} est à jour (branche supportée jusqu'au {eol_date}).
-- **Échec (FR) :** WordPress {observed} n'a pas la dernière mise à jour de sécurité de sa branche (fin de vie de la branche : {eol_date}).
+- **Réussite (FR) :** WordPress {observed} a tous les correctifs de sécurité de sa version.
+- **Échec (FR) :** La mise à jour de sécurité {available} de WordPress est disponible mais n'est pas installée. Appliquez-la sans tarder.
 
 ```php
         'check' => static function (Context $c) {
-            $eol     = $c->reference('eol');
             $version = $c->string('payload.wp_version');
-            if (!$eol instanceof EndOfLife || $version === null) {
+            if ($version === null) {
                 return Check::unknown();
             }
-            $status = $eol->eolStatus('wordpress', $version);
-            if ($status === null) {
-                return Check::unknown();
-            }
-            [$isEol, $date] = $status;
-            if ($isEol) {
-                return Check::fail($version, ['eol_date' => $date]); // outdated branch, no longer patched — not a confirmed vulnerability
+            $minor = (string) ($c->get('payload.core_update.minor_update_version') ?? '');
+            if ($minor !== '') {
+                return Check::fail($version, ['available' => $minor]);
             }
 
-            // minor_update_version, not available_version: the latter is
-            // update_core's first offer, which is also filled for a new major
-            // release — not a missing security patch on this branch.
-            $minor = $c->get('payload.core_update.minor_update_version');
-            if ($minor !== null && $minor !== '') {
-                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $minor]);
+            $wpVersions = $c->reference('wordpress_versions');
+            $verdict    = $wpVersions instanceof WordPressVersions ? ($wpVersions->all()[$version] ?? null) : null;
+            if ($verdict === 'insecure') {
+                return Check::fail($version, ['variant' => 'insecure']);
             }
 
-            return Check::pass($version, ['eol_date' => $date]);
+            return $verdict === null && !is_array($c->get('payload.core_update'))
+                ? Check::unknown()
+                : Check::pass($version);
         },
 ```
 
-### F3 — Version PHP supportée
+### F3 — Version de PHP supportée
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** PHP {observed} est supporté (jusqu'au {eol_date}).
-- **Échec (FR) :** PHP {observed} n'est plus supporté (fin de vie {eol_date}). Planifier une montée de version.
+- **Réussite (FR) :** PHP {observed} reçoit des correctifs de sécurité jusqu'au {eol_date}.
+- **Échec (FR) :** PHP {observed}, le langage qui fait fonctionner votre site, ne reçoit plus de correctifs de sécurité depuis le {eol_date}. Planifiez la mise à niveau avec votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -683,21 +671,20 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             [$isEol, $date] = $status;
+            $data = $date === null ? ['variant' => 'no_date'] : ['eol_date' => $date];
 
-            return $isEol
-                ? Check::fail($version, ['eol_date' => $date])
-                : Check::pass($version, ['eol_date' => $date]);
+            return $isEol ? Check::fail($version, $data) : Check::pass($version, $data);
         },
 ```
 
-### F4 — Extensions à jour
+### F4 — Mises à jour des extensions
 
-- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 0
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Toutes les extensions sont à jour.
-- **Échec (FR) :** {observed} extension(s) ont une mise à jour disponible : {names}.
+- **Échec (FR) :** {observed} extensions ont une mise à jour en attente : {names}. Les mises à jour corrigent souvent des failles de sécurité ; appliquez-les après une sauvegarde.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             if ($plugins === []) {
                 return Check::unknown();
@@ -706,38 +693,40 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if ($outdated === []) {
                 return Check::pass(0);
             }
-            $names = array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated);
 
-            return Check::fail(count($outdated), ['names' => implode(', ', array_slice($names, 0, 10))]);
+            return Check::fail(count($outdated), $nameList(array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated)));
         },
 ```
 
-### F5 — Thèmes à jour
+### F5 — Mises à jour des thèmes
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Tous les thèmes sont à jour.
-- **Échec (FR) :** {observed} thème(s) ont une mise à jour disponible.
+- **Échec (FR) :** {observed} thèmes ont une mise à jour en attente : {names}. Appliquez-les après une sauvegarde.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($nameList) {
             $themes = $c->list('payload.themes');
             if ($themes === []) {
                 return Check::unknown();
             }
-            $outdated = array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version']));
+            $outdated = array_values(array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version'])));
+            if ($outdated === []) {
+                return Check::pass(0);
+            }
 
-            return $outdated === [] ? Check::pass(0) : Check::fail(count($outdated));
+            return Check::fail(count($outdated), $nameList(array_map(static fn (array $t): string => (string) ($t['name'] ?? '?'), $outdated)));
         },
 ```
 
-### F7 — Prérequis des extensions respectés
+### F7 — Compatibilité des extensions
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Toutes les extensions sont compatibles avec les versions PHP et WordPress du site.
-- **Échec (FR) :** {observed} extension(s) exigent une version PHP/WP supérieure à l'environnement : {names}.
+- **Réussite (FR) :** Toutes les extensions sont compatibles avec les versions de PHP et de WordPress du site.
+- **Échec (FR) :** {observed} extensions exigent une version de PHP ou de WordPress plus récente que celle du site : {names}. Elles risquent de mal fonctionner ; mettez l'environnement à jour ou remplacez-les.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             $php     = $c->string('payload.php.version');
             $wp      = $c->string('payload.wp_version');
@@ -757,19 +746,175 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 }
             }
 
-            return $incompatible === []
-                ? Check::pass(0)
-                : Check::fail(count($incompatible), ['names' => implode(', ', $incompatible)]);
+            return $incompatible === [] ? Check::pass(0) : Check::fail(count($incompatible), $nameList($incompatible));
+        },
+```
+
+### F8 — Extensions et thèmes maintenus
+
+- **Catégorie :** UPDATES · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 365
+- **Réussite (FR) :** Toutes les extensions et tous les thèmes vérifiés ont été mis à jour par leur auteur au cours des {threshold} derniers jours.
+- **Échec (FR) :** {observed} extensions ou thèmes n'ont reçu aucune mise à jour de leur auteur depuis plus de {threshold} jours : {names}. Un logiciel abandonné ne reçoit plus de correctifs de sécurité ; envisagez de le remplacer.
+
+```php
+        'check' => static function (Context $c, Rule $rule) use ($nameList) {
+            if (!$c->probeRan('wporg')) {
+                return Check::unknown();
+            }
+            $wporgPlugins = (array) $c->get('probe.wporg.plugins', []);
+            $wporgThemes  = (array) $c->get('probe.wporg.themes', []);
+            $cutoff       = time() - ((int) $rule->threshold) * 86400;
+            $checked      = 0;
+            $abandoned    = [];
+
+            $scan = static function (array $items, string $type, array $wporgData) use (&$checked, &$abandoned, $cutoff): void {
+                foreach ($items as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $slug  = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
+                    $entry = $wporgData[$slug] ?? null;
+                    if (!is_array($entry) || empty($entry['on_wporg']) || empty($entry['last_updated'])) {
+                        continue;
+                    }
+                    $checked++;
+                    $updatedAt = strtotime((string) $entry['last_updated']);
+                    if ($updatedAt !== false && $updatedAt < $cutoff) {
+                        $abandoned[] = (string) ($item['name'] ?? $slug);
+                    }
+                }
+            };
+            $scan($c->list('payload.plugins'), 'plugin', $wporgPlugins);
+            $scan($c->list('payload.themes'), 'theme', $wporgThemes);
+
+            if ($checked === 0) {
+                return Check::unknown();
+            }
+
+            return $abandoned === [] ? Check::pass(0) : Check::fail(count($abandoned), $nameList($abandoned));
+        },
+```
+
+### F10 — Vulnérabilités connues
+
+- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Réussite (FR) :** Aucune vulnérabilité connue ne touche WordPress, vos extensions ni vos thèmes.
+- **Échec (FR) :** {observed} vulnérabilités connues touchent {components} composants de votre site : {names}. Ces failles sont publiques et exploitées par des robots ; appliquez les mises à jour correctives sans tarder.
+
+```php
+        'check' => static function (Context $c) use ($nameList) {
+            $bvKnown = $c->number('probe.blogvault.vulnerabilities_total') !== null;
+            $wfKnown = $c->number('probe.wordfence.vulnerabilities_total') !== null;
+            if (!$bvKnown && !$wfKnown) {
+                return Check::unknown();
+            }
+            $summary = VulnerabilityMerge::siteSummary(
+                $bvKnown ? $c->probeData('blogvault') : null,
+                $wfKnown ? $c->probeData('wordfence') : null,
+                (array) ($c->reference('ignored_vulnerabilities') ?? []),
+            );
+            if ($summary['total'] === 0) {
+                return Check::pass(0);
+            }
+
+            return Check::fail($summary['total'], ['components' => count($summary['components'])] + $nameList($summary['components']));
+        },
+```
+
+### F12 — Mises à jour automatiques
+
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** Les correctifs de sécurité de WordPress s'installent automatiquement. Extensions mises à jour automatiquement : {plugins_auto} sur {plugins_total}.
+- **Échec (FR) :** Les mises à jour automatiques de WordPress sont désactivées, y compris les correctifs de sécurité : ils doivent être appliqués manuellement. Extensions mises à jour automatiquement : {plugins_auto} sur {plugins_total}.
+
+```php
+        'check' => static function (Context $c) {
+            $constants = $c->get('payload.constants');
+            if (!is_array($constants)) {
+                return Check::unknown();
+            }
+            $data = [
+                'plugins_auto'  => count($c->list('payload.auto_update_plugins')),
+                'plugins_total' => count($c->list('payload.plugins')),
+            ];
+            if ($c->constant('DISALLOW_FILE_MODS') === true) {
+                return Check::fail('file_mods', $data + ['variant' => 'file_mods']);
+            }
+            if ($c->constant('AUTOMATIC_UPDATER_DISABLED') === true) {
+                return Check::fail('all_disabled', $data + ['variant' => 'all_disabled']);
+            }
+            $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
+            if ($core === false || $core === 'false') {
+                return Check::fail('core_disabled', $data);
+            }
+
+            return $core === true || $core === 'true'
+                ? Check::pass('all', $data + ['variant' => 'all'])
+                : Check::pass('minor', $data);
+        },
+```
+
+### F13 — Extensions et thèmes inutilisés
+
+- **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Aucune extension ni aucun thème inutilisé n'est installé.
+- **Échec (FR) :** {observed} extensions ou thèmes sont installés mais désactivés : {names}. Même inactifs, leurs fichiers restent sur le serveur et peuvent contenir des failles ; supprimez ceux dont vous n'avez pas besoin.
+
+```php
+        'check' => static function (Context $c) use ($nameList) {
+            $plugins = $c->list('payload.plugins');
+            $themes  = $c->list('payload.themes');
+            if ($plugins === [] && $themes === []) {
+                return Check::unknown();
+            }
+            // Per-site activation can't tell whether another network site uses it.
+            if ($c->bool('payload.is_multisite') === true) {
+                return Check::na();
+            }
+
+            $unused = [];
+            foreach ($plugins as $plugin) {
+                if (is_array($plugin) && empty($plugin['active']) && empty($plugin['network_activated'])) {
+                    $unused[] = (string) ($plugin['name'] ?? '?');
+                }
+            }
+
+            $required = [];
+            foreach ($themes as $slug => $theme) {
+                if (is_array($theme) && !empty($theme['active'])) {
+                    $required[] = (string) ($theme['slug'] ?? $slug);
+                    $required[] = (string) ($theme['template'] ?? '');
+                    $required[] = (string) ($theme['parent_slug'] ?? '');
+                }
+            }
+            $keepsDefault = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
+
+            foreach ($themes as $slug => $theme) {
+                if (!is_array($theme) || !empty($theme['active'])) {
+                    continue;
+                }
+                $themeSlug = (string) ($theme['slug'] ?? $slug);
+                if (in_array($themeSlug, $required, true)) {
+                    continue;
+                }
+                if (!$keepsDefault && str_starts_with($themeSlug, 'twenty')) {
+                    $keepsDefault = true; // the one fallback theme worth keeping
+                    continue;
+                }
+                $unused[] = (string) ($theme['name'] ?? $themeSlug);
+            }
+
+            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
         },
 ```
 
 ## G. PHP & serveur
 
-### G1 — memory_limit dans la plage recommandée
+### G1 — Mémoire disponible pour PHP
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** memory_limit vaut {observed}, dans la plage recommandée (256M–512M).
-- **Échec (FR) :** memory_limit vaut {observed}, hors de la plage recommandée (256M–512M).
+- **Réussite (FR) :** PHP dispose de {memory_mb} Mo de mémoire, ce qui est suffisant.
+- **Échec (FR) :** PHP dispose de {memory_mb} Mo de mémoire (recommandé : au moins 256 Mo) : les pages lourdes et l'administration peuvent tomber en erreur. Faites augmenter la limite par votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -778,21 +923,24 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $shown = $c->string('payload.php.memory_limit');
-            $mb    = $bytes / 1048576;
+            if ($bytes === INF) {
+                return Check::pass($shown, ['variant' => 'unlimited']);
+            }
+            $data = ['memory_mb' => (int) round($bytes / 1048576)];
 
             return match (true) {
-                $mb < 64 || $mb > 1024 => Check::fail($shown, [], Severity::High), // far outside the range
-                $mb < 256 || $mb > 512 => Check::fail($shown),                    // outside the sweet spot, not extreme
-                default                 => Check::pass($shown),                    // 256–512 MB
+                $bytes < 64 * 1048576  => Check::fail($shown, $data, Severity::High),
+                $bytes < 256 * 1048576 => Check::fail($shown, $data),
+                default                => Check::pass($shown, $data),
             };
         },
 ```
 
-### G3 — Cohérence des limites d'upload PHP
+### G3 — Taille maximale des envois de fichiers
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 50
-- **Réussite (FR) :** post_max_size et upload_max_filesize sont identiques et suffisants ({observed}).
-- **Échec (FR) :** post_max_size et upload_max_filesize devraient être identiques et permettre au moins {threshold} Mo ({observed}), sans quoi des problèmes de transmission de données peuvent survenir.
+- **Réussite (FR) :** Les envois de fichiers peuvent atteindre {effective_mb} Mo.
+- **Échec (FR) :** Un envoi de fichier est limité à {effective_mb} Mo (recommandé : au moins {threshold} Mo) : l'ajout de vidéos ou de gros documents peut échouer. Faites augmenter la limite par votre hébergeur.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -807,29 +955,37 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 $post = INF;
             }
             $observed  = "{$postRaw} / {$uploadRaw}";
-            $mismatch  = $post !== INF && $post != $upload;
             $effective = min($post, $upload);
-            $tooSmall  = $effective / 1048576 < (float) $rule->threshold;
+            if ($effective === INF) {
+                return Check::pass($observed, ['variant' => 'unlimited']);
+            }
+            $data = ['effective_mb' => (int) round($effective / 1048576)];
 
-            return ($mismatch || $tooSmall) ? Check::fail($observed) : Check::pass($observed);
+            if ($post !== INF && $post != $upload) {
+                return Check::fail($observed, $data + ['variant' => 'mismatch']);
+            }
+
+            return $effective / 1048576 < (float) $rule->threshold
+                ? Check::fail($observed, $data)
+                : Check::pass($observed, $data);
         },
 ```
 
-### G4 — max_input_vars suffisant
+### G4 — Nombre de champs par formulaire
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 3000
-- **Réussite (FR) :** max_input_vars vaut {observed} (au moins {threshold}).
-- **Échec (FR) :** max_input_vars vaut {observed} (recommandé au moins {threshold}).
+- **Réussite (FR) :** PHP accepte {observed} champs par formulaire, ce qui est suffisant.
+- **Échec (FR) :** PHP accepte au plus {observed} champs par formulaire (recommandé : au moins {threshold}) : l'enregistrement de menus ou de pages complexes peut perdre des données sans avertissement. Faites augmenter le réglage max_input_vars.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
 ```
 
-### G5 — Extensions PHP recommandées
+### G5 — Modules PHP nécessaires
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Toutes les extensions PHP recommandées sont présentes.
-- **Échec (FR) :** Extensions PHP manquantes : {observed}.
+- **Réussite (FR) :** Tous les modules PHP dont WordPress a besoin sont présents.
+- **Échec (FR) :** Des modules PHP dont WordPress a besoin sont absents ({observed}) : certaines fonctions (images, mises à jour, sécurité) peuvent échouer. Faites-les installer par votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -838,21 +994,20 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $present  = array_map('strtolower', array_map('strval', $extensions));
-            $required = ['curl', 'mbstring', 'openssl', 'zip', 'dom', 'xml', 'json'];
-            $missing  = array_values(array_diff($required, $present));
+            $missing  = array_values(array_diff(['curl', 'mbstring', 'openssl', 'zip', 'dom', 'xml', 'json'], $present));
             if (!array_intersect(['gd', 'imagick'], $present)) {
-                $missing[] = 'gd|imagick';
+                $missing[] = 'gd/imagick';
             }
 
             return $missing === [] ? Check::pass('all') : Check::fail(implode(', ', $missing));
         },
 ```
 
-### G6 — OPcache actif
+### G6 — Accélérateur PHP (OPcache)
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** OPcache est actif.
-- **Échec (FR) :** L'extension OPcache n'est pas chargée : les performances PHP en pâtissent.
+- **Réussite (FR) :** L'accélérateur OPcache est actif.
+- **Échec (FR) :** L'accélérateur OPcache n'est pas actif : PHP recompile le code du site à chaque visite, ce qui le ralentit. Faites-le activer par votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -869,11 +1024,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## H. Base de données
 
-### H1 — Version de base de données supportée
+### H1 — Version de la base de données
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** La version de base de données est supportée (jusqu'au {eol_date}).
-- **Échec (FR) :** {observed} n'est plus supporté (fin de vie {eol_date}). Planifier une montée de version.
+- **Réussite (FR) :** Votre base de données ({observed}) reçoit des correctifs de sécurité jusqu'au {eol_date}.
+- **Échec (FR) :** Votre base de données ({observed}) ne reçoit plus de correctifs de sécurité depuis le {eol_date}. Planifiez la mise à niveau avec votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -883,10 +1038,10 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if (!$eol instanceof EndOfLife || $version === null || $type === '') {
                 return Check::unknown();
             }
-            $product = match (true) {
-                str_contains($type, 'maria') => 'mariadb',
-                str_contains($type, 'mysql') => 'mysql',
-                default                      => null,
+            [$product, $label] = match (true) {
+                str_contains($type, 'maria') => ['mariadb', 'MariaDB'],
+                str_contains($type, 'mysql') => ['mysql', 'MySQL'],
+                default                      => [null, null],
             };
             if ($product === null) {
                 return Check::unknown();
@@ -896,19 +1051,18 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             [$isEol, $date] = $status;
-            $branch = $product . ' ' . EndOfLife::branch($version);
+            $data = $date === null ? ['variant' => 'no_date'] : ['eol_date' => $date];
+            $branch = $label . ' ' . EndOfLife::branch($version);
 
-            return $isEol
-                ? Check::fail($branch, ['eol_date' => $date])
-                : Check::pass($version, ['eol_date' => $date]);
+            return $isEol ? Check::fail($branch, $data) : Check::pass($branch, $data);
         },
 ```
 
-### H4 — Fragmentation des tables maîtrisée
+### H4 — Espace récupérable dans la base de données
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 10485760
-- **Réussite (FR) :** Les tables cumulent {observed} octets d'overhead (seuil {threshold}).
-- **Échec (FR) :** Les tables cumulent {observed} octets d'overhead (seuil {threshold}).
+- **Réussite (FR) :** L'espace récupérable en optimisant les tables ({overhead_mb} Mo) reste faible par rapport à la taille de la base.
+- **Échec (FR) :** Environ {overhead_mb} Mo ({percent} % de la base) pourraient être récupérés en optimisant les tables. C'est un entretien facultatif.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -917,16 +1071,25 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $overhead = array_sum(array_map(static fn ($t): float => is_array($t) ? (float) ($t['overhead_bytes'] ?? 0) : 0.0, $tables));
+            $total    = $c->number('payload.database.total_bytes');
+            $data     = ['overhead_mb' => round($overhead / 1048576, 1)];
+            if ($total !== null && $total > 0) {
+                $data['percent'] = (int) round($overhead / $total * 100);
+            } else {
+                $data['variant'] = 'no_total';
+            }
 
-            return Check::atMost($overhead, (float) $rule->threshold);
+            $significant = $overhead >= (float) $rule->threshold && ($data['percent'] ?? 100) >= 20;
+
+            return $significant ? Check::fail($overhead, $data) : Check::pass($overhead, $data);
         },
 ```
 
-### H5 — Transients expirés non accumulés
+### H5 — Données temporaires expirées
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 250
-- **Réussite (FR) :** {observed} transients expirés en base (seuil {threshold}).
-- **Échec (FR) :** {observed} transients expirés traînent en base (seuil {threshold}).
+- **Réussite (FR) :** La base de données contient {observed} données temporaires expirées, ce qui est normal.
+- **Échec (FR) :** {observed} données temporaires expirées (« transients ») encombrent la base de données (seuil : {threshold}). Un nettoyage régulier les supprime.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
@@ -934,11 +1097,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## I. Autoload / cache objet
 
-### I1 — Poids des options autoloadées
+### I1 — Poids des réglages chargés à chaque page
 
 - **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Les options autoloadées pèsent {observed} octets — dans le budget (moins de 500 Ko).
-- **Échec (FR) :** Les options autoloadées pèsent {observed} octets — hors de la plage recommandée (moins de 500 Ko idéalement, à corriger sans tarder au-delà de 2 Mo).
+- **Réussite (FR) :** Les réglages que WordPress charge à chaque page pèsent {size_kb} Ko, dans la norme.
+- **Échec (FR) :** Les réglages que WordPress charge à chaque page (options « autoload ») pèsent {size_kb} Ko (idéalement moins de 500 Ko) : chaque visite en est ralentie. Faites nettoyer les réglages laissés par d'anciennes extensions.
 
 ```php
         'check' => static function (Context $c) {
@@ -946,20 +1109,21 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if ($bytes === null) {
                 return Check::unknown();
             }
+            $data = ['size_kb' => (int) round($bytes / 1024)];
 
             return match (true) {
-                $bytes < 512000   => Check::pass($bytes),                       // < 500 KB
-                $bytes < 2097152  => Check::fail($bytes, [], Severity::Medium), // 500 KB – 2 MB
-                default           => Check::fail($bytes),                      // ≥ 2 MB — red (rule's own default severity)
+                $bytes < 512000  => Check::pass($bytes, $data),
+                $bytes < 2097152 => Check::fail($bytes, $data, Severity::Medium),
+                default          => Check::fail($bytes, $data),
             };
         },
 ```
 
 ### I4 — Cache objet persistant
 
-- **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Un cache objet persistant est configuré.
-- **Échec (FR) :** Aucun cache objet persistant (Redis/Memcached) n'est configuré.
+- **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** Un cache objet persistant (Redis ou Memcached) accélère le site.
+- **Échec (FR) :** Aucun cache objet persistant (Redis ou Memcached) n'est configuré. C'est une optimisation utile pour un site très fréquenté ou transactionnel, facultative pour un site vitrine.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),
@@ -967,11 +1131,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## J. Cron
 
-### J2 — Aucun événement cron en retard
+### J2 — Tâches planifiées exécutées à temps
 
 - **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Aucun événement cron en retard.
-- **Échec (FR) :** {observed} événements cron sont en retard : WP-Cron ne s'exécute probablement pas.
+- **Réussite (FR) :** Les tâches planifiées de WordPress s'exécutent à temps.
+- **Échec (FR) :** {observed} tâches planifiées de WordPress (publications programmées, sauvegardes, nettoyages) sont en retard : le système de tâches ne s'exécute probablement plus. Faites configurer une tâche cron sur le serveur.
 
 ```php
         'check' => static function (Context $c) {
@@ -982,20 +1146,21 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if ($overdue <= 0) {
                 return Check::pass(0);
             }
+            // overdue_minutes is often absent: grade on the count alone then.
             $minutes = $c->number('payload.cron.overdue_minutes');
-            $mild    = $overdue <= 10 && $minutes !== null && $minutes <= 15;
+            $mild    = $overdue <= 10 && ($minutes === null || $minutes <= 15);
 
             return $mild
-                ? Check::fail((int) $overdue, ['overdue_minutes' => (int) $minutes], Severity::Medium)
-                : Check::fail((int) $overdue, ['overdue_minutes' => $minutes]); // red: rule's own default severity
+                ? Check::fail((int) $overdue, ['variant' => 'mild'], Severity::Medium)
+                : Check::fail((int) $overdue);
         },
 ```
 
-### J3 — Nombre d'événements cron raisonnable
+### J3 — Nombre de tâches planifiées
 
 - **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 100
-- **Réussite (FR) :** {observed} événements planifiés (seuil {threshold}).
-- **Échec (FR) :** {observed} événements planifiés (seuil {threshold}).
+- **Réussite (FR) :** {observed} tâches planifiées sont enregistrées, ce qui est raisonnable.
+- **Échec (FR) :** {observed} tâches planifiées sont enregistrées (seuil : {threshold}), souvent le signe d'extensions qui en accumulent. Faites faire le ménage.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.cron.scheduled_events'), (float) $rule->threshold),
@@ -1003,11 +1168,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## K. Configuration & durcissement
 
-### K1 — WP_DEBUG maîtrisé
+### K1 — Mode débogage
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** WP_DEBUG est désactivé, ou activé avec un journal de débogage non exposé publiquement.
-- **Échec (FR) :** WP_DEBUG est activé, et la confidentialité du journal de débogage n'est pas confirmée.
+- **Réussite (FR) :** Le mode débogage de WordPress est désactivé.
+- **Échec (FR) :** Le mode débogage de WordPress (WP_DEBUG) est actif sur le site en ligne, sans journal privé confirmé : des informations techniques peuvent fuiter. Désactivez-le en production.
 
 ```php
         'check' => static function (Context $c) {
@@ -1018,22 +1183,20 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if ($debug === false) {
                 return Check::pass(false);
             }
+            // Debug on is acceptable only when it logs to a file confirmed private.
+            $sensitiveFiles = $c->get('probe.http.exposure.sensitive_files');
+            $logsToFile     = $c->get('payload.constants.WP_DEBUG_LOG') === true;
+            $logIsPrivate   = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
 
-            $sensitiveFiles        = $c->get('probe.http.exposure.sensitive_files');
-            $loggingToDefaultPath  = $c->get('payload.constants.WP_DEBUG_LOG') === true;
-            $defaultLogNotExposed  = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
-
-            return ($loggingToDefaultPath && $defaultLogNotExposed)
-                ? Check::pass(true, ['debug_log' => 'not public'])
-                : Check::fail(true);
+            return ($logsToFile && $logIsPrivate) ? Check::pass(true, ['variant' => 'private_log']) : Check::fail(true);
         },
 ```
 
-### K2 — WP_DEBUG_DISPLAY désactivé
+### K2 — Erreurs cachées aux visiteurs
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** WP_DEBUG_DISPLAY est désactivé : les erreurs PHP ne s'affichent pas aux visiteurs.
-- **Échec (FR) :** WP_DEBUG_DISPLAY est activé : les erreurs PHP s'affichent aux visiteurs.
+- **Réussite (FR) :** Les erreurs PHP ne s'affichent pas à vos visiteurs.
+- **Échec (FR) :** Les erreurs PHP s'affichent directement sur vos pages (WP_DEBUG_DISPLAY) : vos visiteurs voient des messages techniques qui renseignent aussi les attaquants. Désactivez cet affichage.
 
 ```php
         'check' => static function (Context $c) {
@@ -1048,9 +1211,9 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ### K3 — Emplacement du journal de débogage
 
-- **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** WP_DEBUG_LOG utilise un chemin personnalisé ({observed}), plus difficile à deviner.
-- **Échec (FR) :** WP_DEBUG_LOG utilise l'emplacement par défaut (wp-content/debug.log), une cible facile à deviner.
+- **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Réussite (FR) :** Le journal de débogage n'est pas accessible publiquement.
+- **Échec (FR) :** Le journal de débogage est enregistré à son emplacement par défaut (wp-content/debug.log), où il est téléchargeable publiquement.
 
 ```php
         'check' => static function (Context $c) {
@@ -1058,46 +1221,61 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
             if ($debug === null) {
                 return Check::unknown();
             }
-            if ($debug === false) {
-                return Check::na();
-            }
-
             $debugLog = $c->get('payload.constants.WP_DEBUG_LOG');
-            if ($debugLog === null || $debugLog === 'N/A' || $debugLog === false || $debugLog === '') {
+            if ($debug === false || $debugLog === null || $debugLog === 'N/A' || $debugLog === false || $debugLog === '') {
                 return Check::na();
             }
+            if ($debugLog !== true) {
+                return Check::pass('custom');
+            }
+            $found = $c->get('probe.http.exposure.sensitive_files');
+            if (!is_array($found)) {
+                return Check::unknown();
+            }
 
-            return $debugLog === true ? Check::fail(true) : Check::pass((string) $debugLog);
+            return in_array('wp-content/debug.log', $found, true) ? Check::fail('default') : Check::pass('default');
         },
 ```
 
-### K4 — Édition de fichiers désactivée
+### K4 — Éditeur de code de l'administration
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'éditeur de fichiers de l'admin est désactivé.
-- **Échec (FR) :** L'éditeur de fichiers de l'admin est actif : définir DISALLOW_FILE_EDIT à true.
+- **Réussite (FR) :** L'éditeur de code intégré à l'administration est désactivé.
+- **Échec (FR) :** L'éditeur de code intégré à l'administration est actif : un seul compte administrateur compromis suffit pour injecter du code malveillant. Désactivez-le (DISALLOW_FILE_EDIT).
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
 ```
 
-### K6 — SSL forcé sur l'admin
+### K6 — Administration protégée par HTTPS
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** SSL est forcé sur l'administration.
-- **Échec (FR) :** FORCE_SSL_ADMIN n'est pas activé.
+- **Réussite (FR) :** L'accès à l'administration est forcé en HTTPS.
+- **Échec (FR) :** Rien n'oblige l'accès à l'administration en HTTPS : vos identifiants pourraient circuler sans chiffrement. Activez FORCE_SSL_ADMIN ou une redirection HTTPS pour tout le site.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->constant('FORCE_SSL_ADMIN')),
+        'check' => static function (Context $c) {
+            $forced = $c->constant('FORCE_SSL_ADMIN');
+            if ($forced === true) {
+                return Check::pass(true);
+            }
+            $siteHttps = $c->bool('probe.http.redirects.forces_https') === true
+                && str_starts_with((string) $c->string('payload.home_url'), 'https://');
+            if ($siteHttps) {
+                return Check::pass(false, ['variant' => 'site_https']);
+            }
+
+            return $forced === null ? Check::unknown() : Check::fail(false);
+        },
 ```
 
 ## L. Système de fichiers
 
-### L1 — Espace disque libre
+### L1 — Espace disque disponible
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** {observed}% d'espace disque libre ({free_gb} Go).
-- **Échec (FR) :** Il reste {observed}% d'espace disque libre ({free_gb} Go) — sous 20% ou moins de 2 Go.
+- **Réussite (FR) :** Il reste {observed} % d'espace disque ({free_gb} Go).
+- **Échec (FR) :** Il ne reste que {observed} % d'espace disque ({free_gb} Go) : les sauvegardes, mises à jour et téléversements peuvent échouer. Libérez de l'espace ou augmentez votre forfait.
 
 ```php
         'check' => static function (Context $c) {
@@ -1107,24 +1285,18 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $percent  = round($free / $total * 100, 1);
-            $lowSpace = $percent < 20 || $free < 2147483648; // 20% or 2 GiB
-            // A plain number, not "X GB" — findings.json stays language-
-            // neutral (no unit baked in here); the unit word lives in each
-            // lang template alongside {free_gb}, same as every other
-            // placeholder.
-            $freeGb = round($free / 1073741824, 1);
+            $lowSpace = $percent < 20 || $free < 2147483648; // under 20% or 2 GiB
+            $data     = ['free_gb' => round($free / 1073741824, 1)];
 
-            return $lowSpace
-                ? Check::fail($percent, ['free_bytes' => $free, 'free_gb' => $freeGb], Severity::Medium)
-                : Check::pass($percent, ['free_gb' => $freeGb]);
+            return $lowSpace ? Check::fail($percent, $data, Severity::Medium) : Check::pass($percent, $data);
         },
 ```
 
-### L4 — Dossier uploads inscriptible
+### L4 — Enregistrement des médias
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Le dossier uploads est inscriptible.
-- **Échec (FR) :** Le dossier uploads n'est pas inscriptible : les téléversements et mises à jour échoueront.
+- **Réussite (FR) :** WordPress peut enregistrer vos médias.
+- **Échec (FR) :** WordPress ne peut pas écrire dans le dossier des médias : l'ajout d'images et certaines mises à jour échouent. Faites corriger les permissions du dossier.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
@@ -1132,11 +1304,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## M. Utilisateurs & accès
 
-### M1 — Nombre d'administrateurs maîtrisé
+### M1 — Nombre d'administrateurs
 
 - **Catégorie :** USERS · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 3
-- **Réussite (FR) :** Le site compte {observed} administrateur(s).
-- **Échec (FR) :** Le site compte {observed} administrateurs (seuil {threshold}).
+- **Réussite (FR) :** Le site compte {observed} comptes administrateurs.
+- **Échec (FR) :** Le site compte {observed} comptes administrateurs (recommandé : {threshold} au plus) : chaque compte aux pleins pouvoirs est une porte d'entrée. Retirez les droits inutiles.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -1146,11 +1318,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### M2 — Aucun compte « admin » par défaut
+### M2 — Identifiant « admin » évité
 
 - **Catégorie :** USERS · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Aucun compte « admin » par défaut.
-- **Échec (FR) :** Un compte administrateur utilise l'identifiant par défaut « admin ».
+- **Réussite (FR) :** Aucun compte administrateur n'utilise l'identifiant « admin ».
+- **Échec (FR) :** Un compte administrateur utilise l'identifiant « admin », le premier que testent les robots d'attaque. Remplacez-le par un identifiant unique.
 
 ```php
         'check' => static function (Context $c) {
@@ -1170,11 +1342,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## N. N
 
-### N2 — Corbeille maîtrisée
+### N2 — Corbeille des articles
 
 - **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 20
-- **Réussite (FR) :** La corbeille des articles ne contient que {observed} élément(s).
-- **Échec (FR) :** {observed} article(s) traînent dans la corbeille (seuil {threshold}). Les vider libère de l'espace en base de données.
+- **Réussite (FR) :** La corbeille des articles contient {observed} éléments.
+- **Échec (FR) :** {observed} articles attendent dans la corbeille (seuil : {threshold}) : la vider allège la base de données.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -1187,11 +1359,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### N4 — Peu de brouillons en attente
+### N4 — Brouillons en attente
 
 - **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 30
-- **Réussite (FR) :** Seulement {observed}% des articles sont en brouillon.
-- **Échec (FR) :** {observed}% des articles sont encore à l'état de brouillon (seuil {threshold}%). Publier ou supprimer les brouillons abandonnés garde le contenu à jour.
+- **Réussite (FR) :** Seulement {observed} % des articles sont des brouillons.
+- **Échec (FR) :** {observed} % des articles sont des brouillons (seuil : {threshold} %) : publiez ou supprimez ceux qui sont abandonnés.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -1211,11 +1383,11 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## BV. BlogVault
 
-### BV1 — Site non signalé comme piraté
+### BV1 — Site exempt de piratage
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Aucun signe de piratage détecté sur ce site.
-- **Échec (FR) :** Ce site est signalé comme piraté : {detections} détection(s) non résolue(s).
+- **Réussite (FR) :** Aucun signe de piratage n'a été détecté sur votre site.
+- **Échec (FR) :** Du code malveillant a été détecté sur votre site ({detections} éléments non résolus). Un nettoyage est nécessaire sans délai.
 
 ```php
         'check' => static function (Context $c) {
@@ -1231,99 +1403,47 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### BV2 — Aucune vulnérabilité connue
-
-- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
-- **Échec (FR) :** {observed} vulnérabilités connues recensées sur {components} composant(s).
-
-```php
-        'check' => static function (Context $c) {
-            $total = $c->number('probe.blogvault.vulnerabilities_total');
-            if ($total === null) {
-                return Check::unknown();
-            }
-            if ($total <= 0) {
-                return Check::pass(0);
-            }
-
-            $components = (int) ($c->number('probe.blogvault.plugins.vulnerable_count') ?? 0)
-                + (int) ($c->number('probe.blogvault.themes.vulnerable_count') ?? 0)
-                + (($c->bool('probe.blogvault.core.vulnerable') === true) ? 1 : 0);
-
-            return Check::fail((int) $total, ['components' => $components]);
-        },
-```
-
-## WF. Wordfence Intelligence
-
-### WF1 — Aucune vulnérabilité connue
-
-- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Aucune vulnérabilité connue pour le cœur, les extensions ni les thèmes.
-- **Échec (FR) :** {observed} vulnérabilités connues recensées sur {components} composant(s).
-
-```php
-        'check' => static function (Context $c) {
-            $total = $c->number('probe.wordfence.vulnerabilities_total');
-            if ($total === null) {
-                return Check::unknown();
-            }
-            if ($total <= 0) {
-                return Check::pass(0);
-            }
-
-            $components = (int) ($c->number('probe.wordfence.plugins.vulnerable_count') ?? 0)
-                + (int) ($c->number('probe.wordfence.themes.vulnerable_count') ?? 0)
-                + (($c->count('probe.wordfence.core.vulnerabilities') ?? 0) > 0 ? 1 : 0);
-
-            return Check::fail((int) $total, ['components' => $components]);
-        },
-```
-
 ## X. Exposition (sondes passives)
 
-### X1 — xmlrpc.php non exposé
+### X1 — Ancienne interface xmlrpc.php bloquée
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** xmlrpc.php est bloqué ou désactivé.
-- **Échec (FR) :** xmlrpc.php répond — amplification de brute-force et abus de pingback possibles.
+- **Réussite (FR) :** L'ancienne interface xmlrpc.php est bloquée ou désactivée.
+- **Échec (FR) :** L'ancienne interface xmlrpc.php répond : elle permet aux robots de tester des milliers de mots de passe d'un coup. Bloquez-la si aucune application ne l'utilise (Jetpack, applications mobiles).
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.xmlrpc_enabled')),
 ```
 
-### X2 — Aucune divulgation d'identifiant via l'API REST
+### X2 — Identifiants protégés (API de WordPress)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'API REST ne divulgue pas les comptes utilisateurs.
-- **Échec (FR) :** L'API REST liste les comptes utilisateurs sur /wp-json/wp/v2/users, divulguant chaque identifiant.
+- **Réussite (FR) :** L'API de WordPress ne divulgue pas les identifiants de vos utilisateurs.
+- **Échec (FR) :** L'API de WordPress publie la liste des identifiants de connexion de vos utilisateurs : un attaquant n'a plus qu'à deviner les mots de passe. Restreignez l'accès à cette liste.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.rest_user_enumeration')),
 ```
 
-### X3 — Aucune divulgation d'identifiant via les archives auteur
+### X3 — Identifiants protégés (archives d'auteur)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** La redirection d'archive auteur ne divulgue pas d'identifiant.
-- **Échec (FR) :** ?author=1 redirige vers l'archive de l'auteur, divulguant l'identifiant dans l'URL.
+- **Réussite (FR) :** Les archives d'auteur ne révèlent pas les identifiants de connexion.
+- **Échec (FR) :** L'adresse « ?author=1 » révèle l'identifiant de connexion d'un administrateur. Bloquez cette redirection.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.author_enumeration')),
 ```
 
-### X4 — Aucun fichier de sauvegarde/config exposé
+### X4 — Fichiers sensibles protégés
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Critique · **Seuil configurable :** —
-- **Réussite (FR) :** Aucun fichier de sauvegarde/config courant n'est accessible publiquement.
-- **Échec (FR) :** Accessible publiquement : {observed}. Ces fichiers peuvent divulguer les identifiants de la base de données directement.
+- **Réussite (FR) :** Aucun fichier sensible courant (sauvegarde, configuration) n'est accessible publiquement.
+- **Échec (FR) :** Des fichiers sensibles sont téléchargeables publiquement ({observed}) : ils peuvent révéler les accès à la base de données. Supprimez-les ou bloquez-les sans délai.
 
 ```php
         'check' => static function (Context $c) {
-            // null (skipped — the site has a soft-404 catch-all, see
-            // HttpProbe::exposureCheck()) must read as unknown, never as a
-            // clean pass: every path would have answered 200 regardless.
+            // null = not checked (soft-404 catch-all or auth gate): never a clean pass.
             $found = $c->get('probe.http.exposure.sensitive_files');
             if (!is_array($found)) {
                 return Check::unknown();
@@ -1333,21 +1453,21 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
         },
 ```
 
-### X5 — Dossier uploads non navigable
+### X5 — Liste des médias non consultable
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** wp-content/uploads/ n'est pas navigable.
-- **Échec (FR) :** wp-content/uploads/ retourne une liste de répertoire.
+- **Réussite (FR) :** Le contenu du dossier des médias ne peut pas être parcouru.
+- **Échec (FR) :** N'importe qui peut parcourir la liste complète des fichiers de votre dossier de médias (wp-content/uploads/), y compris des documents non publiés. Faites désactiver l'affichage des répertoires.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.directory_listing')),
 ```
 
-### X6 — Méthode HTTP TRACE désactivée
+### X6 — Méthode de diagnostic TRACE désactivée
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Le serveur refuse HTTP TRACE.
-- **Échec (FR) :** Le serveur répond à une requête HTTP TRACE (risque de cross-site tracing).
+- **Réussite (FR) :** Le serveur refuse la méthode de diagnostic HTTP TRACE.
+- **Échec (FR) :** Le serveur accepte la méthode de diagnostic HTTP TRACE, inutile en production. Faites-la désactiver.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.trace_enabled')),

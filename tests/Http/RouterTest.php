@@ -17,7 +17,7 @@ final class RouterTest extends TestCase
     private const string UUID = '3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c';
     private const string EID  = '20260723T125131Z';
 
-    /** '/' is a deliberately empty placeholder (2026-09-10); the sites/"Extractions" list moved to its own URL. */
+    /** '/' is a deliberately empty placeholder; the "Extractions" list has its own URL. */
     public function testRootRoutesToTheEmptyHomePage(): void
     {
         $this->assertSame('home', Router::matchRoute('/')['route']);
@@ -224,7 +224,7 @@ final class RouterTest extends TestCase
             ['findings', 'findings.json'],
             // A syntactically valid name that is not a stored file resolves to a
             // probes/ path; the caller's is_file() check turns it into a 404.
-            // The router no longer keeps a name allowlist — see resolveRawFile().
+            // No name allowlist: basename() confines the lookup — see resolveRawFile().
             ['summary', 'probes/summary.json'],
             ['tls', 'probes/tls.json'],
             ['http', 'probes/http.json'],
@@ -283,5 +283,39 @@ final class RouterTest extends TestCase
         // keys.json lives outside the extraction dir, so this resolves to a
         // probes/ path that simply does not exist -> 404 at the caller.
         $this->assertSame('probes/keys.json', Router::resolveRawFile('keys'));
+    }
+
+    public function testPostRoutesResolveEveryExtractionAction(): void
+    {
+        $base = '/site/' . self::UUID . '/extraction/' . self::EID . '/';
+        foreach ([
+            'run'          => 'extraction_run',
+            'abort'        => 'extraction_abort',
+            'rerun'        => 'extraction_rerun',
+            'report-token' => 'extraction_report_token',
+            'observations' => 'extraction_observations',
+            'licenses'     => 'extraction_licenses',
+        ] as $action => $route) {
+            $match = Router::matchPostRoute($base . $action);
+            $this->assertSame($route, $match['route'], $action);
+            $this->assertSame(['site_id' => self::UUID, 'extraction_id' => self::EID], $match['params']);
+        }
+    }
+
+    public function testPostRoutesResolveTheFlatTargets(): void
+    {
+        foreach (['users', 'profile', 'keys', 'catalog', 'subscriptions'] as $target) {
+            $this->assertSame($target, Router::matchPostRoute('/' . $target)['route']);
+        }
+        $this->assertSame('auth_logout', Router::matchPostRoute('/auth/logout')['route']);
+    }
+
+    public function testPostRoutesValidateIdentifiersAndRejectUnknownActions(): void
+    {
+        $this->assertSame('not_found', Router::matchPostRoute('/site/not-a-uuid/extraction/' . self::EID . '/run')['route']);
+        $this->assertSame('not_found', Router::matchPostRoute('/site/' . self::UUID . '/extraction/nope/run')['route']);
+        $this->assertSame('not_found', Router::matchPostRoute('/site/' . self::UUID . '/extraction/' . self::EID . '/delete')['route']);
+        $this->assertSame('not_found', Router::matchPostRoute('/status')['route']);
+        $this->assertSame('not_found', Router::matchPostRoute('/keys/extra')['route']);
     }
 }

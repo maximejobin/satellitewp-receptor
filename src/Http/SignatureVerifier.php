@@ -63,10 +63,7 @@ final class SignatureVerifier
             throw new SignatureException('Invalid X-SWP-Signature', 401);
         }
 
-        // The timestamp window alone only bounds how *late* a captured
-        // request can be replayed, not whether it already has been — a
-        // signature seen once before, still inside its own window, is a
-        // replay of the same request, not a second legitimate one.
+        // The window bounds how late a replay can come; this rejects one inside it.
         if ($this->replayCache?->seenBefore($signature, (int) $timestamp, $this->replayWindowSeconds) === true) {
             throw new SignatureException('X-SWP-Signature already used (replay rejected)', 401);
         }

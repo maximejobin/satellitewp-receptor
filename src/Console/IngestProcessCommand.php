@@ -14,12 +14,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 /**
- * The cron worker. It only ever picks up extractions an analyst has explicitly
- * queued from the web UI (status "queued") — never the ones that merely
- * arrived (status "pending"). A site pushing on its own therefore costs a file
- * on disk and nothing else: no probes, no PageSpeed or BlogVault quota. The
- * cron exists so the slow work (~20 s a site, mostly PageSpeed) runs outside
- * the web request instead of timing it out.
+ * The cron worker: runs only extractions an analyst queued, never mere
+ * arrivals, so a push spends no probe quota; the slow work stays out of web
+ * requests.
  *
  * Crontab: * * * * * php /path/to/bin/xtractor ingest:process --requeue-stale=30
  */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Xtractor\Probe;
 
+use Closure;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\GuzzleException;
@@ -18,8 +19,11 @@ use SatelliteWP\Xtractor\Support\HostGuard;
 
 /**
  * HTTP behaviour of the site: redirect chain (http→https, www canonical),
- * negotiated HTTP version, compression, cache/security headers,
- * server fingerprint, CDN hints, soft-404 behaviour.
+ * negotiated HTTP version, compression, cache/security headers, server
+ * fingerprint, CDN hints, soft-404 behaviour and passive exposure checks.
+ *
+ * Every request connects to the address the SSRF guard vetted (pinned via
+ * CURLOPT_RESOLVE), never to a second independent lookup.
  */
 final class HttpProbe extends AbstractProbe
 {
@@ -38,28 +42,40 @@ final class HttpProbe extends AbstractProbe
         'x-amz-cf-id'     => 'cloudfront',
         'x-fastly-request-id' => 'fastly',
         'x-akamai-transformed' => 'akamai',
-        'x-cache-status'  => 'generic-cache',
     ];
 
     /**
-     * Common backup/config/log files people leave in the webroot — the
-     * single most consequential item here: `.env`/`wp-config.php.bak`
-     * disclose database credentials directly, no vulnerability needed.
+     * Backup/config/log files commonly left in the webroot, each with the
+     * content signature that proves the real file was served (an HTML error
+     * page answered with 200 is not an exposure).
      */
     private const array SENSITIVE_PATHS = [
-        '.env',
-        'wp-config.php.bak',
-        'wp-config.php~',
-        '.git/config',
-        'wp-content/debug.log',
-        'backup.sql',
+        '.env'                 => '/^\s*[A-Z][A-Z0-9_]*\s*=/m',
+        'wp-config.php.bak'    => '/define\s*\(\s*[\'"](?:DB_NAME|DB_PASSWORD|DB_USER|AUTH_KEY)/',
+        'wp-config.php~'       => '/define\s*\(\s*[\'"](?:DB_NAME|DB_PASSWORD|DB_USER|AUTH_KEY)/',
+        '.git/config'          => '/^\s*\[core\]/m',
+        'wp-content/debug.log' => '/PHP (?:Fatal error|Warning|Notice|Deprecated|Parse error)/',
+        'backup.sql'           => '/(?:CREATE TABLE|INSERT INTO|-- (?:MySQL|MariaDB) dump)/i',
     ];
 
+    /** Only the start of a sensitive file is read — enough for its signature, never a multi-GB dump. */
+    private const int SENSITIVE_HEAD_BYTES = 4096;
+    private const int SENSITIVE_MAX_BYTES  = 1_048_576;
+
+    private readonly Closure $resolveIp;
+
+    /**
+     * @param Closure|null $handler   Guzzle handler override (tests)
+     * @param Closure|null $resolveIp host => vetted public IP or null (default HostGuard::publicIpFor)
+     */
     public function __construct(
         private readonly int $connectTimeout,
         private readonly int $timeout,
         private readonly string $userAgent,
+        private readonly ?Closure $handler = null,
+        ?Closure $resolveIp = null,
     ) {
+        $this->resolveIp = $resolveIp ?? HostGuard::publicIpFor(...);
     }
 
     public function name(): string
@@ -78,7 +94,7 @@ final class HttpProbe extends AbstractProbe
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['No host in site context']];
         }
 
-        if (!HostGuard::isPubliclyRoutable($site->host)) {
+        if (($this->resolveIp)($site->host) === null) {
             return ['status' => ProbeResult::STATUS_ERROR, 'errors' => ['Host does not resolve to a public address — refusing to connect (SSRF guard)']];
         }
 
@@ -90,16 +106,10 @@ final class HttpProbe extends AbstractProbe
             'verify'          => true,
             'allow_redirects' => false,
         ];
-        $stack = HandlerStack::create();
-        // Every request (and every manually followed redirect hop) connects to
-        // the address HostGuard vetted, never to a second, independent lookup.
-        $stack->push(self::pinToVettedAddress([HostGuard::class, 'publicIpFor']), 'pin_vetted_address');
-        // A site paired behind HTTP Basic Auth (staging, an IP-restriction
-        // bypass, …) needs these to see anything past a 401 — see
-        // KeyStore::getHttpAuth() / the site's "⚙ Site settings" panel.
-        // Attached per request, never client-wide: the redirect chain starts
-        // on plain http:// and can hop to another host, and neither may see
-        // the credentials (see shouldSendCredentials()).
+        $stack = HandlerStack::create($this->handler);
+        $stack->push(self::pinToVettedAddress($this->resolveIp), 'pin_vetted_address');
+        // Per request, never client-wide: the chain starts on plain http:// and
+        // can hop to another host, and neither may see the credentials.
         if ($site->httpAuth !== null) {
             $header   = 'Basic ' . base64_encode($site->httpAuth['username'] . ':' . $site->httpAuth['password']);
             $siteHost = $site->host;
@@ -114,41 +124,30 @@ final class HttpProbe extends AbstractProbe
 
         $errors = [];
 
-        // 1. Redirect chain starting on plain http://
+        // 1. The http:// chain answers only "does the site force HTTPS" (A10).
+        // Its landing URL is never reused: a plain-HTTP vhost can be broken
+        // independently of the site visitors actually reach.
         $redirects = $this->followRedirects($client, 'http://' . $site->host . '/', $errors);
 
-        // 2. Main request on the final URL.
-        $finalUrl = $redirects['final_url'] ?? ('https://' . $site->host . '/');
-        $main     = $this->mainRequest($client, $finalUrl, $errors);
+        // 2. Everything else targets the public homepage (home_url), followed
+        // through its own redirects.
+        $mainStartUrl = self::pickMainStartUrl($site->homeUrl, $site->siteUrl, $site->host);
+        if (!$this->isSafeUrl($mainStartUrl)) {
+            $errors[]     = "home_url \"{$mainStartUrl}\" does not resolve to a public address — refusing to connect (SSRF guard)";
+            $mainStartUrl = 'https://' . $site->host . '/';
+        }
+        $mainRedirects = $this->followRedirects($client, $mainStartUrl, $errors);
+        $finalUrl      = $mainRedirects['final_url'] ?? $mainStartUrl;
+        $main          = $this->mainRequest($client, $finalUrl, $errors);
 
         $authRequired = ($main['status_code'] ?? null) === 401;
 
-        // 3. Soft-404 detection.
-        $soft404 = $this->soft404Check($client, $finalUrl, $errors);
-
-        // 4. Compression + cache of a first-party CSS/JS asset. Servers often
-        //    compress the HTML document but not their static assets (or vice versa).
-        $asset = $this->assetCheck($client, $finalUrl);
-
-        // 5. robots.txt (+ the sitemap it declares).
-        $robots = $this->robotsCheck($client, $finalUrl);
-
-        // 6. Passive exposure checks — xmlrpc.php, REST/legacy user
-        //    enumeration, browsable uploads dir, common backup files, TRACE.
-        $exposure = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
-
+        $soft404     = $this->soft404Check($client, $finalUrl, $errors);
+        // Servers often compress the HTML document but not their static assets.
+        $asset       = $this->assetCheck($client, $finalUrl);
+        $robots      = $this->robotsCheck($client, $finalUrl);
+        $exposure    = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
         $compression = $this->compressionSupportCheck($client, $finalUrl);
-
-        // 8. Protocol support, isolated per version rather than the old
-        // ">= 2" threshold (which silently counted HTTP/3 as "passing" the
-        // HTTP/2 check too). HTTP/2 reuses the main request's own negotiated
-        // version — that request already prefers h2 via ALPN, so a second
-        // identical negotiation would tell us nothing new. HTTP/1.1 gets its
-        // own request, forced. HTTP/3 has no live signal available: this
-        // server's libcurl has no QUIC support to actually negotiate one, so
-        // it reads the Alt-Svc header the site itself advertises instead —
-        // the same passive signal a browser uses to decide whether to try
-        // QUIC, not proof a handshake would succeed.
         $protocols = $this->protocolSupportCheck($client, $finalUrl, $main['http_version'] ?? null, $main['alt_svc'] ?? null);
 
         $data = [
@@ -176,7 +175,29 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * Follow up to 10 redirects manually so we can record the chain.
+     * The URL every check past the http:// chain targets: home_url (the
+     * public homepage — site_url is where core's files live, possibly /wp),
+     * then site_url, then an https guess from the host.
+     */
+    public static function pickMainStartUrl(string $homeUrl, string $siteUrl, string $host): string
+    {
+        if ($homeUrl !== '') {
+            return $homeUrl;
+        }
+
+        return $siteUrl !== '' ? $siteUrl : ('https://' . $host . '/');
+    }
+
+    private function isSafeUrl(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' && ($this->resolveIp)($host) !== null;
+    }
+
+    /**
+     * Follow up to 10 redirects manually to record the chain. GET, not HEAD:
+     * some servers answer HEAD differently from what a browser receives.
      *
      * @param list<string> $errors
      * @return array<string, mixed>
@@ -188,16 +209,11 @@ final class HttpProbe extends AbstractProbe
 
         for ($hop = 0; $hop < 10; $hop++) {
             try {
-                $response = $client->head($url);
+                $response = $client->get($url);
             } catch (GuzzleException $e) {
-                // Some servers refuse HEAD; retry with GET before giving up.
-                try {
-                    $response = $client->get($url);
-                } catch (GuzzleException $e2) {
-                    $errors[] = "Redirect chain: {$e2->getMessage()}";
+                $errors[] = "Redirect chain: {$e->getMessage()}";
 
-                    return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
-                }
+                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
             }
 
             $status  = $response->getStatusCode();
@@ -212,18 +228,15 @@ final class HttpProbe extends AbstractProbe
                 break;
             }
 
-            $next = $this->resolveUrl($url, $location);
+            $next = self::resolveUrl($url, $location);
             if (in_array($next, array_column($chain, 'url'), true)) {
                 $chain[] = ['url' => $next, 'status' => null];
 
                 return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => true];
             }
 
-            // The starting host was already checked in collect(), but a
-            // redirect can point anywhere — including an internal address a
-            // public site has no business sending an anonymous prober to.
-            // Same SSRF guard, applied per hop instead of once up front.
-            if (!HostGuard::isSafeUrl($next)) {
+            // A redirect can point anywhere, including an internal address.
+            if (!$this->isSafeUrl($next)) {
                 $errors[] = "Redirect chain: {$next} does not resolve to a public address — refusing to follow it (SSRF guard)";
 
                 return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
@@ -231,9 +244,7 @@ final class HttpProbe extends AbstractProbe
             $url = $next;
         }
 
-        // $chain always has at least one entry by this point: every path out
-        // of the loop above (break or exhaustion) appends to it first —
-        // caught by PHPStan as dead code, not just a style nit.
+        // Never empty here: every exit from the loop above appended first.
         $finalUrl = end($chain)['url'];
 
         return [
@@ -277,12 +288,9 @@ final class HttpProbe extends AbstractProbe
             $headers[strtolower($name)] = implode(', ', $values);
         }
 
-        $parsed = self::parseMainResponse($response->getStatusCode(), $headers, $stats ?? []);
+        $parsed = self::parseMainResponse($response->getStatusCode(), $headers, $stats ?? [], $response->getHeader('Set-Cookie'));
 
-        // The exact request this probe made — shown next to the response so
-        // an analyst can re-run the same thing by hand (curl, browser
-        // devtools) to verify a header value themselves, same idea as the
-        // per-check evidence already carried on exposureCheck()'s findings.
+        // The exact request made, so an analyst can re-run it by hand.
         $parsed['request'] = [
             'method'  => 'GET',
             'url'     => $url,
@@ -297,13 +305,14 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * Pure parsing of the main response — unit-testable without network.
+     * Pure parsing of the main response.
      *
-     * @param array<string, string> $headers lowercased header map
-     * @param array<string, mixed>  $stats curl handler stats
+     * @param array<string, string> $headers    lowercased header map
+     * @param array<string, mixed>  $stats      curl handler stats
+     * @param list<string>          $setCookies one entry per Set-Cookie header (defaults to the joined header)
      * @return array<string, mixed>
      */
-    public static function parseMainResponse(int $statusCode, array $headers, array $stats): array
+    public static function parseMainResponse(int $statusCode, array $headers, array $stats, array $setCookies = []): array
     {
         $httpVersion = match ((int) ($stats['http_version'] ?? 0)) {
             CURL_HTTP_VERSION_1_0 => '1.0',
@@ -329,15 +338,12 @@ final class HttpProbe extends AbstractProbe
             $cdn = 'cloudflare';
         }
 
-        $setCookie = $headers['set-cookie'] ?? null;
+        if ($setCookies === [] && isset($headers['set-cookie'])) {
+            $setCookies = [$headers['set-cookie']];
+        }
 
-        // The full raw response below is for an analyst who wants to check
-        // something the curated fields don't cover — but "full" stops at
-        // Set-Cookie: its value can be an actual session/cart identifier for
-        // the site's own visitors, not metadata about the site itself, and
-        // has no business being written to data/ or shown in the UI. The
-        // boolean-only `cookies` summary below is the safe representation of
-        // the same fact (secure/httponly/samesite present or not).
+        // Set-Cookie values can be visitors' session ids: only the flag
+        // summary below is ever stored.
         unset($headers['set-cookie']);
 
         return [
@@ -347,10 +353,6 @@ final class HttpProbe extends AbstractProbe
             'gzip'             => ($headers['content-encoding'] ?? '') === 'gzip',
             'brotli'           => ($headers['content-encoding'] ?? '') === 'br',
             'alt_svc'          => $headers['alt-svc'] ?? null,
-            // Every OTHER response header received, unfiltered —
-            // security_headers below is a curated subset for quick scanning;
-            // this is the full raw response for an analyst who wants to
-            // check something else (Set-Cookie excluded, see above).
             'headers'          => $headers,
             'cache_headers'    => [
                 'cache-control' => $headers['cache-control'] ?? null,
@@ -364,20 +366,43 @@ final class HttpProbe extends AbstractProbe
                 'x-powered-by' => $headers['x-powered-by'] ?? null,
             ],
             'cdn'              => $cdn,
-            'cookies'          => $setCookie === null ? null : [
-                'secure'   => str_contains(strtolower($setCookie), 'secure'),
-                'httponly' => str_contains(strtolower($setCookie), 'httponly'),
-                'samesite' => str_contains(strtolower($setCookie), 'samesite'),
-            ],
+            'cookies'          => self::cookieFlags($setCookies),
         ];
     }
 
     /**
-     * Requests gzip and brotli ONE AT A TIME — each its own request offering
-     * only that encoding — so a "false" means the server genuinely cannot
-     * produce it, not merely that it prefers the other one when both are on
-     * offer (see the main request above, which offers "gzip, br" together
-     * and reflects the server's own preference, not its full capability).
+     * Pure. Each flag is true only when EVERY cookie carries it — one secure
+     * cookie must not vouch for the others. SameSite counts only as Lax or
+     * Strict (None offers no CSRF protection).
+     *
+     * @param list<string> $setCookies
+     * @return array{secure: bool, httponly: bool, samesite: bool}|null null when no cookie was set
+     */
+    public static function cookieFlags(array $setCookies): ?array
+    {
+        if ($setCookies === []) {
+            return null;
+        }
+
+        $flags = ['secure' => true, 'httponly' => true, 'samesite' => true];
+        foreach ($setCookies as $cookie) {
+            $attributes = array_map(
+                static fn (string $a): string => strtolower(trim($a)),
+                array_slice(explode(';', $cookie), 1)
+            );
+            $flags['secure']   = $flags['secure'] && in_array('secure', $attributes, true);
+            $flags['httponly'] = $flags['httponly'] && in_array('httponly', $attributes, true);
+            $flags['samesite'] = $flags['samesite']
+                && (in_array('samesite=lax', $attributes, true) || in_array('samesite=strict', $attributes, true));
+        }
+
+        return $flags;
+    }
+
+    /**
+     * Offers gzip and brotli one at a time, so "false" means the server
+     * cannot produce that encoding — the main request only shows which one
+     * it prefers when both are offered.
      *
      * @return array{gzip: bool|null, brotli: bool|null} null when the request itself failed
      */
@@ -397,19 +422,16 @@ final class HttpProbe extends AbstractProbe
                 'decode_content' => false,
             ]);
         } catch (GuzzleException) {
-            return null; // inconclusive, not a "no" — the request itself never completed
+            return null; // inconclusive, not a "no"
         }
 
         return strtolower($response->getHeaderLine('Content-Encoding')) === $expect;
     }
 
     /**
-     * Protocol support, isolated per version. HTTP/2 reuses the main
-     * request's own negotiated version (that request already prefers h2 via
-     * ALPN, so re-negotiating would just repeat it); HTTP/1.1 gets a
-     * dedicated request forcing that version; HTTP/3 has no live signal
-     * available in this environment (see altSvcAdvertisesHttp3()) and reads
-     * the Alt-Svc header instead.
+     * Protocol support per version. HTTP/2 reuses the main request's ALPN
+     * result; HTTP/1.1 gets its own forced request; HTTP/3 reads Alt-Svc
+     * (this libcurl cannot negotiate QUIC).
      *
      * @return array{http1_1: bool|null, http2: bool|null, http3_advertised: bool|null}
      */
@@ -420,11 +442,7 @@ final class HttpProbe extends AbstractProbe
         try {
             $client->get($url, [
                 'version'  => '1.1',
-                // Same FRESH_CONNECT reasoning as mainRequest() above, the
-                // other direction: without it, this request could silently
-                // reuse whatever connection the (now correctly negotiated)
-                // HTTP/2 main request just opened, making a server that
-                // supports HTTP/1.1 fine read as "false" here.
+                // A reused HTTP/2 connection would make HTTP/1.1 read as unsupported.
                 'curl'     => [\CURLOPT_FRESH_CONNECT => true],
                 'on_stats' => static function (TransferStats $s) use (&$stats): void {
                     $stats = $s->getHandlerStats();
@@ -432,7 +450,7 @@ final class HttpProbe extends AbstractProbe
             ]);
             $http1_1 = (int) ($stats['http_version'] ?? 0) === CURL_HTTP_VERSION_1_1;
         } catch (GuzzleException) {
-            // leave null — inconclusive, not a "no"
+            // inconclusive: leave null
         }
 
         return [
@@ -443,14 +461,8 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * Whether an Alt-Svc header advertises HTTP/3 — the standardized "h3"
-     * protocol id, or an older "h3-XX" draft id some servers still send.
-     * Pure and testable without a live QUIC handshake, which is the point:
-     * this server's own libcurl build has no HTTP/3 support to actually
-     * negotiate one (confirmed: no HTTP3 feature in `curl -V`), so Alt-Svc —
-     * the same passive signal a browser reads before it decides to try QUIC
-     * — is the only signal available here. A "true" here is what the site
-     * advertises, not proof a handshake would succeed.
+     * Whether Alt-Svc advertises HTTP/3 ("h3" or a draft "h3-XX") — what the
+     * site announces, not proof a QUIC handshake would succeed.
      */
     public static function altSvcAdvertisesHttp3(?string $altSvc): bool
     {
@@ -552,7 +564,7 @@ final class HttpProbe extends AbstractProbe
         }
 
         foreach ($candidates as $candidate) {
-            $resolved = (new self(0, 0, ''))->resolveUrl($pageUrl, $candidate);
+            $resolved = self::resolveUrl($pageUrl, $candidate);
             if (parse_url($resolved, PHP_URL_HOST) === $host) {
                 return strtok($resolved, '#'); // drop any fragment
             }
@@ -588,12 +600,13 @@ final class HttpProbe extends AbstractProbe
         }
 
         $contentType = strtolower($response->getHeaderLine('Content-Type'));
-        // A "robots.txt" that is actually an HTML page (SPA/soft-404) is not one.
-        if ($contentType !== '' && !str_contains($contentType, 'text/plain') && !str_contains($contentType, 'text/')) {
+        $body        = (string) $response->getBody();
+        // An HTML page answered for robots.txt (SPA, soft-404) is not one.
+        if (($contentType !== '' && !str_starts_with($contentType, 'text/')) || self::looksLikeHtml($body)) {
             return ['present' => false, 'status_code' => 200, 'reason' => 'Content-Type ' . $contentType];
         }
 
-        $parsed = self::parseRobots((string) $response->getBody());
+        $parsed = self::parseRobots($body);
         $parsed['present']     = true;
         $parsed['url']         = $robotsUrl;
 
@@ -609,11 +622,7 @@ final class HttpProbe extends AbstractProbe
                 $parsed['sitemap_reachable'] = false;
             }
         } else {
-            // robots.txt declaring no sitemap is not the same fact as "this
-            // site has no sitemap" — WordPress core itself never adds a
-            // "Sitemap:" line, and not every SEO plugin does either, even
-            // though a real sitemap exists at one of the conventional URLs.
-            // Checked in order; the first one that resolves wins.
+            // Core never declares its sitemap in robots.txt: try the conventional URLs.
             foreach (['/wp-sitemap.xml', '/sitemap.xml', '/sitemap_index.xml'] as $path) {
                 try {
                     $candidate = $client->head($origin . $path);
@@ -680,30 +689,13 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * Passive exposure checks — no exploitation, nothing destructive: every
-     * one of these is a request any anonymous visitor (or `wpscan --enumerate`)
-     * can already make. This only automates the well-known targets so an
-     * analyst does not have to run a separate tool for the basics.
+     * Passive exposure checks: only requests any anonymous visitor can make.
+     * Each check records its evidence (URL, status, the detail behind the
+     * verdict) so an analyst can re-run it by hand.
      *
-     * Every check also records its own `evidence` (exact URL requested, HTTP
-     * status, and whatever detail justified the verdict — the Location
-     * header for author enumeration, the usernames actually parsed out for
-     * REST enumeration, which of the sensitive paths were tried) so a finding
-     * is never "trust me" — an analyst can point at exactly what was
-     * requested and what came back, the same request they could re-run by
-     * hand with curl.
-     *
-     * The sensitive-files and directory-listing checks are skipped entirely
-     * on a soft-404 site (every path would answer 200 regardless of whether
-     * it exists, which would report all of them as "exposed") — `null`
-     * there means "not checked", never "checked, found nothing".
-     *
-     * Same logic, wider gate, for a site that answered the homepage itself
-     * with a 401: every one of these checks would also 401 regardless of
-     * what it is testing for, which would report all of them as "not
-     * exposed" — a false "clean" when the truth is "not public, couldn't
-     * check". `$authRequired` skips the lot up front instead of letting each
-     * individual check independently (and misleadingly) read a 401 as "no".
+     * null means "not checked": the file/listing checks are skipped on a
+     * soft-404 site (every path answers 200), and everything is skipped when
+     * the homepage itself requires auth (every path would 401 and read clean).
      *
      * @return array<string, mixed>
      */
@@ -727,7 +719,7 @@ final class HttpProbe extends AbstractProbe
         $directoryListing  = null;
         $sensitiveFiles    = null;
         $uploadsEvidence   = null;
-        $sensitiveEvidence = ['checked' => self::SENSITIVE_PATHS, 'found' => []];
+        $sensitiveEvidence = ['checked' => array_keys(self::SENSITIVE_PATHS), 'found' => [], 'unverified' => []];
         if (!$isSoft404) {
             $uploadsUrl = $origin . '/wp-content/uploads/';
             $uploads    = $this->probeExposure($client, $uploadsUrl);
@@ -735,9 +727,13 @@ final class HttpProbe extends AbstractProbe
             $uploadsEvidence  = ['url' => $uploadsUrl, 'status' => $uploads['status'] ?? null];
 
             $sensitiveFiles = [];
-            foreach (self::SENSITIVE_PATHS as $path) {
-                $result = $this->probeExposure($client, $origin . '/' . $path);
-                if ($result !== null && $result['status'] === 200) {
+            foreach (array_keys(self::SENSITIVE_PATHS) as $path) {
+                $head = $this->fetchHead($client, $origin . '/' . $path);
+                if ($head === null) {
+                    $sensitiveEvidence['unverified'][] = $path;
+                    continue;
+                }
+                if (self::isSensitiveFileExposed($path, $head['status'], $head['content_type'], $head['head'])) {
                     $sensitiveFiles[] = $path;
                 }
             }
@@ -767,10 +763,8 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * Guzzle middleware pinning each request's connection to one vetted
-     * address: $resolve (HostGuard::publicIpFor in production) returns the
-     * public IP for the request's host, or null — then the request is refused
-     * outright instead of letting curl resolve the name again on its own.
+     * Guzzle middleware pinning each request to the address $resolve vetted,
+     * refusing the request when it returns null.
      *
      * @param callable(string): ?string $resolve
      * @return callable(callable): callable
@@ -813,11 +807,8 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * The result exposureCheck() returns without making a single request when
-     * the site itself requires HTTP auth we don't have (or don't have right):
-     * every field `null` ("not checked"), never `false` ("checked, clean") —
-     * pulled out as its own pure method so the shape is unit-testable without
-     * a Guzzle client.
+     * exposureCheck() for a site that requires auth we lack: every field null
+     * ("not checked"), never false ("checked, clean").
      *
      * @return array<string, mixed>
      */
@@ -833,6 +824,51 @@ final class HttpProbe extends AbstractProbe
             'auth_required'         => true,
             'evidence'              => [],
         ];
+    }
+
+    /**
+     * Status, content type and the first bytes of a possibly huge file.
+     * Range keeps the transfer small on servers that honour it;
+     * CURLOPT_MAXFILESIZE aborts one that announces an oversized body.
+     *
+     * @return array{status: int, content_type: string, head: string}|null null when it could not be read
+     */
+    private function fetchHead(Client $client, string $url): ?array
+    {
+        try {
+            $response = $client->get($url, [
+                'headers' => ['Range' => 'bytes=0-' . (self::SENSITIVE_HEAD_BYTES - 1)],
+                'curl'    => [\CURLOPT_MAXFILESIZE => self::SENSITIVE_MAX_BYTES],
+            ]);
+        } catch (GuzzleException) {
+            return null;
+        }
+
+        return [
+            'status'       => $response->getStatusCode(),
+            'content_type' => strtolower($response->getHeaderLine('Content-Type')),
+            'head'         => substr((string) $response->getBody(), 0, self::SENSITIVE_HEAD_BYTES),
+        ];
+    }
+
+    /**
+     * Pure: exposed only when the real file was served — a 200/206 whose
+     * content matches the file's signature, never an HTML page.
+     */
+    public static function isSensitiveFileExposed(string $path, int $status, string $contentType, string $head): bool
+    {
+        $signature = self::SENSITIVE_PATHS[$path] ?? null;
+        if ($signature === null || !in_array($status, [200, 206], true)
+            || str_contains($contentType, 'text/html') || self::looksLikeHtml($head)) {
+            return false;
+        }
+
+        return preg_match($signature, $head) === 1;
+    }
+
+    private static function looksLikeHtml(string $body): bool
+    {
+        return (bool) preg_match('/^\s*(?:<!doctype html|<html\b|<head\b|<body\b)/i', $body);
     }
 
     /** @return array{status: int, body: string, location: string}|null null only on a request failure (network/timeout) */
@@ -852,9 +888,8 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * A raw HTTP TRACE request most hardened servers reject outright
-     * (405/501/403); a 200 answer is itself the exposure (reflected XST),
-     * regardless of the exact body content.
+     * HTTP TRACE: a 200 is itself the exposure (reflected XST); hardened
+     * servers answer 405/501/403.
      *
      * @return array{enabled: ?bool, status: ?int}
      */
@@ -962,7 +997,7 @@ final class HttpProbe extends AbstractProbe
             || !empty($exposure['sensitive_files']);
 
         $warn =
-            ($data['gzip'] ?? false) === false && ($data['brotli'] ?? false) === false
+            (($data['compression']['gzip'] ?? null) === false && ($data['compression']['brotli'] ?? null) === false)
             || $assetUncompressed
             || ($data['redirects']['forces_https'] ?? true) === false
             || (($data['security_headers']['x-content-type-options'] ?? null) === null)
@@ -973,26 +1008,27 @@ final class HttpProbe extends AbstractProbe
         return $warn ? ProbeResult::STATUS_WARN : ProbeResult::STATUS_OK;
     }
 
-    private function resolveUrl(string $base, string $location): string
+    /** Pure: a Location/href resolved against the URL it came from, port kept. */
+    public static function resolveUrl(string $base, string $location): string
     {
         if (preg_match('#^https?://#i', $location)) {
             return $location;
         }
 
-        $parts  = parse_url($base);
-        $scheme = $parts['scheme'] ?? 'http';
-        $host   = $parts['host'] ?? '';
+        $parts     = parse_url($base);
+        $scheme    = $parts['scheme'] ?? 'http';
+        $authority = ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
 
         if (str_starts_with($location, '//')) {
             return $scheme . ':' . $location;
         }
         if (str_starts_with($location, '/')) {
-            return $scheme . '://' . $host . $location;
+            return $scheme . '://' . $authority . $location;
         }
 
         $path = $parts['path'] ?? '/';
-        $dir  = substr($path, -1) === '/' ? $path : dirname($path) . '/';
+        $dir  = str_ends_with($path, '/') ? $path : rtrim(dirname($path), '/') . '/';
 
-        return $scheme . '://' . $host . $dir . $location;
+        return $scheme . '://' . $authority . $dir . $location;
     }
 }

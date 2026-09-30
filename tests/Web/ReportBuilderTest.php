@@ -6,6 +6,8 @@ namespace SatelliteWP\Xtractor\Tests\Web;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SatelliteWP\Xtractor\Rules\Pastille;
+use SatelliteWP\Xtractor\Rules\RuleCatalog;
 use SatelliteWP\Xtractor\Rules\Translator;
 use SatelliteWP\Xtractor\Web\ReportBuilder;
 
@@ -118,6 +120,30 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['type' => 'value', 'value' => '—', 'color' => null], $report['fields']['missing']);
     }
 
+    /** @return iterable<string, array{string, mixed, string}> */
+    public static function phpSizes(): iterable
+    {
+        yield 'megabytes fr'  => ['fr', '64M', '64 Mo'];
+        yield 'megabytes en'  => ['en', '64M', '64 MB'];
+        yield 'kilobytes'     => ['fr', '512K', '512 Ko'];
+        yield 'gigabytes'     => ['fr', '2G', '2 Go'];
+        yield 'lowercase'     => ['en', '128m', '128 MB'];
+        yield 'plain bytes'   => ['en', '1048576', '1 MB'];
+        yield 'unlimited -1'  => ['fr', '-1', 'Illimité'];
+        yield 'unlimited 0'   => ['en', '0', 'Unlimited'];
+    }
+
+    #[DataProvider('phpSizes')]
+    public function testPhpSizeShorthandIsReadable(string $locale, mixed $raw, string $expected): void
+    {
+        $contract = ['fields' => ['post_max' => ['type' => 'value', 'from' => 'payload.php.post_max_size', 'transform' => 'php_size']]];
+        $context  = ['payload' => ['php' => ['post_max_size' => $raw]]];
+
+        $value = $this->builder($locale)->build($contract, $context, [])['fields']['post_max']['value'];
+
+        self::assertSame($expected, $value);
+    }
+
     public function testValueFieldCarriesALiteralColorWhenGiven(): void
     {
         $contract = ['fields' => [
@@ -219,7 +245,7 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['Login', 'Email', 'Role'], $report['fields']['x']['headers']);
         self::assertCount(2, $table); // one administrator + one super admin, not deduplicated
         self::assertSame(['admin', 'admin@example.com', 'Administrator'], array_column($table[0], 'text'));
-        self::assertSame(['netadmin', 'net@example.com', 'Super Admin'], array_column($table[1], 'text'));
+        self::assertSame(['netadmin', 'net@example.com', 'Super admin'], array_column($table[1], 'text'));
     }
 
     public function testYesNoTransformHandlesTrueFalseAndUnknown(): void
@@ -261,10 +287,10 @@ final class ReportBuilderTest extends TestCase
         $context = $this->context();
         $context['reference']['database_eol']      = false;
         $context['reference']['database_eol_date'] = '2027-07-01';
-        self::assertSame('Supported until 2027-07-01', $this->builder()->build($contract, $context, [])['fields']['x']['value']);
+        self::assertSame('Supported until July 1, 2027', $this->builder()->build($contract, $context, [])['fields']['x']['value']);
 
         $context['reference']['database_eol'] = true;
-        self::assertSame('Not supported since 2027-07-01', $this->builder()->build($contract, $context, [])['fields']['x']['value']);
+        self::assertSame('Not supported since July 1, 2027', $this->builder()->build($contract, $context, [])['fields']['x']['value']);
 
         // No date on file — falls back to the plain status word rather than
         // an empty/broken "since " sentence.
@@ -319,7 +345,7 @@ final class ReportBuilderTest extends TestCase
         $contract = ['fields' => ['x' => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type']]];
 
         $multisite = $this->builder()->build($contract, $this->context(), []);
-        self::assertSame('Multisite (subdomain)', $multisite['fields']['x']['value']);
+        self::assertSame('Multisite (subdomains)', $multisite['fields']['x']['value']);
 
         $context = $this->context();
         $context['payload']['is_multisite'] = false;
@@ -350,19 +376,19 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['text' => '0 B', 'color' => null], $rows[1][3]); // wp_medium has none
     }
 
-    public function testFilePermissionsTableColoursWritableOrangeAndReadableGreen(): void
+    public function testFilePermissionsFlagOnlyUnexpectedWritablePaths(): void
     {
         $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'file_permissions']]];
+        $context  = $this->context();
+        $context['payload']['filesystem']['permissions']['index'] = ['mode' => '0666', 'writable' => true, 'readable' => true];
 
-        $report = $this->builder()->build($contract, $this->context(), []);
+        $report = $this->builder()->build($contract, $context, []);
         $rows   = $report['fields']['x']['rows'];
 
-        // wp_config: not writable (green), readable (green).
-        self::assertSame(['text' => 'No', 'color' => 'green'], $rows[0][2]);
-        self::assertSame(['text' => 'Yes', 'color' => 'green'], $rows[0][3]);
-        // uploads_dir: writable (orange — worth attention), not readable (red).
-        self::assertSame(['text' => 'Yes', 'color' => 'orange'], $rows[1][2]);
-        self::assertSame(['text' => 'No', 'color' => 'red'], $rows[1][3]);
+        self::assertSame(['Location', 'Mode', 'Writable'], $report['fields']['x']['headers']);
+        self::assertSame(['text' => 'No', 'color' => 'green'], $rows[0][2]);   // wp-config.php locked down
+        self::assertSame(['text' => 'Yes', 'color' => null], $rows[1][2]);     // uploads must be writable
+        self::assertSame(['text' => 'Yes', 'color' => 'orange'], $rows[2][2]); // index.php should not be
     }
 
     public function testSecurityHeadersTableUsesAFixedOrderAndFlagsMissing(): void
@@ -385,9 +411,7 @@ final class ReportBuilderTest extends TestCase
         $report = $this->builder()->build($contract, $this->context(), []);
         $table  = $report['fields']['x'];
 
-        // Component/CVE/Patched version/Source were dropped on request —
-        // only Title, CVSS, Fix remain.
-        self::assertSame(['Title', 'CVSS', 'Fix'], $table['headers']);
+        self::assertSame(['Vulnerability', 'CVSS', 'Fix'], $table['headers']);
 
         $rows = $table['rows'];
         self::assertCount(1, $rows); // Akismet's Wordfence-only CVE — nothing else in the fixture has one
@@ -498,7 +522,7 @@ final class ReportBuilderTest extends TestCase
     public function testManualObservationWithAnUnknownColorFallsBackToGrey(): void
     {
         $contract = ['fields' => ['x' => ['type' => 'observations', 'categories' => []]]];
-        $manual   = [['id' => 'x1', 'section' => 'x', 'color' => 'purple', 'title' => 'T', 'description' => 'D', 'include' => true]];
+        $manual   = [['id' => 'x1', 'section' => 'x', 'color' => 'magenta', 'title' => 'T', 'description' => 'D', 'include' => true]];
 
         $report = $this->builder()->build($contract, $this->context(), [], $manual);
 
@@ -576,7 +600,7 @@ final class ReportBuilderTest extends TestCase
 
         $report = $this->builder()->build($contract, $this->context(), []);
 
-        self::assertSame('Child Theme 1.0', $report['fields']['theme']['value']);
+        self::assertSame('Child Theme', $report['fields']['theme']['value']);
         self::assertSame('Parent Theme', $report['fields']['parent']['value']);
     }
 
@@ -600,7 +624,7 @@ final class ReportBuilderTest extends TestCase
         return [
             'mu_plugins'     => ['mu_plugins', ['Name', 'Version']],
             'dropins'        => ['dropins', ['File', 'Description']],
-            'content_types'  => ['content_types', ['Type', 'Total', 'Published', 'Draft', 'Trash']],
+            'content_types'  => ['content_types', ['Type', 'Total', 'Published', 'Drafts', 'Trash']],
             'settings'       => ['settings', ['Setting', 'Value']],
         ];
     }
@@ -646,12 +670,28 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('5', $rows[1][1]['text']);
     }
 
+    public function testSettingsTableReadsPolylangAndTranslatePressLocales(): void
+    {
+        $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'settings']]];
+
+        foreach (['polylang' => ['fr', 'en'], 'translatepress' => ['fr_CA', 'en_US']] as $key => $codes) {
+            $context = $this->context();
+            $context['payload']['connectors'] = [$key => ['default_language' => $codes[0], 'active_languages' => $codes]];
+
+            $rows = $this->builder()->build($contract, $context, [])['fields']['x']['rows'];
+
+            self::assertCount(4, $rows, $key);
+            self::assertSame('French, English', $rows[3][1]['text'], $key);
+        }
+    }
+
     public function testSettingsTableIncludesWpmlOnlyWhenPresent(): void
     {
         $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'settings']]];
 
         $report = $this->builder()->build($contract, $this->context(), []);
         self::assertCount(4, $report['fields']['x']['rows']); // Admin email + Permalinks + 2 WPML rows
+        self::assertSame('French, English', $report['fields']['x']['rows'][3][1]['text']);
 
         $context = $this->context();
         unset($context['payload']['connectors']);
@@ -709,5 +749,167 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['Type', 'Total', 'Publiés', 'Brouillons', 'Corbeille'], $report['fields']['content']['headers']);
         self::assertSame(['Nom', 'Version'], $report['fields']['mu']['headers']);
         self::assertSame(['Fichier', 'Description'], $report['fields']['dropins']['headers']);
+    }
+
+    /** @param array<string, mixed> $spec */
+    private function value(array $spec, mixed $raw, string $locale = 'fr'): array
+    {
+        $context = $this->context();
+        $context['v'] = $raw;
+        $spec['type'] = 'value';
+        $spec['from'] ??= 'v';
+
+        return $this->builder($locale)->build(['fields' => ['x' => $spec]], $context, [])['fields']['x'];
+    }
+
+    public function testDatesAreLongAndLocalized(): void
+    {
+        self::assertSame('5 septembre 2008', $this->value(['transform' => 'date'], '2008-09-05T21:02:24Z')['value']);
+        self::assertSame('1er juillet 2027', $this->value(['transform' => 'date'], '2027-07-01')['value']);
+        self::assertSame('September 5, 2008', $this->value(['transform' => 'date'], '2008-09-05', 'en')['value']);
+        self::assertSame('—', $this->value(['transform' => 'date', 'default' => '—'], null)['value']);
+    }
+
+    public function testDatabaseStatusCarriesALocalizedDateAndEolColour(): void
+    {
+        $field = $this->value(['transform' => 'database_status_label', 'color_transform' => 'eol_red_green'], [true, '2026-07-06']);
+
+        self::assertSame('Plus prise en charge depuis le 6 juillet 2026', $field['value']);
+        self::assertSame('red', $field['color']);
+        self::assertSame('green', $this->value(['transform' => 'eol_status_label', 'color_transform' => 'eol_red_green'], false)['color']);
+        self::assertNull($this->value(['transform' => 'eol_status_label', 'color_transform' => 'eol_red_green'], null)['color']);
+    }
+
+    public function testDatabaseLabelsAreReadable(): void
+    {
+        self::assertSame('MariaDB 10.6.22', $this->value(['transform' => 'database_label'], ['mariadb', '10.6.22-MariaDB-0ubuntu0.22.04.1-log'])['value']);
+        self::assertSame('MySQL', $this->value(['transform' => 'database_type'], 'mysql')['value']);
+        self::assertSame('8.4.7', $this->value(['transform' => 'database_version'], '8.4.7')['value']);
+    }
+
+    public function testCoreAutoUpdateIsTranslated(): void
+    {
+        self::assertSame('Désactivée', $this->value(['transform' => 'auto_update_core'], false)['value']);
+        self::assertSame('Mineures seulement', $this->value(['transform' => 'auto_update_core'], 'minor')['value']);
+        self::assertSame('Toutes', $this->value(['transform' => 'auto_update_core'], true)['value']);
+        self::assertSame('Indéterminé', $this->value(['transform' => 'auto_update_core'], null)['value']);
+    }
+
+    public function testLighthouseScoreIsOutOfAHundredAndBanded(): void
+    {
+        $spec = ['transform' => 'score_100', 'color_transform' => 'lighthouse', 'default' => '—'];
+
+        self::assertSame(['type' => 'value', 'value' => '74/100', 'color' => 'orange'], $this->value($spec, 74));
+        self::assertSame('green', $this->value($spec, 90)['color']);
+        self::assertSame('red', $this->value($spec, 37)['color']);
+        self::assertSame(['type' => 'value', 'value' => '—', 'color' => null], $this->value($spec, null));
+    }
+
+    public function testWordpressStatusLabelAndColour(): void
+    {
+        $spec = ['transform' => 'wordpress_status_label', 'color_transform' => 'wordpress_status_color'];
+
+        self::assertSame(['type' => 'value', 'value' => 'Non sécurisée — mise à jour urgente', 'color' => 'red'], $this->value($spec, 'insecure'));
+        self::assertSame(['type' => 'value', 'value' => 'À jour', 'color' => 'green'], $this->value($spec, 'latest'));
+        self::assertSame(['type' => 'value', 'value' => 'Mise à jour disponible', 'color' => 'orange'], $this->value($spec, ''));
+        self::assertSame(['type' => 'value', 'value' => 'Indéterminé', 'color' => null], $this->value($spec, null));
+    }
+
+    public function testDefaultLabelIsTranslatedAndCountCountsTheList(): void
+    {
+        self::assertSame('Aucune', $this->value(['transform' => 'join_lines', 'default_label' => 'none_f'], [])['value']);
+        self::assertSame('2', $this->value(['transform' => 'count'], [['login' => 'a'], ['login' => 'b']])['value']);
+        self::assertSame('0', $this->value(['transform' => 'count'], null)['value']);
+    }
+
+    public function testNumbersAndBytesFollowTheLocale(): void
+    {
+        $context = $this->context();
+        $context['payload']['database']['tables'] = [['name' => 'wp_posts', 'size_bytes' => 54_630_000, 'row_count' => 3_297_779]];
+        $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'database_tables']]];
+
+        $fr = $this->builder('fr')->build($contract, $context, [])['fields']['x']['rows'][0];
+        self::assertSame('52,1 Mo', $fr[1]['text']);
+        self::assertSame("3\u{202F}297\u{202F}779", $fr[2]['text']);
+
+        $en = $this->builder('en')->build($contract, $context, [])['fields']['x']['rows'][0];
+        self::assertSame('52.1 MB', $en[1]['text']);
+        self::assertSame('3,297,779', $en[2]['text']);
+    }
+
+    public function testContentTypesHideWordpressAndPluginMachinery(): void
+    {
+        $context = $this->context();
+        $context['payload']['post_types'] = array_combine(
+            $slugs = ['post', 'page', 'attachment', 'revision', 'nav_menu_item', 'acf-field', 'wpcf7_contact_form', 'temoignage', 'guide'],
+            $slugs
+        );
+        $context['payload']['post_type_count'] = [
+            'post'       => ['publish' => '481', 'draft' => '5'],
+            'page'       => ['publish' => '32'],
+            'attachment' => ['inherit' => '1925'],
+            'revision'   => ['inherit' => '4928'],
+            'acf-field'  => ['publish' => '19'],
+            'wpcf7_contact_form' => ['publish' => '6'],
+            'temoignage' => ['publish' => '11'],
+            'guide'      => ['publish' => 0],
+        ];
+
+        $rows = $this->builder('fr')->build(['fields' => ['x' => ['type' => 'table', 'source' => 'content_types']]], $context, [])['fields']['x']['rows'];
+
+        self::assertSame(['Articles', 'Pages', 'Médias', 'Temoignage'], array_column(array_column($rows, 0), 'text'));
+        self::assertSame("1\u{202F}925", $rows[2][2]['text']); // media count under "published"
+    }
+
+    public function testConstantsTableFlagsOnlyDebugOutputLeaks(): void
+    {
+        $context = $this->context();
+        $context['payload']['constants'] = ['WP_DEBUG' => true, 'WP_DEBUG_LOG' => true, 'DISALLOW_FILE_EDIT' => false, 'MULTISITE' => 'N/A'];
+
+        $rows = $this->builder()->build(['fields' => ['x' => ['type' => 'table', 'source' => 'constants']]], $context, [])['fields']['x']['rows'];
+
+        self::assertSame([['text' => 'WP_DEBUG', 'color' => null], ['text' => 'true', 'color' => 'red']], $rows[0]);
+        self::assertSame(['text' => 'true', 'color' => null], $rows[1][1]);
+        self::assertSame(['text' => 'false', 'color' => null], $rows[2][1]);
+        self::assertSame(['text' => 'N/A', 'color' => null], $rows[3][1]);
+    }
+
+    public function testObservationReadingOrderCoversEveryPastille(): void
+    {
+        self::assertEqualsCanonicalizing(Pastille::values(), array_keys(ReportBuilder::OBSERVATION_COLOR_ORDER));
+    }
+
+    public function testEveryCatalogueRuleLandsInATopicSectionOfTheReport(): void
+    {
+        $root     = dirname(__DIR__, 2);
+        $contract = require $root . '/config/reports/bilan-de-sante.php';
+
+        $categories = [];
+        $ids        = [];
+        foreach ($contract['fields'] as $name => $spec) {
+            if (($spec['type'] ?? null) !== 'observations' || $name === 'all_observations') {
+                continue;
+            }
+            $categories = array_merge($categories, (array) ($spec['categories'] ?? []));
+            $ids        = array_merge($ids, (array) ($spec['ids'] ?? []));
+        }
+
+        $orphans = [];
+        foreach (RuleCatalog::load($root . '/config/rules.php') as $rule) {
+            if (!in_array($rule->category, $categories, true) && !in_array($rule->id, $ids, true)) {
+                $orphans[] = $rule->id;
+            }
+        }
+
+        self::assertSame([], $orphans, 'rules shown nowhere but {{all_observations}}');
+    }
+
+    public function testTheShippedContractResolvesWithoutGaps(): void
+    {
+        $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
+
+        $report = $this->builder('fr')->build($contract, $this->context(), $this->findings());
+
+        self::assertSame(array_keys($contract['fields']), array_keys($report['fields']));
     }
 }

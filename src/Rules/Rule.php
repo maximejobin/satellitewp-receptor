@@ -22,6 +22,7 @@ final readonly class Rule
         public Severity $severity,
         public Closure $check,
         public mixed $threshold = null,
+        public bool $clientAction = false,
     ) {
     }
 
@@ -54,6 +55,7 @@ final readonly class Rule
                 : Severity::from((string) $definition['severity']),
             check: $definition['check'],
             threshold: $thresholdOverride ?? ($definition['threshold'] ?? null),
+            clientAction: (bool) ($definition['client_action'] ?? false),
         );
     }
 }

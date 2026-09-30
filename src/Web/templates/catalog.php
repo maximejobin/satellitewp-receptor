@@ -21,8 +21,7 @@
 </div>
 <script>
   $(function () {
-    // Server-side AJAX (SoftwareCatalog::search()), not a client-side table:
-    // the catalogue is expected to grow into the thousands of entries.
+    // Server-side: the catalogue grows into thousands of entries.
     var dt = $('#catalog-table').DataTable({
       serverSide: true,
       pageLength: 50,

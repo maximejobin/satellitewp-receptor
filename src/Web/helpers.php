@@ -51,10 +51,7 @@ function badge(?string $status): string
         'pending'          => 'badge-pending',
         'warn', 'queued', 'running' => 'badge-warn',
         'error'            => 'badge-error',
-        // Aborted is a deliberate "I don't care about this data" — neutral
-        // grey, same bucket as 'unknown', not a status that needs attention.
-        'aborted'          => 'badge-muted',
-        default            => 'badge-muted',
+        default            => 'badge-muted', // aborted is a deliberate skip, not something to act on
     };
 
     return '<span class="badge ' . $class . '">' . e($status) . '</span>';
@@ -99,16 +96,7 @@ function breadcrumb(array $trail): string
         . '</nav>';
 }
 
-/**
- * A page-level alert banner — info (blue), warning (orange/yellow), critical
- * (red), or progress (blue, spinning ring icon — a job is under way and the
- * page expects to move on its own; see extraction.php's queued/running
- * state). Unlike badge(), a small inline pill for one value, this is a
- * block-level box meant to surface something the analyst should notice
- * before reading the rest of the page (e.g. "N subscriptions not linked to
- * a website"). $html is trusted, pre-rendered HTML (so a notice can carry a
- * link), same convention as field_raw() vs field().
- */
+/** Page-level banner: info, warning, critical or progress (spinner). $html is trusted, pre-rendered HTML. */
 function notice(string $level, string $html): string
 {
     $level = in_array($level, ['info', 'warning', 'critical', 'progress'], true) ? $level : 'info';
@@ -120,10 +108,7 @@ function notice(string $level, string $html): string
         'critical' => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
             . 'stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/>'
             . '<line x1="6.6" y1="6.6" x2="11.4" y2="11.4"/><line x1="11.4" y1="6.6" x2="6.6" y2="11.4"/></svg>',
-        // A faint full ring plus one bright quarter-arc — CSS spins the
-        // whole <svg> (.notice-progress .notice-icon svg, style.css), which
-        // is what makes the arc read as a loading spinner instead of a
-        // static "C".
+        // Faint ring + bright arc; style.css spins it into a loading spinner.
         'progress' => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" '
             . 'stroke-linecap="round"><circle cx="9" cy="9" r="7.1" stroke-opacity=".25"/>'
             . '<path d="M16.1 9a7.1 7.1 0 0 0-7.1-7.1"/></svg>',
@@ -148,13 +133,7 @@ function badge_score(int $score): string
     return '<span class="badge ' . $class . '">' . $score . '</span>';
 }
 
-/**
- * A clickable link to an external system (Teamwork/HubSpot/BlogVault client,
- * BlogVault website, WordPress "edit at the source" — config/config.php's
- * `external_links.*`), built from a URL pattern with a literal "{id}"
- * placeholder. Plain, unlinked text whenever the pattern isn't configured
- * yet or there's no id to substitute — never a link to nowhere.
- */
+/** Link built from an `external_links.*` pattern ("{id}" substituted); plain text when there's no pattern or id. */
 function external_link(?string $pattern, mixed $id, string $label): string
 {
     $idString = $id !== null && $id !== '' ? (string) $id : null;
@@ -168,13 +147,7 @@ function external_link(?string $pattern, mixed $id, string $label): string
         . e($label) . ' <span class="icon">' . icon_external_link() . '</span></a>';
 }
 
-/**
- * Like external_link(), but for an *action* button ("Edit", "View in
- * BlogVault") rather than a value shown as its own label: unlike a value,
- * which is still worth displaying unlinked, an action with nowhere to go is
- * not worth showing at all — this returns '' (render nothing) instead of
- * inert text when the pattern isn't configured yet or there's no id.
- */
+/** Action-button variant of external_link(): renders nothing when there's nowhere to go. */
 function external_link_button(?string $pattern, mixed $id, string $label): string
 {
     $idString = $id !== null && $id !== '' ? (string) $id : null;
@@ -202,21 +175,13 @@ function external_link_icon(?string $pattern, mixed $id, string $title): string
 }
 
 /**
- * An observation's description supports a tiny, fixed markup —
- * **bold**, _italic_, [text](url) — the same 3 patterns the Google Docs
- * report script (rapport-poc's analyserTexteFormate()) resolves into real
- * bold/italic/hyperlink runs, so what an analyst sees here is what the
- * pasted report will actually show. HTML-escapes FIRST, then turns the
- * (now HTML-safe) markers into real tags — never the other way around, or
- * the raw < / > / & the escaping is meant to neutralise could slip through
- * inside a link's text or URL.
+ * **bold**, _italic_ and [text](url) in an observation — the same markup the
+ * report script resolves. Escapes first, then converts, so nothing raw slips
+ * through a link. One pass, so a marker inside a URL is never re-read;
+ * _italic_ only at word boundaries (snake_case names stay untouched).
  */
 function format_observation_text(string $text): string
 {
-    // One left-to-right pass (same alternation as the Apps Script's
-    // analyserTexteFormate()), so a marker inside a link's URL is never
-    // re-read as italic. _italic_ only at word boundaries: wp_super_cache
-    // and other snake_case names stay untouched.
     return preg_replace_callback(
         '/\*\*(.+?)\*\*|(?<![\p{L}\p{N}])_(.+?)_(?![\p{L}\p{N}])|\[(.+?)\]\((https?:\/\/[^\s)]+)\)/su',
         static fn (array $m): string => match (true) {
@@ -272,26 +237,14 @@ function license_select(
         . '<input type="hidden" name="type" value="' . e($type) . '">'
         . '<input type="hidden" name="slug" value="' . e($slug) . '">'
         . '<input type="hidden" name="return" value="' . e($return) . '">'
-        // requestSubmit(), not submit(): the plain .submit() DOM method
-        // is specified to skip firing a "submit" event entirely, which is
-        // exactly what layout.php's global listener needs to intercept this
-        // and save via fetch() instead of a full page reload.
+        // requestSubmit() fires the submit event layout.php intercepts; submit() does not.
         . '<select name="license" class="' . $cls . '" onchange="this.form.requestSubmit()">' . $options . '</select>'
         . '</form>';
 }
 
 /**
- * Per-extraction licence-KEY status for one plugin/theme row on an
- * extraction report — a different question from license_select() above (is
- * this component free/premium at all, a cross-site classification): is the
- * licence on THIS install, as of THIS extraction, currently active,
- * missing, or does it need checking. Same auto-save-on-change mechanism
- * (.lic-form, reused by layout.php's shared interceptor), different
- * storage (DataStore::setLicenseStatus(), licenses.json inside the
- * extraction's own directory — set again on each new extraction, same
- * "snapshot in time" rule findings.json/observations.json already
- * follow) and a different capability (gated the same as /catalog's own
- * edit — catalog_edit — rather than a new one).
+ * This install's licence-key status as of this extraction (licenses.json) —
+ * unlike license_select(), which is the cross-site free/premium classification.
  */
 function license_status_select(
     string $siteId,
@@ -360,20 +313,14 @@ function subscription_website_form(array $subscription, string $csrf, string $re
     return $display . $form;
 }
 
-/** Colored pastille (green/orange/red/blue/grey) + label — the analyst signal. */
+/** Colored pastille (green/orange/red/purple/blue/grey) + label — the analyst signal. */
 function pastille(string $color, string $label): string
 {
     return '<span class="pastille pastille-' . e($color) . '" title="' . e($label) . '">'
         . '<span class="dot"></span>' . e($label) . '</span>';
 }
 
-/**
- * A label/value card. $rows is pre-rendered <tr> HTML from field()/field_raw().
- * Inspired by the section-per-topic layout of the existing Xtract tool, styled
- * with this project's own CSS (no Bootstrap/Metronic). $class adds extra
- * classes to the wrapping <section> — e.g. "card-full" to span the whole
- * width of a `.cards` grid instead of sharing a row with the next card.
- */
+/** Label/value card from field()/field_raw() rows; $class e.g. "card-full" spans the grid. */
 function section(string $title, string $rows, string $badge = '', string $class = ''): string
 {
     if (trim($rows) === '') {
@@ -385,12 +332,8 @@ function section(string $title, string $rows, string $badge = '', string $class 
 }
 
 /**
- * Reads a WordPress count. The plugin ships wp_count_posts(),
- * wp_count_comments(), wp_count_attachments() and count_users() verbatim, so
- * these arrive as maps keyed by status / mime type / role, never as integers.
- * Returns the first named key that is present, or the sum of the map when none
- * is named; `trash` is excluded from that sum. A plain integer passes through,
- * which keeps older payloads working.
+ * A WordPress count map (wp_count_posts() & co. arrive verbatim, keyed by
+ * status/mime/role): the first named key present, else the sum without trash.
  */
 function wp_count(mixed $value, string ...$keys): ?int
 {
@@ -418,8 +361,7 @@ function field(string $label, mixed $value, ?string $status = null, ?string $sou
     if (is_bool($value)) {
         $value = $value ? 'yes' : 'no';
     }
-    // Never let a structure reach e(): "(string) $array" is a warning that
-    // renders the literal word "Array" in the page.
+    // A structure would render the literal word "Array".
     if (is_array($value)) {
         $value = null;
     }
@@ -443,17 +385,8 @@ function field_raw(string $label, string $html, ?string $status = null, ?string 
 }
 
 /**
- * A small "ⓘ" marker naming exactly where one displayed value came from —
- * the precise dot-path (`payload.*`, `probe.<name>.*`, `catalog.*`,
- * `reference.*`) plus a plain-language sentence on who produced it and
- * whether Xtractor independently verified it or is just relaying what the
- * WordPress plugin reported. Dispatches on the path's root, not per-field,
- * so every field gets an accurate provenance without 150 hand-written
- * one-off sentences that would drift out of sync with each other.
- *
- * `payload.*` is the one category this project can never verify further:
- * it is whatever the WordPress plugin's own collector measured on the site
- * and sent, unmodified — Xtractor displays it as received.
+ * "ⓘ" provenance marker: the value's dot-path and whether Xtractor measured
+ * it or relays what the plugin reported — one sentence per path root.
  */
 function src_note(string $path): string
 {
@@ -476,19 +409,6 @@ function src_note(string $path): string
     }
 
     return ' <span class="xt-src" tabindex="0" title="' . e($path . ' — ' . $explain) . '">ⓘ</span>';
-}
-
-/**
- * A small, quiet glyph — same pattern as src_note()'s ⓘ above (native
- * title tooltip, no JS, keyboard-reachable via tabindex, deliberately
- * muted rather than another colored badge) — for a plugin/theme row's
- * Status cell: at a glance, is there an update, a known vulnerability, a
- * licence to check, without repeating what the Update/Vulnerabilities/
- * Licence columns already show in full detail.
- */
-function status_icon(string $glyph, string $colorToken, string $tooltip): string
-{
-    return ' <span class="xt-status-icon" style="color:var(--' . e($colorToken) . ')" tabindex="0" title="' . e($tooltip) . '">' . $glyph . '</span>';
 }
 
 /**
@@ -539,142 +459,22 @@ function fmt_lines(mixed $items, int $max = 30): string
 }
 
 /**
- * Merges one component's vulnerability lists from BlogVault and Wordfence
- * Intelligence into one list, each entry tagged with `sources` — the answer
- * to "does this come from BlogVault, Wordfence, or both?".
+ * One component's BlogVault + Wordfence vulnerabilities, merged by CVE — see Rules\VulnerabilityMerge.
  *
- * Matched by strict, case-insensitive `cve_id` equality only — the one
- * unambiguous key two independent databases share. A vulnerability without a
- * CVE on either side (common in Wordfence's "scanner" feed, published before
- * a CVE is assigned) is never fuzzy-matched by version range: it stays listed
- * under its own single source rather than risking a false "confirmed by both".
- *
- * `patched_version` is picked by `nearest_patched_version()` from *every*
- * candidate either source lists, relative to `$installedVersion` — not just
- * "the first one a source happens to return". A WordPress core fix commonly
- * lands in several branches at once (6.4.5 *and* 6.5.2 for the same CVE);
- * showing whichever came first in the source's own array could name a branch
- * behind the one actually installed, which reads as "downgrade to fix this".
- *
- * @param list<array<string, mixed>> $blogvault BlogVaultProbe vulnerabilities[] for one component
- * @param list<array<string, mixed>> $wordfence WordfenceProbe vulnerabilities[] for the same component
- * @param string|null $installedVersion the component's version on this site, for `patched_version`
- * @return list<array<string, mixed>> each entry: cve_id, title, cvss_rating,
- *     cvss_score, patched_version, published_at, sources (list of 'blogvault'/'wordfence')
+ * @param list<array<string, mixed>> $blogvault
+ * @param list<array<string, mixed>> $wordfence
+ * @param list<string> $ignored ids configured under vulnerabilities.ignored
+ * @return list<array<string, mixed>>
  */
-function merge_vulnerabilities(array $blogvault, array $wordfence, ?string $installedVersion = null): array
+function merge_vulnerabilities(array $blogvault, array $wordfence, ?string $installedVersion = null, array $ignored = []): array
 {
-    $cveKey = static function (array $vuln): ?string {
-        $cve = $vuln['cve_id'] ?? null;
-
-        return is_string($cve) && $cve !== '' ? strtoupper($cve) : null;
-    };
-
-    $merged  = [];
-    $matched = [];
-
-    foreach ($blogvault as $bv) {
-        $cve   = $cveKey($bv);
-        $match = null;
-        if ($cve !== null) {
-            foreach ($wordfence as $i => $wf) {
-                if (!isset($matched[$i]) && $cveKey($wf) === $cve) {
-                    $match      = $wf;
-                    $matched[$i] = true;
-                    break;
-                }
-            }
-        }
-
-        $candidates = array_merge(
-            [$bv['patched_version'] ?? null],
-            (array) ($match['patched_versions'] ?? [])
-        );
-
-        $merged[] = [
-            'cve_id'          => $bv['cve_id'] ?? null,
-            'title'           => $bv['title'] ?? ($match['title'] ?? null),
-            'cvss_rating'     => $bv['cvss_rating'] ?? ($match['cvss_rating'] ?? null),
-            'cvss_score'      => $bv['cvss_score'] ?? ($match['cvss_score'] ?? null),
-            'patched_version' => nearest_patched_version($candidates, $installedVersion),
-            'published_at'    => $bv['published_at'] ?? ($match['published_at'] ?? null),
-            'sources'         => $match !== null ? ['blogvault', 'wordfence'] : ['blogvault'],
-        ];
-    }
-
-    foreach ($wordfence as $i => $wf) {
-        if (isset($matched[$i])) {
-            continue;
-        }
-        $merged[] = [
-            'cve_id'          => $wf['cve_id'] ?? null,
-            'title'           => $wf['title'] ?? null,
-            'cvss_rating'     => $wf['cvss_rating'] ?? null,
-            'cvss_score'      => $wf['cvss_score'] ?? null,
-            'patched_version' => nearest_patched_version((array) ($wf['patched_versions'] ?? []), $installedVersion),
-            'published_at'    => $wf['published_at'] ?? null,
-            'sources'         => ['wordfence'],
-        ];
-    }
-
-    return $merged;
+    return \SatelliteWP\Xtractor\Rules\VulnerabilityMerge::merge($blogvault, $wordfence, $installedVersion, $ignored);
 }
 
-/**
- * The one patched version worth showing next to an installed version,
- * out of every candidate either source lists for the same vulnerability:
- * prefer the lowest patch **in the installed branch, at or above the
- * installed version** (the fix that applies without a branch change);
- * failing that, the lowest patch in any branch above the installed version
- * (the nearest upgrade path that actually carries the fix); failing that
- * (every known patch is already at or below what's installed), the highest
- * one seen, since there's nothing left to recommend. `null`/`""`/`"*"`
- * entries are ignored as non-answers, not treated as version "0".
- *
- * @param list<mixed> $candidates
- */
+/** @param list<mixed> $candidates */
 function nearest_patched_version(array $candidates, ?string $installedVersion): ?string
 {
-    $versions = array_values(array_unique(array_filter(
-        $candidates,
-        static fn ($v): bool => is_string($v) && $v !== '' && $v !== '*'
-    )));
-    if ($versions === []) {
-        return null;
-    }
-
-    if ($installedVersion === null || $installedVersion === '') {
-        usort($versions, 'version_compare');
-
-        return $versions[0];
-    }
-
-    $branch = static fn (string $v): string => implode('.', array_slice(explode('.', $v), 0, 2));
-    $installedBranch = $branch($installedVersion);
-
-    $sameBranch = array_values(array_filter(
-        $versions,
-        static fn (string $v): bool => $branch($v) === $installedBranch && version_compare($v, $installedVersion, '>=')
-    ));
-    if ($sameBranch !== []) {
-        usort($sameBranch, 'version_compare');
-
-        return $sameBranch[0];
-    }
-
-    $above = array_values(array_filter(
-        $versions,
-        static fn (string $v): bool => version_compare($v, $installedVersion, '>')
-    ));
-    if ($above !== []) {
-        usort($above, 'version_compare');
-
-        return $above[0];
-    }
-
-    usort($versions, 'version_compare');
-
-    return $versions[count($versions) - 1];
+    return \SatelliteWP\Xtractor\Rules\VulnerabilityMerge::nearestPatchedVersion($candidates, $installedVersion);
 }
 
 /**
@@ -695,17 +495,7 @@ function vulnerability_source_badge(array $sources): string
     ));
 }
 
-/**
- * CVSS score + rating as one colored badge: critical (dark red) and high
- * (red) are visually distinct from each other, not just from medium
- * (orange) — a page full of "High" and "Critical" rows in the same shade
- * hides exactly the distinction that matters most.
- */
-/**
- * Same coloring as /data/vulnerabilities: banded by the score itself (0–6.0
- * green, 6.1–8.0 orange, 8.1–8.9 red, 9.0+ dark red), not by the rating
- * string — the rating still shows, in the tooltip.
- */
+/** CVSS badge banded by score (same bands as /data/vulnerabilities); the rating goes in the tooltip. */
 function cvss_badge(mixed $score, ?string $rating): string
 {
     if ($score === null) {
@@ -717,8 +507,7 @@ function cvss_badge(mixed $score, ?string $rating): string
         $score >= 9.0 => 'badge-critical',
         $score >= 8.1 => 'badge-error',
         $score >= 6.1 => 'badge-warn',
-        // A vulnerability is never --ok green, no matter how low its
-        // score — green means "compliant", not "a low-severity flaw".
+        // Never green: green means compliant, not a low-severity flaw.
         default => 'badge-low',
     };
     $title = 'CVSS ' . $score . ($rating ? ' — ' . $rating : '');
@@ -726,12 +515,7 @@ function cvss_badge(mixed $score, ?string $rating): string
     return '<span class="badge ' . $cls . '" title="' . e($title) . '">' . e($score) . '</span>';
 }
 
-/**
- * Multisite network sites, tallied by status. Accepts either a list of plain
- * status strings or a list of per-site objects carrying a `status` key —
- * the exact shape isn't exercised by the fixture (a single-site install has
- * nothing to report), so this stays defensive rather than assuming one.
- */
+/** Multisite sites tallied by status; accepts status strings or objects with a `status` key. */
 function fmt_status_tally(mixed $items): string
 {
     if (!is_array($items) || $items === []) {
@@ -752,13 +536,7 @@ function fmt_status_tally(mixed $items): string
     return implode(' · ', $parts);
 }
 
-/**
- * "Last refreshed" banner for a reference cache (endoflife.date, wordpress.org,
- * Wordfence Intelligence…) — an analyst reading a table of external data has
- * no other way to tell whether it is current. `$maxAgeSeconds` is the refresh
- * cron's own interval (plus a little slack): older than that means a
- * scheduled refresh was missed, not just "not brand new".
- */
+/** "Last refreshed" badge for a reference cache; warns past $maxAgeSeconds (a missed scheduled refresh). */
 function fmt_refreshed(?string $isoDate, int $maxAgeSeconds, string $label = 'Last refreshed', ?string $title = null): string
 {
     $titleAttr = $title !== null ? ' title="' . e($title) . '"' : '';
@@ -808,13 +586,7 @@ function copy_button(string $value): string
         . '">⧉</button>';
 }
 
-/**
- * "Requires WP x.y / PHP x.y" for a plugin/theme row, flagged red when the
- * site's actual running version doesn't meet it — plain muted text told an
- * analyst nothing beyond the bare number, which is the plugin's declared
- * minimum, not a fact about this site; whether it's actually satisfied here
- * is the only reason to show it on a per-site report at all.
- */
+/** "WP x.y · PHP x.y" requirements, red where the site's running version doesn't meet them. */
 function requirement_cell(?string $requiresWp, ?string $requiresPhp, ?string $installedWp, ?string $installedPhp): string
 {
     $part = static function (string $label, ?string $required, ?string $installed): string {
@@ -834,13 +606,7 @@ function requirement_cell(?string $requiresWp, ?string $requiresPhp, ?string $in
     return $parts === [] ? '—' : implode(' · ', $parts);
 }
 
-/**
- * Small inline icon set for the extraction report's section groups — hand-
- * drawn from basic SVG primitives (circle/rect/line/arc), not copied from an
- * icon library, so there is no external font/CDN dependency (this project
- * vendors its own assets, no CDN, no build step — see Datatables). `aria-hidden`
- * throughout: every icon sits next to a text label, never alone.
- */
+/** Inline SVG icons for the report's groups; aria-hidden since each sits next to a text label. */
 function report_icon(string $name): string
 {
     $inner = match ($name) {

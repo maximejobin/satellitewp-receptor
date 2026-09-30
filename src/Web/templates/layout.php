@@ -83,12 +83,11 @@ $nav = $nav ?? 'sites';
         <a class="nav-item <?= $nav === 'data-vulnerabilities' ? 'active' : '' ?>" href="/data/vulnerabilities">Vulnerabilities</a>
 
         <div class="nav-label">Management</div>
-        <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users">Users</a>
+        <?php if (!empty($canSeeUsersNav)): ?>
+            <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users">Users</a>
+        <?php endif; ?>
         <a class="nav-item <?= $nav === 'styleguide' ? 'active' : '' ?>" href="/styleguide">Style guide</a>
-        <?php // Unlike "Users" above, this one genuinely has nothing to show
-              // without an identity (profilePage() 404s — there is no
-              // per-user account under Basic auth/the open dev fallback),
-              // so it stays conditional, same reasoning as "Sign out". ?>
+        <?php // Profile and sign-out only exist for a signed-in identity. ?>
         <?php if (!empty($currentUser)): ?>
             <a class="nav-item <?= $nav === 'profile' ? 'active' : '' ?>" href="/profile">My profile</a>
             <form method="post" action="/auth/logout" style="margin:0">
@@ -121,7 +120,13 @@ $nav = $nav ?? 'sites';
     var container = document.getElementById('app-toast-container');
     var toast = document.createElement('div');
     toast.className = 'toast' + (isError ? ' toast-error' : '');
-    toast.innerHTML = '<span class="icon">' + (isError ? errorIcon : checkIcon) + '</span><span>' + message + '</span>';
+    var icon = document.createElement('span');
+    icon.className = 'icon';
+    icon.innerHTML = isError ? errorIcon : checkIcon;
+    var text = document.createElement('span');
+    text.textContent = message;
+    toast.appendChild(icon);
+    toast.appendChild(text);
     container.appendChild(toast);
     setTimeout(function () {
       toast.style.opacity = '0';
@@ -165,31 +170,18 @@ $nav = $nav ?? 'sites';
       });
     });
 
-    // Licence dropdowns (catalog + per-plugin on an extraction report, plus
-    // the per-site licence-status dropdown): save via fetch() instead of a
-    // real form submit, so picking a value for one of a hundred plugins
-    // does not reload the whole page every time. The form/action/CSRF are
-    // untouched — this is the same POST a no-JS submit would make, just
-    // not navigated to. select[name] is deliberately not pinned to
-    // "license" — a .lic-form always carries exactly one <select>, whatever
-    // its field is named (license, status, …).
+    // .lic-form dropdowns save via fetch() (same POST, no page reload); each
+    // form holds exactly one <select>, whatever its field name.
     document.addEventListener('submit', function (e) {
       var form = e.target;
       if (!form.classList.contains('lic-form')) { return; }
       e.preventDefault();
       var select = form.querySelector('select');
       var previous = select ? select.className : '';
-      // Build the body BEFORE disabling the select: a disabled form control
-      // is excluded from FormData (same rule as a real submit), so disabling
-      // first silently sent every save with no "license" field at all — the
-      // server no-opped and still redirected, which read as success below.
+      // FormData before disabling: a disabled control is left out of it.
       var body = new FormData(form);
       if (select) { select.className = 'lic-' + select.value; select.disabled = true; }
-      // redirect: 'manual' — Router 303s back after a successful save;
-      // following it would just download the whole page again for nothing,
-      // since the response body is never read here. A rejected save now
-      // comes back as a real error status instead of also 303ing, so this
-      // opaqueredirect/ok check reflects whether anything was actually saved.
+      // A save answers 303 (not followed: the body is unused); a rejection answers an error status.
       fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
         .then(function (r) {
           if (!select) { return; }
@@ -224,18 +216,8 @@ $nav = $nav ?? 'sites';
     $input.on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
   }
 
-  // Searchable dropdowns for any select whose real option count (a client
-  // out of 315, a website out of ~100) makes preloading everything into the
-  // page wasteful, not just unusable past ~20 entries: a select carrying
-  // data-ajax-url searches that endpoint server-side as the operator types
-  // (see ClientsRepository::searchClients() et al.) instead of filtering a
-  // list already sitting in the DOM — only the *currently selected* option,
-  // if any, is ever rendered server-side. A select with data-ajax-url absent
-  // still gets plain client-side search over its own options (none
-  // currently in this app, but the fallback costs nothing to keep).
-  // dropdownParent: body — several of these selects live inside a <table>,
-  // and `table { overflow: hidden }` (style.css, for the rounded corners)
-  // would otherwise clip the dropdown to the row/cell it opens from.
+  // select2; with data-ajax-url it searches server-side as the user types.
+  // dropdownParent: body, or a table's overflow:hidden clips the dropdown.
   function initSelect2($el) {
     var ajaxUrl = $el.data('ajax-url');
     var options = {
@@ -251,9 +233,7 @@ $nav = $nav ?? 'sites';
         delay: 200,
         data: function (params) { return { q: params.term || '' }; }
       };
-      // Show an initial set of results (alphabetical) as soon as the
-      // dropdown opens, rather than requiring the first keystroke before
-      // anything appears.
+      // First page of results as soon as it opens, before any keystroke.
       options.minimumInputLength = 0;
     }
     $el.select2(options);
@@ -278,15 +258,14 @@ $nav = $nav ?? 'sites';
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'filter-dropdown-btn';
-    btn.innerHTML = label + ' <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    btn.innerHTML = xtEscapeHtml(label) + ' <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
       + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
     wrap.appendChild(btn);
 
     var panel = document.createElement('div');
     panel.className = 'filter-dropdown-panel';
     Array.prototype.forEach.call(select.options, function (opt) {
-      // The "All"/"Any" option itself isn't a pickable tag — removing the
-      // tag is what already means that.
+      // The "All" option is what removing the tag means, not a tag itself.
       if (opt.value === emptyValue) { return; }
       var optBtn = document.createElement('button');
       optBtn.type = 'button';
@@ -388,9 +367,7 @@ $nav = $nav ?? 'sites';
         chip.dataset.tagChip = root.id;
         chip.innerHTML = '<span class="filter-tag-label">' + xtEscapeHtml(tag) + '</span> '
           + '<button type="button" aria-label="Remove ' + xtEscapeHtml(tag) + ' filter">&times;</button>';
-        // Removing a chip is a complete action, same as the single-value
-        // filter-dropdown tags above — applies immediately rather than
-        // waiting for a separate "Filter" click.
+        // Removing a chip applies immediately; picking waits for "Filter".
         chip.querySelector('button').addEventListener('click', function () {
           selected = selected.filter(function (t) { return t !== tag; });
           sync();
@@ -407,10 +384,7 @@ $nav = $nav ?? 'sites';
         var idx = selected.indexOf(tag);
         if (idx === -1) { selected.push(tag); } else { selected.splice(idx, 1); }
         sync();
-        // Picking stays behind the page's own explicit "Filter" click (same
-        // rule as every other filter control) — only removing a chip above
-        // applies immediately. The panel stays open so several tags can be
-        // picked in a row without reopening it each time.
+        // The panel stays open so several tags can be picked in a row.
       });
     });
 
@@ -449,9 +423,7 @@ $nav = $nav ?? 'sites';
       var form2 = cancelBtn.closest('.wf-edit-form');
       var id2 = form2.dataset.wfId;
       if (window.jQuery) {
-        // Discard any unsaved pick: without this, reopening later (without
-        // ever saving or reloading) would show the abandoned choice as if
-        // it might be the real linked website.
+        // Discard an unsaved pick so reopening shows the real linked website.
         var $select2 = jQuery(form2).find('.wf-select');
         if ($select2.length) { $select2.val($select2.data('wf-original')).trigger('change'); }
       }
@@ -461,12 +433,7 @@ $nav = $nav ?? 'sites';
       return;
     }
 
-    // The simpler cousin of the above, no select2 involved (Users list:
-    // edit name/email/role inline) — same display:none-based toggle, same
-    // reasoning against the `hidden` attribute. Both rows are real <tr>s
-    // (a colspan'd <form> in the edit row), so 'table-row' is the display
-    // value that shows one — not 'flex', which is right for the subscription
-    // form above but wrong for a table row.
+    // Inline row editing (users, observations): both rows are <tr>, so 'table-row'.
     var rowEditBtn = e.target.closest('.row-edit-btn');
     if (rowEditBtn) {
       var rid = rowEditBtn.dataset.rowId;

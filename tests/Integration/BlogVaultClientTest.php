@@ -136,7 +136,7 @@ final class BlogVaultClientTest extends TestCase
         );
     }
 
-    /** The v6 envelope is {"error":{...}} — reading it as a string used to yield "Array". */
+    /** The v6 envelope is {"error":{...}} — it must be unwrapped, never cast to a string ("Array"). */
     public function testV6ErrorEnvelopeIsUnwrapped(): void
     {
         $client = $this->client([$this->json([
@@ -192,17 +192,17 @@ final class BlogVaultClientTest extends TestCase
     }
 
     /**
-     * With 'query' auth the key rides in the request URL — Guzzle transport
-     * exceptions commonly embed that URL verbatim in getMessage(). A failed
-     * request must not leak the key into probes/blogvault.json (or logs) via
-     * that message (2026-08-31).
+     * With 'query' auth the key rides in the request URL, which Guzzle
+     * transport errors echo — raw and URL-encoded forms must both be masked.
      */
     public function testTransportErrorMessageNeverContainsTheApiKey(): void
     {
-        $request = new Request('GET', 'https://api.blogvault.test/v6/ping?apikey=secret-key');
+        $key     = 'secret key/+=';
+        $request = new Request('GET', 'https://api.blogvault.test/v6/ping?apikey=' . rawurlencode($key));
         $mock    = new MockHandler([
             new ConnectException(
-                'cURL error 6: Could not resolve host for GET https://api.blogvault.test/v6/ping?apikey=secret-key',
+                'cURL error 6: Could not resolve host for GET https://api.blogvault.test/v6/ping?apikey='
+                    . rawurlencode($key) . ' (form: ' . urlencode($key) . ', raw: ' . $key . ')',
                 $request
             ),
         ]);
@@ -210,7 +210,7 @@ final class BlogVaultClientTest extends TestCase
 
         $client = BlogVaultClient::fromConfig([
             'base_url' => 'https://api.blogvault.test/v6',
-            'api_key'  => 'secret-key',
+            'api_key'  => $key,
             'auth'     => ['type' => 'query', 'name' => 'apikey'],
         ], $http);
 
@@ -218,7 +218,9 @@ final class BlogVaultClientTest extends TestCase
             $client->get('ping');
             $this->fail('expected BlogVaultException');
         } catch (BlogVaultException $e) {
-            $this->assertStringNotContainsString('secret-key', $e->getMessage());
+            $this->assertStringNotContainsString($key, $e->getMessage());
+            $this->assertStringNotContainsString(rawurlencode($key), $e->getMessage());
+            $this->assertStringNotContainsString(urlencode($key), $e->getMessage());
             $this->assertStringContainsString('***', $e->getMessage());
         }
     }

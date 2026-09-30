@@ -33,9 +33,7 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
 <form method="get" class="search">
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search…">
 
-    <?php // Plain enumerated dropdowns, not select2 AJAX — the tag vocabulary is
-          // small. initTagFilter() in layout.php owns the interaction: click a
-          // tag to add/remove it from THIS list, independently of the other. ?>
+    <?php // Small tag vocabulary: plain dropdowns driven by initTagFilter() (layout.php). ?>
     <?= $tagFilter('tags-include-filter', 'Include tags', 'tag', $selectedTags, $allTags, false) ?>
     <?= $tagFilter('tags-exclude-filter', 'Exclude tags', 'excludeTag', $selectedExcludeTags, $allTags, true) ?>
     <input type="hidden" name="exclude_tag_present" value="1">

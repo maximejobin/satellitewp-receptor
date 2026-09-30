@@ -170,8 +170,7 @@ final class UserStore
     }
 
     /**
-     * The full record for one address — e.g. Router::profilePage() reading
-     * the signed-in user's own data/runcloud_api_key/public_ssh_key.
+     * The full record for one address.
      *
      * @return array{
      *     email:string,role:string,first_name:string,last_name:string,status:string,
@@ -249,10 +248,7 @@ final class UserStore
 
         foreach ($users as $i => $user) {
             if ($user['email'] === $email) {
-                // Only identity/role/status change here — data/runcloud_api_key/
-                // public_ssh_key are carried over from $user untouched: this is
-                // an admin editing who someone is, not the self-service profile
-                // edit (updateProfile()) that owns those three fields.
+                // Profile fields belong to updateProfile(); carried over untouched.
                 $users[$i] = [
                     'email'            => $newEmail,
                     'role'             => $role,
@@ -331,11 +327,8 @@ final class UserStore
     }
 
     /**
-     * The last remaining *active* admin cannot be removed: dropping it would
-     * either lock everyone out of managing the list, or (with no active
-     * admin left) make this very restriction unenforceable the next time it
-     * matters. A suspended admin record doesn't count as "another admin" —
-     * nobody can sign in as them either.
+     * The last active admin cannot be removed (a suspended admin doesn't count):
+     * nobody could manage the list afterwards.
      *
      * @return bool false when absent, or when it is the last active admin
      */

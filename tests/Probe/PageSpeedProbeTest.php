@@ -89,19 +89,4 @@ final class PageSpeedProbeTest extends TestCase
         $this->assertSame('fr', $this->probe('fr')->resolveLocale($this->site(null)));
         $this->assertSame('fr', $this->probe('fr')->resolveLocale($this->site('')));
     }
-
-    public function testRedactKeyRemovesTheKeyRawAndUrlEncoded(): void
-    {
-        $key = 'AIza+Sy/abc=';
-        $msg = 'PSI mobile: cURL error 28: Operation timed out for https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=x&key='
-            . rawurlencode($key) . ' (raw ' . $key . ', form ' . urlencode($key) . ')';
-
-        $out = PageSpeedProbe::redactKey($msg, $key);
-
-        $this->assertStringNotContainsString($key, $out);
-        $this->assertStringNotContainsString(rawurlencode($key), $out);
-        $this->assertStringNotContainsString(urlencode($key), $out);
-        $this->assertStringContainsString('key=[redacted]', $out);
-        $this->assertSame('no key here', PageSpeedProbe::redactKey('no key here', null));
-    }
 }

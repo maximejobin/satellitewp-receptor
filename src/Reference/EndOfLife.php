@@ -7,6 +7,7 @@ namespace SatelliteWP\Xtractor\Reference;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
+use SatelliteWP\Xtractor\Support\AtomicFile;
 
 /**
  * End-of-life reference data sourced from endoflife.date and cached locally
@@ -120,7 +121,7 @@ final class EndOfLife
                 throw new RuntimeException("endoflife.date {$product}: invalid JSON");
             }
 
-            self::writeAtomically($this->cacheFile($product), $body);
+            AtomicFile::write($this->cacheFile($product), $body);
             unset($this->loaded[$product]);
             $results[$product] = count($decoded);
         }
@@ -146,15 +147,5 @@ final class EndOfLife
     private function cacheFile(string $product): string
     {
         return $this->cacheDir . '/' . preg_replace('/[^a-z0-9._-]/i', '', $product) . '.json';
-    }
-
-    /** Temp file + rename: a concurrent reader sees the old cache or the new one, never a truncated file. */
-    private static function writeAtomically(string $file, string $body): void
-    {
-        $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
-        if (file_put_contents($tmp, $body) === false || !rename($tmp, $file)) {
-            @unlink($tmp);
-            throw new RuntimeException("Cannot write reference cache: {$file}");
-        }
     }
 }

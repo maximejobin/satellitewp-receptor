@@ -67,6 +67,7 @@ final class RuleEngine
             observed: $result->observed,
             threshold: $rule->threshold,
             data: $result->data,
+            clientAction: $rule->clientAction,
         );
     }
 
@@ -83,7 +84,7 @@ final class RuleEngine
             'na'      => 0,
             'unknown' => 0,
             'by_severity' => ['C' => 0, 'E' => 0, 'M' => 0, 'I' => 0],
-            'by_pastille' => ['green' => 0, 'orange' => 0, 'red' => 0, 'blue' => 0, 'grey' => 0],
+            'by_pastille' => array_fill_keys(Pastille::values(), 0),
         ];
 
         foreach ($findings as $finding) {

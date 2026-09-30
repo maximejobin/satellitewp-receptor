@@ -12,16 +12,17 @@ use PDO;
  */
 final class Index
 {
+    /** Received, awaiting an analyst's decision. */
     public const string STATUS_PENDING = 'pending';
-    /** Received and awaiting a human decision is PENDING; QUEUED means an
-     *  analyst pressed "run" and the cron worker may pick it up. Probes only
-     *  ever run on QUEUED, so an extraction arriving on its own never spends
-     *  a PageSpeed or BlogVault quota. */
+    /** An analyst pressed "run"; the only status the cron worker picks up, so arrivals spend no probe quota. */
     public const string STATUS_QUEUED  = 'queued';
     public const string STATUS_RUNNING = 'running';
     public const string STATUS_DONE    = 'done';
     public const string STATUS_ERROR   = 'error';
     public const string STATUS_ABORTED = 'aborted';
+
+    /** Bumped whenever an upgrade step is added to migrate(); stored in PRAGMA user_version. */
+    public const int SCHEMA_VERSION = 1;
 
     private ?PDO $pdo = null;
 
@@ -51,7 +52,12 @@ final class Index
 
     private function migrate(): void
     {
-        $this->pdo?->exec(<<<'SQL'
+        $pdo = $this->pdo;
+        if ($pdo === null || (int) $pdo->query('PRAGMA user_version')->fetchColumn() >= self::SCHEMA_VERSION) {
+            return;
+        }
+
+        $pdo->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS sites (
                 site_id    TEXT PRIMARY KEY,
                 site_url   TEXT,
@@ -83,22 +89,21 @@ final class Index
             CREATE INDEX IF NOT EXISTS idx_extractions_site ON extractions(site_id, received_at DESC);
             SQL);
 
-        // CREATE TABLE IF NOT EXISTS above does nothing to an index.sqlite that
-        // already existed before these two columns were added — add them here
-        // so an upgrade does not have to wait for an explicit index:rebuild.
-        $columns = array_column($this->pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
+        // Version 1: bring an index created by an older build to today's columns.
+        $columns = array_column($pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
         foreach (['database_type', 'database_version'] as $column) {
             if (!in_array($column, $columns, true)) {
-                $this->pdo->exec("ALTER TABLE extractions ADD COLUMN {$column} TEXT");
+                $pdo->exec("ALTER TABLE extractions ADD COLUMN {$column} TEXT");
+            }
+        }
+        $siteColumns = array_column($pdo->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
+        foreach (['first_seen', 'last_seen', 'name'] as $column) {
+            if (in_array($column, $siteColumns, true)) {
+                $pdo->exec("ALTER TABLE sites DROP COLUMN {$column}");
             }
         }
 
-        $siteColumns = array_column($this->pdo->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
-        foreach (['first_seen', 'last_seen', 'name'] as $column) {
-            if (in_array($column, $siteColumns, true)) {
-                $this->pdo->exec("ALTER TABLE sites DROP COLUMN {$column}");
-            }
-        }
+        $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
     }
 
     /** @param array<string, mixed> $payload */
@@ -144,8 +149,7 @@ final class Index
 
     public function setExtractionStatus(string $siteId, string $extractionId, string $status): void
     {
-        // Stamp the transition time on running/done/error so requeueStale
-        // measures staleness from when the run STARTED, not from receipt.
+        // Stamped on running/done/error so requeueStale() measures from the run's start, not receipt.
         $this->pdo()->prepare(<<<'SQL'
             UPDATE extractions
             SET status = :status,
@@ -254,10 +258,6 @@ final class Index
     /** @return list<array<string, mixed>> */
     public function listSites(?string $search = null): array
     {
-        // "Last extraction" is read straight off the extractions table
-        // (received_at of the newest row for the site) rather than a
-        // separately-tracked site-level timestamp — one source for it, and
-        // it is exact instead of an approximation of the same fact.
         $sql = <<<'SQL'
             SELECT s.*,
                    (SELECT e.id FROM extractions e
@@ -272,11 +272,10 @@ final class Index
 
         $params = [];
         if ($search !== null && $search !== '') {
-            $sql .= ' WHERE s.site_url LIKE :q OR s.site_id LIKE :q';
-            $params['q'] = '%' . $search . '%';
+            $sql .= ' WHERE s.site_url LIKE :q ' . SqlLike::ESCAPE . ' OR s.site_id LIKE :q ' . SqlLike::ESCAPE;
+            $params['q'] = SqlLike::contains($search);
         }
-        // NULL (no extraction yet) sorts last under DESC in SQLite — exactly
-        // where a site with nothing to show belongs.
+        // A site with no extraction yet (NULL) sorts last under DESC.
         $sql .= ' ORDER BY last_extraction_received_at DESC';
 
         $stmt = $this->pdo()->prepare($sql);
@@ -342,22 +341,13 @@ final class Index
             foreach ($store->listExtractionIds($siteId) as $extractionId) {
                 $payload    = $store->readExtractionPayload($siteId, $extractionId) ?? [];
                 $meta       = $store->readMeta($siteId, $extractionId) ?? [];
-                // meta.json always carries received_at in practice; this
-                // fallback only matters for a hand-damaged data/ tree during
-                // a manual rebuild, so "now" is an honest placeholder rather
-                // than inventing a past time nothing on disk actually recorded.
+                // Only a hand-damaged tree lacks received_at; "now" invents no past date.
                 $receivedAt = (string) ($meta['received_at'] ?? gmdate('Y-m-d\TH:i:s\Z'));
                 $probes     = $store->readAllProbeResults($siteId, $extractionId);
 
-                // Reconstructed from what is on disk: no probes means the
-                // analysis never ran (PENDING); probes AND findings.json means
-                // it completed (DONE); probes without findings.json means it
-                // stopped part-way (ERROR) — never DONE, or the page would show
-                // a "finished" report with no findings. An extraction that was
-                // merely QUEUED has no on-disk trace — it comes back as PENDING
-                // and the analyst re-presses "Lancer l'analyse". Acceptable:
-                // rebuild is a recovery step, and the JSON tree is the source of
-                // truth, not the queue.
+                // From disk: no probes = never ran; probes + findings = done;
+                // probes without findings = stopped part-way. A queued-only
+                // extraction leaves no trace and comes back pending.
                 $status = match (true) {
                     $probes === []                                           => self::STATUS_PENDING,
                     $store->readFindings($siteId, $extractionId) !== null    => self::STATUS_DONE,

@@ -42,4 +42,17 @@ final class PastilleTest extends TestCase
         // "No result" beats the Info-severity blue override.
         $this->assertSame(Pastille::Grey, Pastille::for(Status::Unknown, Severity::Info));
     }
+
+    public function testClientActionIsPurpleRegardlessOfStatusOrSeverity(): void
+    {
+        $this->assertSame(Pastille::Purple, Pastille::for(Status::Pass, Severity::Info, true));
+        $this->assertSame(Pastille::Purple, Pastille::for(Status::Fail, Severity::Critical, true));
+        $this->assertSame(Pastille::Purple, Pastille::for(Status::Fail, Severity::Medium, true));
+    }
+
+    public function testClientActionStillYieldsGreyWithNoResult(): void
+    {
+        $this->assertSame(Pastille::Grey, Pastille::for(Status::NotApplicable, Severity::Info, true));
+        $this->assertSame(Pastille::Grey, Pastille::for(Status::Unknown, Severity::Info, true));
+    }
 }

@@ -48,4 +48,31 @@ final class DnsProbeTest extends TestCase
         $this->assertNull($data['dmarc']['policy']);
         $this->assertSame([], $data['mx']);
     }
+
+    public function testAFailedLookupIsNullNeverAnEmptyFinding(): void
+    {
+        $data = DnsProbe::parseRecords([
+            'a'     => [['ip' => '192.0.2.10']],
+            'txt'   => null,
+            'dmarc' => null,
+            'mx'    => null,
+            'caa'   => null,
+        ]);
+
+        $this->assertNull($data['txt']);
+        $this->assertNull($data['spf']);
+        $this->assertNull($data['dmarc']);
+        $this->assertNull($data['mx']);
+        $this->assertNull($data['caa']);
+        $this->assertSame(['192.0.2.10'], $data['a']);
+    }
+
+    public function testAnEmptyAnswerIsAFindingNotAFailure(): void
+    {
+        $data = DnsProbe::parseRecords(['txt' => [], 'dmarc' => [], 'mx' => []]);
+
+        $this->assertSame(['present' => false, 'record' => null], $data['spf']);
+        $this->assertFalse($data['dmarc']['present']);
+        $this->assertSame([], $data['mx']);
+    }
 }

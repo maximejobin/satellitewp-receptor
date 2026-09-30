@@ -100,10 +100,10 @@ $hex = [
 
 <h2>Pastilles</h2>
 <p class="muted"><span class="mono">pastille()</span> — the extraction report's own findings signal. Official
-    labels: info, pass, attention, critical, na.</p>
+    labels: info, pass, attention, critical, action needed, na.</p>
 <p class="sg-row">
     <?= pastille('blue', 'info') ?> <?= pastille('green', 'pass') ?> <?= pastille('orange', 'attention') ?>
-    <?= pastille('red', 'critical') ?> <?= pastille('grey', 'na') ?>
+    <?= pastille('red', 'critical') ?> <?= pastille('purple', 'action needed') ?> <?= pastille('grey', 'na') ?>
 </p>
 
 <h2>Cards</h2>
@@ -189,7 +189,12 @@ $hex = [
       var tag = document.createElement('span');
       tag.className = 'filter-tag';
       tag.dataset.filter = filterKey;
-      tag.innerHTML = label + ': ' + text + ' <button type="button" aria-label="Remove ' + label + ' filter">&times;</button>';
+      tag.textContent = label + ': ' + text + ' ';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Remove ' + label + ' filter');
+      remove.innerHTML = '&times;';
+      tag.appendChild(remove);
       tag.querySelector('button').addEventListener('click', function () { tag.remove(); });
       tagsContainer.appendChild(tag);
     }
@@ -221,9 +226,7 @@ $hex = [
 <h2>Toasts</h2>
 <p class="muted">A transient confirmation after an AJAX save — auto-dismisses, bottom-right, never blocks
     the page. Same accent-bar language as <span class="mono">.notice</span>. <span class="mono">showToast()</span>
-    is global (layout.php) and already wired into the one real AJAX save in the app —
-    <span class="mono">license_select()</span>'s licence dropdown on /catalog, which used to <span class="mono">alert()</span>
-    on failure.</p>
+    is global (layout.php), used by the licence dropdowns' AJAX save.</p>
 <p class="sg-row">
     <button type="button" class="btn btn-secondary" onclick="showToast('Saved successfully.', false)">Simulate a successful save</button>
     <button type="button" class="btn btn-muted" onclick="showToast('Could not save — try again.', true)">Simulate a failed save</button>

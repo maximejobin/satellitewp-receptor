@@ -2,7 +2,6 @@
 /**
  * @var list<array{email:string,role:string,first_name:string,last_name:string,status:string}> $users
  * @var list<string> $roles
- * @var string|null $admin
  * @var string|null $me
  * @var array{add: bool, edit: bool, suspend: bool, remove: bool} $can
  * @var string $csrf

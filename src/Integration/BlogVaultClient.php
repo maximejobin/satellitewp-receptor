@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use InvalidArgumentException;
+use SatelliteWP\Xtractor\Support\Secret;
 
 /**
  * Generic, parameter-driven client for the BlogVault API v6.
@@ -112,7 +113,7 @@ final class BlogVaultClient
         try {
             $response = $this->http->request(strtoupper($method), $this->url($path), $guzzleOptions);
         } catch (GuzzleException $e) {
-            throw new BlogVaultException('BlogVault transport error: ' . $this->redact($e->getMessage()), null, null, $e);
+            throw new BlogVaultException('BlogVault transport error: ' . Secret::redact($e->getMessage(), $this->apiKey, '***'), null, null, $e);
         }
 
         $status = $response->getStatusCode();
@@ -125,7 +126,7 @@ final class BlogVaultClient
 
         if ($status < 200 || $status >= 300) {
             throw new BlogVaultException(
-                'BlogVault error: ' . $this->redact(self::errorMessage($decoded, $status)),
+                'BlogVault error: ' . Secret::redact(self::errorMessage($decoded, $status), $this->apiKey, '***'),
                 $status,
                 $decoded
             );
@@ -183,24 +184,6 @@ final class BlogVaultClient
     private function url(string $path): string
     {
         return $this->baseUrl . '/' . ltrim($path, '/');
-    }
-
-    /**
-     * Strips the API key out of a string before it becomes an exception
-     * message — one that can end up in `probes/blogvault.json`, on the
-     * extraction report's raw-data view, or in logs. Only the 'query' auth
-     * mode (not the default) ever puts the key somewhere a failed request's
-     * own URL or message could echo it back, but this runs unconditionally:
-     * cheap, and a future auth mode change should not have to remember to
-     * add it back.
-     */
-    private function redact(string $message): string
-    {
-        if ($this->apiKey === null || $this->apiKey === '') {
-            return $message;
-        }
-
-        return str_replace($this->apiKey, '***', $message);
     }
 
     /** @return array<string, string> */

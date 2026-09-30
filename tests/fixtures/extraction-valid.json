@@ -22,6 +22,10 @@
     "web_server": "nginx",
     "document_root": "/var/www/html/",
     "website_administrator_email": "admin@example.com",
+    "os_family": "Linux",
+    "os_name": "Ubuntu 22.04.5 LTS",
+    "kernel_release": "5.15.0-177-generic",
+    "architecture": "x86_64",
     "php": {
         "version": "8.3.11",
         "extensions": ["curl", "gd", "imagick", "mbstring", "openssl", "zip"],

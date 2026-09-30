@@ -6,6 +6,7 @@ namespace SatelliteWP\Xtractor\Console;
 
 use SatelliteWP\Xtractor\App;
 use SatelliteWP\Xtractor\Rules\Context;
+use SatelliteWP\Xtractor\Rules\Pastille;
 use SatelliteWP\Xtractor\Rules\Translator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -96,20 +97,21 @@ final class RulesEvaluateCommand extends Command
                 continue;
             }
 
-            $color   = $finding['pastille'];
-            $tag     = match ($color) {
-                'red'    => '<error>● ' . $t->pastille('red') . '</error>',
-                'orange' => '<comment>● ' . $t->pastille('orange') . '</comment>',
-                'green'  => '<info>● ' . $t->pastille('green') . '</info>',
-                'blue'   => '● ' . $t->pastille('blue'),
-                default  => '○ ' . $t->pastille('grey'),
+            $color = (string) $finding['pastille'];
+            $label = $t->pastille($color);
+            $tag   = match (Pastille::tryFrom($color)) {
+                Pastille::Red    => "<error>● {$label}</error>",
+                Pastille::Orange => "<comment>● {$label}</comment>",
+                Pastille::Green  => "<info>● {$label}</info>",
+                Pastille::Grey, null => "○ {$label}",
+                default          => "● {$label}",
             };
 
             $rows[] = [
                 $finding['id'],
                 $t->category($finding['category']),
                 $tag,
-                $t->title($finding['id']),
+                $t->title($finding['id'], $finding['status'] ?? null),
                 $t->message($finding) ?? '',
             ];
         }
@@ -121,16 +123,9 @@ final class RulesEvaluateCommand extends Command
                 ->render();
         }
 
-        $p = $findings['counts']['by_pastille'];
+        $p     = (array) $findings['counts']['by_pastille'];
+        $tally = array_map(static fn (string $c): string => ((int) ($p[$c] ?? 0)) . ' ' . $c, Pastille::values());
 
-        $output->writeln(sprintf(
-            "\n%d rules — <error>● %d red</error>, <comment>● %d orange</comment>, ● %d blue, <info>● %d green</info>, ○ %d n/a",
-            $findings['counts']['total'],
-            $p['red'],
-            $p['orange'],
-            $p['blue'],
-            $p['green'],
-            $p['grey']
-        ));
+        $output->writeln(sprintf("\n%d rules — %s", $findings['counts']['total'], implode(', ', $tally)));
     }
 }

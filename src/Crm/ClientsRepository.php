@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Crm;
 
 use PDO;
+use SatelliteWP\Xtractor\Storage\SqlLike;
 
+/**
+ * The external CRM database (portable SQL only, so the suite can test it on
+ * SQLite). Read-only except setSubscriptionWebsite().
+ */
 final class ClientsRepository
 {
     public const string PRODUCT_TYPE_LICENSE          = 'license';
@@ -58,8 +63,8 @@ final class ClientsRepository
         $where  = [];
         $params = [];
         if ($search !== null && $search !== '') {
-            $where[]     = '(c.company LIKE :q OR c.first_name LIKE :q OR c.last_name LIKE :q OR c.email LIKE :q)';
-            $params['q'] = '%' . $search . '%';
+            $where[]     = sprintf('(c.company LIKE :q %1$s OR c.first_name LIKE :q %1$s OR c.last_name LIKE :q %1$s OR c.email LIKE :q %1$s)', SqlLike::ESCAPE);
+            $params['q'] = SqlLike::contains($search);
         }
 
         $sql = <<<'SQL'
@@ -100,11 +105,7 @@ final class ClientsRepository
         return $rows;
     }
 
-    /**
-     * Most recent `date_sync` across the whole clients table — a page-level
-     * freshness indicator ("last synced 50 minutes ago"), not a per-client
-     * fact.
-     */
+    /** Most recent date_sync across the clients table (page-level freshness). */
     public function clientsLastSyncedAt(): ?string
     {
         $value = $this->pdo->query('SELECT MAX(date_sync) FROM swp_clients')->fetchColumn();
@@ -161,8 +162,7 @@ final class ClientsRepository
     }
 
     /**
-     * Clients with no company name recorded — a data-quality gap the status
-     * page flags so it gets filled in, not a business-logic filter.
+     * Data-quality gap flagged on the status page.
      *
      * @return list<array<string, mixed>>
      */
@@ -176,11 +176,7 @@ final class ClientsRepository
     }
 
     /**
-     * Active clients (>=1 subscription with subscription_status = 'active' —
-     * same "active" definition as listClients()'s service filter) with no
-     * company name recorded. A subset of clientsWithEmptyCompany() above,
-     * kept as its own query rather than filtered in PHP so the status page
-     * can show both counts independently without fetching every client.
+     * Active clients (>=1 active subscription, as in listClients()) with no company name.
      *
      * @return list<array<string, mixed>>
      */
@@ -195,8 +191,7 @@ final class ClientsRepository
     }
 
     /**
-     * Active clients with no HubSpot id recorded — same "active" definition
-     * as clientsActiveWithEmptyCompany() above.
+     * Active clients with no HubSpot id recorded.
      *
      * @return list<array<string, mixed>>
      */
@@ -211,8 +206,7 @@ final class ClientsRepository
     }
 
     /**
-     * Active clients with no Teamwork id recorded — same "active" definition
-     * as clientsActiveWithEmptyCompany() above.
+     * Active clients with no Teamwork id recorded.
      *
      * @return list<array<string, mixed>>
      */
@@ -274,8 +268,7 @@ final class ClientsRepository
      *        one of these tags is included (not required to carry all of them)
      * @param string|null $connectionStatus exact match, e.g. 'CONNECTED' / 'DISCONNECTED'
      * @param list<string>|null $excludeTags a website carrying ANY of these tags is
-     *        dropped, even if it also matches $tags — the default caller (Router,
-     *        see crm-websites.php) excludes DEV-tagged sites this way by default
+     *        dropped, even if it also matches $tags
      * @return list<array<string, mixed>> each row carries 'tags' (list<string>)
      */
     public function listWebsites(
@@ -315,13 +308,14 @@ final class ClientsRepository
             $where[] = 'w.id NOT IN (SELECT website_id FROM swp_website_tags WHERE tag IN (' . implode(',', $placeholders) . '))';
         }
         if ($search !== null && $search !== '') {
-            $where[]     = "(w.url LIKE :q OR w.host LIKE :q OR w.id IN (
+            $esc         = SqlLike::ESCAPE;
+            $where[]     = "(w.url LIKE :q {$esc} OR w.host LIKE :q {$esc} OR w.id IN (
                 SELECT sw.website_id FROM swp_subscriptions_websites sw
                 JOIN swp_subscriptions s ON s.id = sw.subscription_id
                 JOIN swp_clients c ON c.id = s.client_id
-                WHERE c.company LIKE :q
+                WHERE c.company LIKE :q {$esc}
             ))";
-            $params['q'] = '%' . $search . '%';
+            $params['q'] = SqlLike::contains($search);
         }
         if ($connectionStatus !== null && $connectionStatus !== '') {
             $where[]                       = 'w.connection_status = :connection_status';
@@ -396,9 +390,7 @@ final class ClientsRepository
     }
 
     /**
-     * A website's items, split the way the UI wants them: plugins and themes
-     * called out explicitly, anything else (a future item type) bucketed
-     * separately rather than silently dropped.
+     * A website's items split into plugins, themes and anything else (never dropped).
      *
      * @return array{plugin: list<array<string,mixed>>, theme: list<array<string,mixed>>, other: list<array<string,mixed>>}
      */
@@ -423,9 +415,9 @@ final class ClientsRepository
     public function searchTags(string $query, int $limit = 50): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT DISTINCT tag FROM swp_website_tags WHERE tag LIKE :q ORDER BY tag LIMIT :limit'
+            'SELECT DISTINCT tag FROM swp_website_tags WHERE tag LIKE :q ' . SqlLike::ESCAPE . ' ORDER BY tag LIMIT :limit'
         );
-        $stmt->bindValue('q', '%' . $query . '%');
+        $stmt->bindValue('q', SqlLike::contains($query));
         $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
 
@@ -433,20 +425,20 @@ final class ClientsRepository
     }
 
     /**
-     * Clients matching $query (email/name/company) — backs the select2 AJAX
-     * source for the /websites client filter.
+     * Clients matching $query on email, name or company.
      *
      * @return list<array{id:int,label:string}>
      */
     public function searchClients(string $query, int $limit = 50): array
     {
-        $stmt = $this->pdo->prepare(<<<'SQL'
+        $esc  = SqlLike::ESCAPE;
+        $stmt = $this->pdo->prepare(<<<SQL
             SELECT id, email, first_name, last_name, company FROM swp_clients
-            WHERE email LIKE :q OR first_name LIKE :q OR last_name LIKE :q OR company LIKE :q
+            WHERE email LIKE :q {$esc} OR first_name LIKE :q {$esc} OR last_name LIKE :q {$esc} OR company LIKE :q {$esc}
             ORDER BY company, last_name, first_name
             LIMIT :limit
             SQL);
-        $stmt->bindValue('q', '%' . $query . '%');
+        $stmt->bindValue('q', SqlLike::contains($query));
         $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
 
@@ -512,10 +504,8 @@ final class ClientsRepository
     }
 
     /**
-     * The client(s) linked to a website via any of its subscriptions — for
-     * the website detail page's "who is the client" section (usually one,
-     * but nothing in the schema guarantees every subscription on a site
-     * belongs to the same client, so this is a list).
+     * The client(s) linked to a website through its subscriptions — usually
+     * one, but the schema allows several.
      *
      * @return list<array<string, mixed>> full swp_clients rows (id, company, first_name, last_name, email, ...)
      */
@@ -539,10 +529,8 @@ final class ClientsRepository
     public const string TAG_EXCLUDED_FROM_ASSIGNMENT = 'DEV';
 
     /**
-     * Websites a subscription may be assigned to: every website except one
-     * tagged TAG_EXCLUDED_FROM_ASSIGNMENT. The full, unfiltered list — used
-     * only for setSubscriptionWebsite()'s server-side validation, never
-     * rendered directly (see searchAssignableWebsites() for that).
+     * Every website a subscription may be linked to (not tagged
+     * TAG_EXCLUDED_FROM_ASSIGNMENT) — the server-side validation list.
      *
      * @return list<array{id:int,url:string}>
      */
@@ -559,23 +547,22 @@ final class ClientsRepository
     }
 
     /**
-     * Assignable websites matching $query — backs the select2 AJAX source
-     * for the "linked website" control on a subscription
-     * (subscription_website_form() in helpers.php).
+     * Assignable websites whose URL matches $query.
      *
      * @return list<array{id:int,url:string}>
      */
     public function searchAssignableWebsites(string $query, int $limit = 50): array
     {
-        $stmt = $this->pdo->prepare(<<<'SQL'
+        $esc  = SqlLike::ESCAPE;
+        $stmt = $this->pdo->prepare(<<<SQL
             SELECT id, url FROM swp_websites
             WHERE id NOT IN (SELECT website_id FROM swp_website_tags WHERE tag = :tag)
-              AND url LIKE :q
+              AND url LIKE :q {$esc}
             ORDER BY url
             LIMIT :limit
             SQL);
         $stmt->bindValue('tag', self::TAG_EXCLUDED_FROM_ASSIGNMENT);
-        $stmt->bindValue('q', '%' . $query . '%');
+        $stmt->bindValue('q', SqlLike::contains($query));
         $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
 
@@ -583,14 +570,9 @@ final class ClientsRepository
     }
 
     /**
-     * Changes (or clears, when $websiteId is null) which website a
-     * subscription is linked to. Always a delete-then-insert, never an
-     * update-in-place: relinking a subscription is a new fact ("this
-     * website, as of today"), not a correction of the old link's own
-     * `date_added` — and a delete+insert is the one operation both MySQL and
-     * SQLite express identically (an upsert would need MySQL's
-     * `ON DUPLICATE KEY UPDATE` vs. SQLite's `ON CONFLICT ... DO UPDATE`,
-     * which are not portable).
+     * Links (or, with null, unlinks) a subscription to a website. Delete then
+     * insert: a relink is a new fact with its own date_added, and it is the
+     * one form MySQL and SQLite share (upsert syntax differs).
      *
      * @return bool false when the subscription does not exist, or the target
      *              website does not exist or is excluded from assignment
@@ -631,10 +613,8 @@ final class ClientsRepository
     // ---- Products --------------------------------------------------------
 
     /**
-     * Every product, with its derived type: a product is a 'license' or a
-     * 'maintenance_plan' exactly when it has a matching row in that child
-     * table (by auto_id) — not a free-text 'category' column, which is not
-     * guaranteed to only ever hold these two values plus "other".
+     * Every product with its type, derived from which child table holds its
+     * auto_id — the free-text 'category' column isn't constrained.
      *
      * @param string|null $type one of the PRODUCT_TYPE_* constants to filter by; null/'' for every product
      * @return list<array<string, mixed>>
@@ -675,8 +655,7 @@ final class ClientsRepository
     }
 
     /**
-     * "Which sites have which plugins": a filterable, paginated cross-site
-     * browse of every item, joined to its website's URL for context.
+     * Paginated cross-site browse of every item, with its website's URL.
      *
      * @param array{type?: string, q?: string, vulnerable?: bool, updateAvailable?: bool} $filters
      * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
@@ -699,8 +678,8 @@ final class ClientsRepository
         }
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
-            $where[]     = '(i.name LIKE :q OR i.slug LIKE :q OR w.url LIKE :q)';
-            $params['q'] = '%' . $q . '%';
+            $where[]     = sprintf('(i.name LIKE :q %1$s OR i.slug LIKE :q %1$s OR w.url LIKE :q %1$s)', SqlLike::ESCAPE);
+            $params['q'] = SqlLike::contains($q);
         }
 
         $whereSql = $where !== [] ? 'WHERE ' . implode(' AND ', $where) : '';

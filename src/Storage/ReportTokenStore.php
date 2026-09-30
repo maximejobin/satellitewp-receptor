@@ -7,16 +7,9 @@ namespace SatelliteWP\Xtractor\Storage;
 use RuntimeException;
 
 /**
- * Disposable tokens for the "report data key" button on an extraction page —
- * lets a script (the Google Docs report template's Apps Script) fetch one
- * extraction's report.json without ever holding config's shared
- * `reports.api_key`. Each token is scoped to exactly one site + extraction
- * and expires quickly: a leaked one exposes one report for a short window,
- * never every report forever the way the shared key would.
- *
- * Stored in data/report-tokens.json, same flat-JSON style as KeyStore.
- * Expired entries are dropped on every issue() — this file never needs its
- * own cleanup job.
+ * One-hour tokens scoped to one extraction's report.json (the "Report data
+ * key" button), so a leaked link exposes one report briefly — never all of
+ * them like the shared reports.api_key. Expired entries are pruned on issue().
  */
 final class ReportTokenStore
 {
@@ -27,12 +20,8 @@ final class ReportTokenStore
     }
 
     /**
-     * Mints a fresh token for this site + extraction, valid for one hour.
-     * $issuedBy is the signed-in analyst's display name at the moment they
-     * clicked "Report data key" — captured here because report.json itself
-     * is fetched later, cold, with no session to read it from (that's the
-     * whole point of this token). Empty when minted via the shared
-     * reports.api_key path, which has no analyst identity attached to it.
+     * Mints a one-hour token. $issuedBy (the analyst's name) is captured now
+     * because report.json is later fetched with no session.
      */
     public function issue(string $siteId, string $extractionId, string $issuedBy = ''): string
     {
@@ -68,13 +57,7 @@ final class ReportTokenStore
             && ($entry['extraction_id'] ?? null) === $extractionId;
     }
 
-    /**
-     * The analyst's display name captured when $token was minted, or '' if
-     * the token is missing/expired or carries none (the shared
-     * reports.api_key path). Call only after verify() already confirmed the
-     * token is valid for this site + extraction — this does no such check
-     * itself, it just reads whatever is on file for the token.
-     */
+    /** The name captured at mint time, or ''. Does not validate: call verify() first. */
     public function issuedBy(string $token): string
     {
         $entry = $this->all()[$token] ?? null;

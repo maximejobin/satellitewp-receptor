@@ -1,24 +1,17 @@
 <?php
 /**
  * Rule catalogue — the executable form of .github/validations-techniques.txt
- * (repo satellitewp-plugin-maintenance).
+ * (repo satellitewp-plugin-maintenance). Ids follow that document's section
+ * letters; W* (domain), PS* (PageSpeed) and X* (exposure) are additions.
  *
- * LANGUAGE-NEUTRAL by design: rules carry no prose. Each rule has an id, a
- * short English category (see Rules\Category), a source, a default severity, an
- * optional configurable threshold, and a check closure that returns only raw
- * values (observed + named data). Titles and sentences (EN/FR) live in
- * config/lang/<locale>.php keyed by the rule id, and are rendered at display
- * time by Rules\Translator.
- *
- * Rule ids follow the source document's section letters (A=SSL, B=HTTP, …).
- * Two prefixes are additions kept distinct so they never collide: W* (domain,
- * WHOIS/RDAP) and PS* (Lighthouse/PageSpeed).
- *
- * Thresholds are overridable per id via config: rules.thresholds.<id>.
+ * Language-neutral: checks return raw values (observed + named data, plus an
+ * optional 'variant' picking a message template); sentences live in
+ * config/lang/<locale>.php. Thresholds: rules.thresholds.<id> in config.
  */
 
 declare(strict_types=1);
 
+use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 use SatelliteWP\Xtractor\Reference\EndOfLife;
 use SatelliteWP\Xtractor\Reference\WordPressVersions;
 use SatelliteWP\Xtractor\Rules\Category;
@@ -26,14 +19,45 @@ use SatelliteWP\Xtractor\Rules\Check;
 use SatelliteWP\Xtractor\Rules\Context;
 use SatelliteWP\Xtractor\Rules\Rule;
 use SatelliteWP\Xtractor\Rules\Severity;
+use SatelliteWP\Xtractor\Rules\VulnerabilityMerge;
 
-// Security headers are only a fact about the site when the probe actually saw
-// its public homepage: a 401 (HTTP Basic Auth in front of the site, no
-// credentials configured) returns the auth gate's headers, not the site's —
-// "not public" is unknown, never a missing-header failure (same rule as the
-// exposure checks).
-$headersReadable = static fn (Context $c): bool => $c->probeRan('http')
-    && $c->get('probe.http.auth.required') !== true;
+// Behind HTTP Basic Auth the probe sees the auth gate, not the site: anything
+// read from the homepage response is unknown, never a failure. A bare 401
+// counts too — probe data predating the auth flag only carries the status.
+$homepageReadable = static fn (Context $c): bool => $c->probeRan('http')
+    && $c->get('probe.http.auth.required') !== true
+    && $c->number('probe.http.status_code') !== 401.0;
+
+// A DNS field is null when its lookup failed (unknown), [] when it has no record.
+$dnsKnown = static fn (Context $c, string $field): bool => $c->probeRan('dns')
+    && $c->get("probe.dns.{$field}") !== null;
+
+// No MX at all: the domain sends/receives no mail, which changes the SPF/DMARC advice.
+$hasNoMx = static fn (Context $c): bool => $dnsKnown($c, 'mx') && $c->list('probe.dns.mx') === [];
+
+/**
+ * First $max names plus an "et N autres" count, for truncated lists.
+ *
+ * @param list<string> $names
+ * @return array<string, scalar>
+ */
+$nameList = static function (array $names, int $max = 10): array {
+    $names = array_values(array_unique($names));
+    $more  = count($names) - $max;
+    $data  = ['names' => implode(', ', array_slice($names, 0, $max))];
+
+    return $more > 0 ? $data + ['more' => $more, 'variant' => 'more'] : $data;
+};
+
+// Lighthouse accessibility/SEO audits don't depend on the device: score on the lower of the two.
+$lowestScore = static function (Context $c, string $metric): ?float {
+    $scores = array_filter(
+        [$c->number("probe.pagespeed.desktop.scores.{$metric}"), $c->number("probe.pagespeed.mobile.scores.{$metric}")],
+        static fn (?float $v): bool => $v !== null
+    );
+
+    return $scores === [] ? null : min($scores);
+};
 
 return [
 
@@ -53,7 +77,7 @@ return [
         'check' => static function (Context $c, Rule $rule) {
             $days = $c->number('probe.tls.days_to_expiry');
             if ($days !== null && $days <= 0) {
-                return Check::na(); // covered by A1
+                return Check::na(); // A1 reports an expired certificate
             }
 
             return Check::graded($days, [[15, Severity::High], [(float) $rule->threshold, Severity::Medium]]);
@@ -78,24 +102,22 @@ return [
             if (!is_array($protocols)) {
                 return Check::unknown();
             }
-            $legacy = array_keys(array_filter([
-                'TLS 1.0' => $protocols['tls1_0'] ?? false,
-                'TLS 1.1' => $protocols['tls1_1'] ?? false,
-            ]));
+            $legacy = ['TLS 1.0' => $protocols['tls1_0'] ?? null, 'TLS 1.1' => $protocols['tls1_1'] ?? null];
 
-            return $legacy === [] ? Check::pass('none') : Check::fail(implode(' & ', $legacy));
+            $accepted = array_keys(array_filter($legacy, static fn ($v): bool => $v === true));
+            if ($accepted !== []) {
+                return Check::fail(implode(', ', $accepted));
+            }
+
+            // null = the probe could not negotiate that version locally: not proof it's disabled.
+            return in_array(null, $legacy, true) ? Check::unknown() : Check::pass('none');
         },
     ],
     [
         'id' => 'A8', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) use ($headersReadable) {
-            if (!$headersReadable($c)) {
-                return Check::unknown();
-            }
-
-            return $c->get('probe.http.security_headers.strict-transport-security') !== null
-                ? Check::pass() : Check::fail();
-        },
+        'check' => static fn (Context $c) => $homepageReadable($c)
+            ? ($c->get('probe.http.security_headers.strict-transport-security') !== null ? Check::pass() : Check::fail())
+            : Check::unknown(),
     ],
     [
         'id' => 'A10', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
@@ -106,24 +128,16 @@ return [
     //  B. HTTP HEADERS & NETWORK                                   [EXT]
     // ===================================================================
     [
-        // Offers ONLY gzip and checks whether the server actually returns it
-        // — not whether gzip happened to be the encoding a combined
-        // "gzip, br" request came back with (that reflects the server's
-        // preference between the two, not its capability; see
-        // HttpProbe::compressionSupportCheck()).
+        // Offers gzip alone, so it measures capability, not the server's preference.
         'id' => 'B1', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.gzip')),
     ],
     [
-        // Same idea as B1, offering ONLY brotli.
         'id' => 'B2', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.brotli')),
     ],
     [
-        // HTTP/2 only — split from the old ">= 2" threshold (config/rules.php
-        // history) which counted HTTP/3 as a pass here too. See B4/B5 for the
-        // other two versions.
-        'id' => 'B3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'id' => 'B3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http2')),
     ],
     [
@@ -131,9 +145,8 @@ return [
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http1_1')),
     ],
     [
-        // Advertised via the Alt-Svc header only, not a live QUIC handshake —
-        // see HttpProbe::altSvcAdvertisesHttp3() for why.
-        'id' => 'B5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        // Read from the Alt-Svc header the site advertises, not a live QUIC handshake.
+        'id' => 'B5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http3_advertised')),
     ],
     [
@@ -143,21 +156,27 @@ return [
             if (!is_array($asset) || ($asset['checked'] ?? false) !== true) {
                 return Check::na();
             }
-            $maxAge = $asset['max_age'] ?? null;
+            $maxAge = (int) ($asset['max_age'] ?? 0);
+            $data   = [
+                'cache_days'     => round($maxAge / 86400, 1),
+                'cache_hours'    => round($maxAge / 3600, 1),
+                'threshold_days' => round((float) $rule->threshold / 86400, 1),
+                'variant'        => $maxAge <= 0 ? 'none' : ($maxAge < 86400 ? 'hours' : 'days'),
+            ];
 
-            return $maxAge === null ? Check::fail(0) : Check::atLeast((float) $maxAge, (float) $rule->threshold);
+            return $maxAge >= (float) $rule->threshold ? Check::pass($maxAge, $data) : Check::fail($maxAge, $data);
         },
     ],
     [
         'id' => 'B7a', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7b', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) use ($headersReadable) {
-            if (!$headersReadable($c)) {
+        'check' => static function (Context $c) use ($homepageReadable) {
+            if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
             $xfo = $c->get('probe.http.security_headers.x-frame-options');
@@ -168,19 +187,19 @@ return [
     ],
     [
         'id' => 'B7c', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
-        'id' => 'B7d', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'id' => 'B7d', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
-        'id' => 'B7e', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static fn (Context $c) => $headersReadable($c)
+        'id' => 'B7e', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
@@ -194,11 +213,11 @@ return [
             foreach (['server', 'x-powered-by'] as $header) {
                 $value = $c->string("probe.http.fingerprint.{$header}");
                 if ($value !== null && preg_match('/\d+\.\d+/', $value)) {
-                    $leaks[] = "{$header}: {$value}";
+                    $leaks[] = $value;
                 }
             }
 
-            return $leaks === [] ? Check::pass('none') : Check::fail(implode(' ; ', $leaks));
+            return $leaks === [] ? Check::pass('none') : Check::fail(implode(', ', $leaks));
         },
     ],
 
@@ -206,9 +225,9 @@ return [
     //  C. DNS & AVAILABILITY                                       [EXT]
     // ===================================================================
     [
-        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Info,
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'aaaa')) {
                 return Check::unknown();
             }
             $aaaa = $c->list('probe.dns.aaaa');
@@ -218,8 +237,8 @@ return [
     ],
     [
         'id' => 'C2', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'caa')) {
                 return Check::unknown();
             }
             $caa = $c->list('probe.dns.caa');
@@ -230,18 +249,19 @@ return [
     [
         'id' => 'C5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2,
         'check' => static function (Context $c, Rule $rule) {
-            if (($c->bool('probe.http.redirects.loop_detected')) === true) {
-                return Check::fail('loop', [], Severity::High);
+            if ($c->bool('probe.http.redirects.loop_detected') === true) {
+                return Check::fail('loop', ['variant' => 'loop'], Severity::High);
             }
+            $hops = $c->number('probe.http.redirects.hops');
 
-            return Check::atMost($c->number('probe.http.redirects.hops'), (float) $rule->threshold);
+            return $hops === null ? Check::unknown() : Check::atMost($hops, (float) $rule->threshold);
         },
     ],
     [
         'id' => 'C7', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $code = $c->number('probe.http.status_code');
-            if ($code === null) {
+            if ($code === null || !$homepageReadable($c)) {
                 return Check::unknown();
             }
 
@@ -250,9 +270,9 @@ return [
     ],
     [
         'id' => 'C8', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $soft = $c->get('probe.http.soft_404');
-            if (!is_array($soft) || ($soft['checked'] ?? false) !== true) {
+            if (!$homepageReadable($c) || !is_array($soft) || ($soft['checked'] ?? false) !== true) {
                 return Check::unknown();
             }
 
@@ -261,9 +281,9 @@ return [
     ],
     [
         'id' => 'C9', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
-            if (!is_array($robots)) {
+            if (!$homepageReadable($c) || !is_array($robots)) {
                 return Check::unknown();
             }
 
@@ -271,9 +291,12 @@ return [
         },
     ],
     [
-        'id' => 'C9a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static function (Context $c) {
+        'id' => 'C9a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
+            if (!$homepageReadable($c)) {
+                return Check::unknown();
+            }
             if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
                 return Check::na();
             }
@@ -283,16 +306,13 @@ return [
     ],
     [
         'id' => 'C10', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
-            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+            if (!$homepageReadable($c) || !is_array($robots) || ($robots['present'] ?? false) !== true) {
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
-            if ($sitemaps === []) {
-                return Check::fail(0, [], Severity::Info);
-            }
-            if (($robots['sitemap_reachable'] ?? null) === false) {
+            if ($sitemaps === [] || ($robots['sitemap_reachable'] ?? null) === false) {
                 return Check::fail(count($sitemaps), [], Severity::Info);
             }
 
@@ -304,50 +324,46 @@ return [
     //  D. EMAIL DELIVERABILITY (DNS side only)                     [EXT]
     // ===================================================================
     [
-        // "?all" (neutral) and "+all" (pass-all) protect nothing — only
-        // "-all"/"~all" actually constrain who may send as this domain.
-        // "~all" (softfail) counts as a pass, not just "-all" (hardfail):
-        // it is the mechanism generally recommended for SPF specifically,
-        // since forwarding and mailing lists routinely break the sender
-        // check in ways a hard fail would then reject as forged.
+        // "~all" passes like "-all": forwarding routinely breaks SPF, and a hard
+        // fail would then reject legitimate mail. "?all"/"+all" protect nothing.
         'id' => 'D1', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
+            if (!$dnsKnown($c, 'spf')) {
                 return Check::unknown();
             }
             if ($c->bool('probe.dns.spf.present') !== true) {
-                return Check::fail('absent');
+                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
             }
             $record = $c->string('probe.dns.spf.record') ?? '';
             if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
-                return Check::fail('no all mechanism', [], Severity::Medium);
+                return Check::fail('no all', ['variant' => 'no_all'], Severity::Medium);
             }
 
             return in_array($m[1], ['-', '~'], true)
                 ? Check::pass($m[1] . 'all')
-                : Check::fail($m[1] . 'all', [], Severity::Medium);
+                : Check::fail($m[1] . 'all', ['variant' => 'weak'], Severity::Medium);
         },
     ],
     [
         'id' => 'D3', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
+            if (!$dnsKnown($c, 'dmarc')) {
                 return Check::unknown();
             }
             if ($c->bool('probe.dns.dmarc.present') !== true) {
-                return Check::fail('absent');
+                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
             }
-            $policy = $c->string('probe.dns.dmarc.policy');
+            $policy = $c->string('probe.dns.dmarc.policy') ?? 'none';
 
             return in_array($policy, ['quarantine', 'reject'], true)
                 ? Check::pass($policy)
-                : Check::fail($policy ?? 'none', [], Severity::Medium);
+                : Check::fail($policy, ['variant' => 'weak'], Severity::Medium);
         },
     ],
     [
         'id' => 'D4', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
-            if (!$c->probeRan('dns')) {
+        'check' => static function (Context $c) use ($dnsKnown) {
+            if (!$dnsKnown($c, 'mx')) {
                 return Check::unknown();
             }
             $mx = $c->list('probe.dns.mx');
@@ -357,7 +373,7 @@ return [
     ],
 
     // ===================================================================
-    //  W. DOMAIN (WHOIS/RDAP — off-catalogue)                      [EXT]
+    //  W. DOMAIN (RDAP/WHOIS)                                      [EXT]
     // ===================================================================
     [
         'id' => 'W1', 'category' => Category::DOMAIN, 'source' => 'EXT', 'severity' => Severity::High, 'threshold' => 30,
@@ -367,28 +383,25 @@ return [
                 return Check::unknown();
             }
             if ($days < 0) {
-                return Check::fail($days, [], Severity::Critical);
+                return Check::fail($days, ['variant' => 'expired'], Severity::Critical);
             }
 
             return Check::graded($days, [[15, Severity::Critical], [(float) $rule->threshold, Severity::High]]);
         },
     ],
-    // W2/W3: unconditional advisories, not a check against this site's own
-    // data — every extraction carries them the same way it carries every
-    // other DOMAIN finding, so a per-category pastille tally (fed from
-    // findings.json like any other count) counts them without a second,
-    // report-template-only source of "how many blue lines are there".
+    // W2/W3 are standing requests for the client's own confirmation, not
+    // checks of the site's data: always "pass", rendered purple.
     [
-        'id' => 'W2', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info,
+        'id' => 'W2', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info, 'client_action' => true,
         'check' => static fn () => Check::pass(),
     ],
     [
-        'id' => 'W3', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info,
+        'id' => 'W3', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info, 'client_action' => true,
         'check' => static fn () => Check::pass(),
     ],
 
     // ===================================================================
-    //  PS. PERFORMANCE (Lighthouse — off-catalogue)                [EXT]
+    //  PS. PERFORMANCE (Lighthouse / PageSpeed)                    [EXT]
     // ===================================================================
     [
         'id' => 'PS1', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
@@ -400,23 +413,23 @@ return [
     ],
     [
         'id' => 'PS2', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.accessibility'), (float) $rule->threshold),
-    ],
-    [
-        'id' => 'PS2a', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.accessibility'), (float) $rule->threshold),
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'accessibility'), (float) $rule->threshold),
     ],
     [
         'id' => 'PS3', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.seo'), (float) $rule->threshold),
-    ],
-    [
-        'id' => 'PS3a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
-        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.seo'), (float) $rule->threshold),
+        'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'seo'), (float) $rule->threshold),
     ],
     [
         'id' => 'PS4', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2500,
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('probe.pagespeed.mobile.lab.lcp.value'), (float) $rule->threshold),
+        'check' => static function (Context $c, Rule $rule) {
+            $lcp = $c->number('probe.pagespeed.mobile.lab.lcp.value');
+            if ($lcp === null) {
+                return Check::unknown();
+            }
+            $data = ['lcp_s' => round($lcp / 1000, 1), 'threshold_s' => round((float) $rule->threshold / 1000, 1)];
+
+            return $lcp <= (float) $rule->threshold ? Check::pass($lcp, $data) : Check::fail($lcp, $data);
+        },
     ],
 
     // ===================================================================
@@ -441,31 +454,29 @@ return [
         },
     ],
     [
+        // WordPress backports security fixes to older branches, so a branch's
+        // endoflife.date "eol" is not the signal: a missing same-branch patch
+        // (minor_update_version) or wordpress.org's own "insecure" verdict is.
         'id' => 'F2', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
-            $eol     = $c->reference('eol');
             $version = $c->string('payload.wp_version');
-            if (!$eol instanceof EndOfLife || $version === null) {
+            if ($version === null) {
                 return Check::unknown();
             }
-            $status = $eol->eolStatus('wordpress', $version);
-            if ($status === null) {
-                return Check::unknown();
-            }
-            [$isEol, $date] = $status;
-            if ($isEol) {
-                return Check::fail($version, ['eol_date' => $date]); // outdated branch, no longer patched — not a confirmed vulnerability
+            $minor = (string) ($c->get('payload.core_update.minor_update_version') ?? '');
+            if ($minor !== '') {
+                return Check::fail($version, ['available' => $minor]);
             }
 
-            // minor_update_version, not available_version: the latter is
-            // update_core's first offer, which is also filled for a new major
-            // release — not a missing security patch on this branch.
-            $minor = $c->get('payload.core_update.minor_update_version');
-            if ($minor !== null && $minor !== '') {
-                return Check::fail($version, ['eol_date' => $date, 'available' => (string) $minor]);
+            $wpVersions = $c->reference('wordpress_versions');
+            $verdict    = $wpVersions instanceof WordPressVersions ? ($wpVersions->all()[$version] ?? null) : null;
+            if ($verdict === 'insecure') {
+                return Check::fail($version, ['variant' => 'insecure']);
             }
 
-            return Check::pass($version, ['eol_date' => $date]);
+            return $verdict === null && !is_array($c->get('payload.core_update'))
+                ? Check::unknown()
+                : Check::pass($version);
         },
     ],
     [
@@ -481,15 +492,14 @@ return [
                 return Check::unknown();
             }
             [$isEol, $date] = $status;
+            $data = $date === null ? ['variant' => 'no_date'] : ['eol_date' => $date];
 
-            return $isEol
-                ? Check::fail($version, ['eol_date' => $date])
-                : Check::pass($version, ['eol_date' => $date]);
+            return $isEol ? Check::fail($version, $data) : Check::pass($version, $data);
         },
     ],
     [
-        'id' => 'F4', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 0,
-        'check' => static function (Context $c) {
+        'id' => 'F4', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             if ($plugins === []) {
                 return Check::unknown();
@@ -498,26 +508,28 @@ return [
             if ($outdated === []) {
                 return Check::pass(0);
             }
-            $names = array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated);
 
-            return Check::fail(count($outdated), ['names' => implode(', ', array_slice($names, 0, 10))]);
+            return Check::fail(count($outdated), $nameList(array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated)));
         },
     ],
     [
         'id' => 'F5', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($nameList) {
             $themes = $c->list('payload.themes');
             if ($themes === []) {
                 return Check::unknown();
             }
-            $outdated = array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version']));
+            $outdated = array_values(array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version'])));
+            if ($outdated === []) {
+                return Check::pass(0);
+            }
 
-            return $outdated === [] ? Check::pass(0) : Check::fail(count($outdated));
+            return Check::fail(count($outdated), $nameList(array_map(static fn (array $t): string => (string) ($t['name'] ?? '?'), $outdated)));
         },
     ],
     [
         'id' => 'F7', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             $php     = $c->string('payload.php.version');
             $wp      = $c->string('payload.wp_version');
@@ -537,9 +549,147 @@ return [
                 }
             }
 
-            return $incompatible === []
-                ? Check::pass(0)
-                : Check::fail(count($incompatible), ['names' => implode(', ', $incompatible)]);
+            return $incompatible === [] ? Check::pass(0) : Check::fail(count($incompatible), $nameList($incompatible));
+        },
+    ],
+    [
+        // Only speaks to software hosted on wp.org: premium/custom items
+        // (on_wporg false) or ones this run couldn't fetch are skipped.
+        'id' => 'F8', 'category' => Category::UPDATES, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 365,
+        'check' => static function (Context $c, Rule $rule) use ($nameList) {
+            if (!$c->probeRan('wporg')) {
+                return Check::unknown();
+            }
+            $wporgPlugins = (array) $c->get('probe.wporg.plugins', []);
+            $wporgThemes  = (array) $c->get('probe.wporg.themes', []);
+            $cutoff       = time() - ((int) $rule->threshold) * 86400;
+            $checked      = 0;
+            $abandoned    = [];
+
+            $scan = static function (array $items, string $type, array $wporgData) use (&$checked, &$abandoned, $cutoff): void {
+                foreach ($items as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $slug  = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
+                    $entry = $wporgData[$slug] ?? null;
+                    if (!is_array($entry) || empty($entry['on_wporg']) || empty($entry['last_updated'])) {
+                        continue;
+                    }
+                    $checked++;
+                    $updatedAt = strtotime((string) $entry['last_updated']);
+                    if ($updatedAt !== false && $updatedAt < $cutoff) {
+                        $abandoned[] = (string) ($item['name'] ?? $slug);
+                    }
+                }
+            };
+            $scan($c->list('payload.plugins'), 'plugin', $wporgPlugins);
+            $scan($c->list('payload.themes'), 'theme', $wporgThemes);
+
+            if ($checked === 0) {
+                return Check::unknown();
+            }
+
+            return $abandoned === [] ? Check::pass(0) : Check::fail(count($abandoned), $nameList($abandoned));
+        },
+    ],
+    [
+        // Counted once per vulnerability across both detectors, matched by CVE.
+        'id' => 'F10', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::High,
+        'check' => static function (Context $c) use ($nameList) {
+            $bvKnown = $c->number('probe.blogvault.vulnerabilities_total') !== null;
+            $wfKnown = $c->number('probe.wordfence.vulnerabilities_total') !== null;
+            if (!$bvKnown && !$wfKnown) {
+                return Check::unknown();
+            }
+            $summary = VulnerabilityMerge::siteSummary(
+                $bvKnown ? $c->probeData('blogvault') : null,
+                $wfKnown ? $c->probeData('wordfence') : null,
+                (array) ($c->reference('ignored_vulnerabilities') ?? []),
+            );
+            if ($summary['total'] === 0) {
+                return Check::pass(0);
+            }
+
+            return Check::fail($summary['total'], ['components' => count($summary['components'])] + $nameList($summary['components']));
+        },
+    ],
+    [
+        // Auto-update policy: informational — a maintained site may update manually on purpose.
+        'id' => 'F12', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Info,
+        'check' => static function (Context $c) {
+            $constants = $c->get('payload.constants');
+            if (!is_array($constants)) {
+                return Check::unknown();
+            }
+            $data = [
+                'plugins_auto'  => count($c->list('payload.auto_update_plugins')),
+                'plugins_total' => count($c->list('payload.plugins')),
+            ];
+            if ($c->constant('DISALLOW_FILE_MODS') === true) {
+                return Check::fail('file_mods', $data + ['variant' => 'file_mods']);
+            }
+            if ($c->constant('AUTOMATIC_UPDATER_DISABLED') === true) {
+                return Check::fail('all_disabled', $data + ['variant' => 'all_disabled']);
+            }
+            $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
+            if ($core === false || $core === 'false') {
+                return Check::fail('core_disabled', $data);
+            }
+
+            return $core === true || $core === 'true'
+                ? Check::pass('all', $data + ['variant' => 'all'])
+                : Check::pass('minor', $data);
+        },
+    ],
+    [
+        // Inactive code stays reachable on disk. Exempt: the active theme's
+        // parent, and one default theme WordPress falls back to.
+        'id' => 'F13', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) use ($nameList) {
+            $plugins = $c->list('payload.plugins');
+            $themes  = $c->list('payload.themes');
+            if ($plugins === [] && $themes === []) {
+                return Check::unknown();
+            }
+            // Per-site activation can't tell whether another network site uses it.
+            if ($c->bool('payload.is_multisite') === true) {
+                return Check::na();
+            }
+
+            $unused = [];
+            foreach ($plugins as $plugin) {
+                if (is_array($plugin) && empty($plugin['active']) && empty($plugin['network_activated'])) {
+                    $unused[] = (string) ($plugin['name'] ?? '?');
+                }
+            }
+
+            $required = [];
+            foreach ($themes as $slug => $theme) {
+                if (is_array($theme) && !empty($theme['active'])) {
+                    $required[] = (string) ($theme['slug'] ?? $slug);
+                    $required[] = (string) ($theme['template'] ?? '');
+                    $required[] = (string) ($theme['parent_slug'] ?? '');
+                }
+            }
+            $keepsDefault = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
+
+            foreach ($themes as $slug => $theme) {
+                if (!is_array($theme) || !empty($theme['active'])) {
+                    continue;
+                }
+                $themeSlug = (string) ($theme['slug'] ?? $slug);
+                if (in_array($themeSlug, $required, true)) {
+                    continue;
+                }
+                if (!$keepsDefault && str_starts_with($themeSlug, 'twenty')) {
+                    $keepsDefault = true; // the one fallback theme worth keeping
+                    continue;
+                }
+                $unused[] = (string) ($theme['name'] ?? $themeSlug);
+            }
+
+            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
         },
     ],
 
@@ -554,27 +704,21 @@ return [
                 return Check::unknown();
             }
             $shown = $c->string('payload.php.memory_limit');
-            $mb    = $bytes / 1048576;
+            if ($bytes === INF) {
+                return Check::pass($shown, ['variant' => 'unlimited']);
+            }
+            $data = ['memory_mb' => (int) round($bytes / 1048576)];
 
             return match (true) {
-                $mb < 64 || $mb > 1024 => Check::fail($shown, [], Severity::High), // far outside the range
-                $mb < 256 || $mb > 512 => Check::fail($shown),                    // outside the sweet spot, not extreme
-                default                 => Check::pass($shown),                    // 256–512 MB
+                $bytes < 64 * 1048576  => Check::fail($shown, $data, Severity::High),
+                $bytes < 256 * 1048576 => Check::fail($shown, $data),
+                default                => Check::pass($shown, $data),
             };
         },
     ],
     [
-        // post_max_size / upload_max_filesize cohérents (docblock G3): the
-        // two should match — PHP silently caps an upload at whichever is
-        // smaller, so a mismatch just means one of the two numbers is dead
-        // weight — and the effective limit (the smaller of the two) should
-        // clear a real working threshold, or a client uploading a normal
-        // media file/backup risks a silent transmission failure. Compared in
-        // bytes, not as raw ini strings ("64M" == "64m" == "67108864").
-        // post_max_size 0 disables PHP's POST limit, so it is unlimited, not
-        // a mismatch — the effective limit is then upload_max_filesize alone
-        // (payload.php.upload_max_size is not used: the plugin's own min()
-        // turns that same 0 into a 0-byte limit).
+        // PHP caps an upload at the smaller of the two limits, so they should
+        // match and clear a working size. post_max_size 0 means unlimited.
         'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
         'check' => static function (Context $c, Rule $rule) {
             $postRaw   = $c->string('payload.php.post_max_size');
@@ -588,11 +732,19 @@ return [
                 $post = INF;
             }
             $observed  = "{$postRaw} / {$uploadRaw}";
-            $mismatch  = $post !== INF && $post != $upload;
             $effective = min($post, $upload);
-            $tooSmall  = $effective / 1048576 < (float) $rule->threshold;
+            if ($effective === INF) {
+                return Check::pass($observed, ['variant' => 'unlimited']);
+            }
+            $data = ['effective_mb' => (int) round($effective / 1048576)];
 
-            return ($mismatch || $tooSmall) ? Check::fail($observed) : Check::pass($observed);
+            if ($post !== INF && $post != $upload) {
+                return Check::fail($observed, $data + ['variant' => 'mismatch']);
+            }
+
+            return $effective / 1048576 < (float) $rule->threshold
+                ? Check::fail($observed, $data)
+                : Check::pass($observed, $data);
         },
     ],
     [
@@ -607,10 +759,9 @@ return [
                 return Check::unknown();
             }
             $present  = array_map('strtolower', array_map('strval', $extensions));
-            $required = ['curl', 'mbstring', 'openssl', 'zip', 'dom', 'xml', 'json'];
-            $missing  = array_values(array_diff($required, $present));
+            $missing  = array_values(array_diff(['curl', 'mbstring', 'openssl', 'zip', 'dom', 'xml', 'json'], $present));
             if (!array_intersect(['gd', 'imagick'], $present)) {
-                $missing[] = 'gd|imagick';
+                $missing[] = 'gd/imagick';
             }
 
             return $missing === [] ? Check::pass('all') : Check::fail(implode(', ', $missing));
@@ -642,10 +793,10 @@ return [
             if (!$eol instanceof EndOfLife || $version === null || $type === '') {
                 return Check::unknown();
             }
-            $product = match (true) {
-                str_contains($type, 'maria') => 'mariadb',
-                str_contains($type, 'mysql') => 'mysql',
-                default                      => null,
+            [$product, $label] = match (true) {
+                str_contains($type, 'maria') => ['mariadb', 'MariaDB'],
+                str_contains($type, 'mysql') => ['mysql', 'MySQL'],
+                default                      => [null, null],
             };
             if ($product === null) {
                 return Check::unknown();
@@ -655,14 +806,15 @@ return [
                 return Check::unknown();
             }
             [$isEol, $date] = $status;
-            $branch = $product . ' ' . EndOfLife::branch($version);
+            $data = $date === null ? ['variant' => 'no_date'] : ['eol_date' => $date];
+            $branch = $label . ' ' . EndOfLife::branch($version);
 
-            return $isEol
-                ? Check::fail($branch, ['eol_date' => $date])
-                : Check::pass($version, ['eol_date' => $date]);
+            return $isEol ? Check::fail($branch, $data) : Check::pass($branch, $data);
         },
     ],
     [
+        // InnoDB's data_free is mostly reusable tablespace, not harmful
+        // fragmentation: informational housekeeping only.
         'id' => 'H4', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 10485760,
         'check' => static function (Context $c, Rule $rule) {
             $tables = $c->list('payload.database.tables');
@@ -670,14 +822,24 @@ return [
                 return Check::unknown();
             }
             $overhead = array_sum(array_map(static fn ($t): float => is_array($t) ? (float) ($t['overhead_bytes'] ?? 0) : 0.0, $tables));
+            $total    = $c->number('payload.database.total_bytes');
+            $data     = ['overhead_mb' => round($overhead / 1048576, 1)];
+            if ($total !== null && $total > 0) {
+                $data['percent'] = (int) round($overhead / $total * 100);
+            } else {
+                $data['variant'] = 'no_total';
+            }
 
-            return Check::atMost($overhead, (float) $rule->threshold);
+            $significant = $overhead >= (float) $rule->threshold && ($data['percent'] ?? 100) >= 20;
+
+            return $significant ? Check::fail($overhead, $data) : Check::pass($overhead, $data);
         },
     ],
     [
         'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
     ],
+
     // ===================================================================
     //  I. AUTOLOAD / OBJECT CACHE                                 [DATA]
     // ===================================================================
@@ -688,16 +850,18 @@ return [
             if ($bytes === null) {
                 return Check::unknown();
             }
+            $data = ['size_kb' => (int) round($bytes / 1024)];
 
             return match (true) {
-                $bytes < 512000   => Check::pass($bytes),                       // < 500 KB
-                $bytes < 2097152  => Check::fail($bytes, [], Severity::Medium), // 500 KB – 2 MB
-                default           => Check::fail($bytes),                      // ≥ 2 MB — red (rule's own default severity)
+                $bytes < 512000  => Check::pass($bytes, $data),
+                $bytes < 2097152 => Check::fail($bytes, $data, Severity::Medium),
+                default          => Check::fail($bytes, $data),
             };
         },
     ],
     [
-        'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Medium,
+        // Worth it for busy or transactional sites, optional on a brochure site.
+        'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Info,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),
     ],
 
@@ -714,12 +878,13 @@ return [
             if ($overdue <= 0) {
                 return Check::pass(0);
             }
+            // overdue_minutes is often absent: grade on the count alone then.
             $minutes = $c->number('payload.cron.overdue_minutes');
-            $mild    = $overdue <= 10 && $minutes !== null && $minutes <= 15;
+            $mild    = $overdue <= 10 && ($minutes === null || $minutes <= 15);
 
             return $mild
-                ? Check::fail((int) $overdue, ['overdue_minutes' => (int) $minutes], Severity::Medium)
-                : Check::fail((int) $overdue, ['overdue_minutes' => $minutes]); // red: rule's own default severity
+                ? Check::fail((int) $overdue, ['variant' => 'mild'], Severity::Medium)
+                : Check::fail((int) $overdue);
         },
     ],
     [
@@ -740,14 +905,12 @@ return [
             if ($debug === false) {
                 return Check::pass(false);
             }
+            // Debug on is acceptable only when it logs to a file confirmed private.
+            $sensitiveFiles = $c->get('probe.http.exposure.sensitive_files');
+            $logsToFile     = $c->get('payload.constants.WP_DEBUG_LOG') === true;
+            $logIsPrivate   = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
 
-            $sensitiveFiles        = $c->get('probe.http.exposure.sensitive_files');
-            $loggingToDefaultPath  = $c->get('payload.constants.WP_DEBUG_LOG') === true;
-            $defaultLogNotExposed  = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
-
-            return ($loggingToDefaultPath && $defaultLogNotExposed)
-                ? Check::pass(true, ['debug_log' => 'not public'])
-                : Check::fail(true);
+            return ($logsToFile && $logIsPrivate) ? Check::pass(true, ['variant' => 'private_log']) : Check::fail(true);
         },
     ],
     [
@@ -762,22 +925,26 @@ return [
         },
     ],
     [
-        'id' => 'K3', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High,
+        // Informational: when the default-path log is actually reachable, X4 carries the red.
+        'id' => 'K3', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Info,
         'check' => static function (Context $c) {
             $debug = $c->constant('WP_DEBUG');
             if ($debug === null) {
                 return Check::unknown();
             }
-            if ($debug === false) {
-                return Check::na();
-            }
-
             $debugLog = $c->get('payload.constants.WP_DEBUG_LOG');
-            if ($debugLog === null || $debugLog === 'N/A' || $debugLog === false || $debugLog === '') {
+            if ($debug === false || $debugLog === null || $debugLog === 'N/A' || $debugLog === false || $debugLog === '') {
                 return Check::na();
             }
+            if ($debugLog !== true) {
+                return Check::pass('custom');
+            }
+            $found = $c->get('probe.http.exposure.sensitive_files');
+            if (!is_array($found)) {
+                return Check::unknown();
+            }
 
-            return $debugLog === true ? Check::fail(true) : Check::pass((string) $debugLog);
+            return in_array('wp-content/debug.log', $found, true) ? Check::fail('default') : Check::pass('default');
         },
     ],
     [
@@ -785,8 +952,21 @@ return [
         'check' => static fn (Context $c) => Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
     ],
     [
+        // A site-wide HTTPS redirect already protects the admin login.
         'id' => 'K6', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isTrue($c->constant('FORCE_SSL_ADMIN')),
+        'check' => static function (Context $c) {
+            $forced = $c->constant('FORCE_SSL_ADMIN');
+            if ($forced === true) {
+                return Check::pass(true);
+            }
+            $siteHttps = $c->bool('probe.http.redirects.forces_https') === true
+                && str_starts_with((string) $c->string('payload.home_url'), 'https://');
+            if ($siteHttps) {
+                return Check::pass(false, ['variant' => 'site_https']);
+            }
+
+            return $forced === null ? Check::unknown() : Check::fail(false);
+        },
     ],
 
     // ===================================================================
@@ -801,24 +981,18 @@ return [
                 return Check::unknown();
             }
             $percent  = round($free / $total * 100, 1);
-            $lowSpace = $percent < 20 || $free < 2147483648; // 20% or 2 GiB
-            // A plain number, not "X GB" — findings.json stays language-
-            // neutral (no unit baked in here); the unit word lives in each
-            // lang template alongside {free_gb}, same as every other
-            // placeholder.
-            $freeGb = round($free / 1073741824, 1);
+            $lowSpace = $percent < 20 || $free < 2147483648; // under 20% or 2 GiB
+            $data     = ['free_gb' => round($free / 1073741824, 1)];
 
-            return $lowSpace
-                ? Check::fail($percent, ['free_bytes' => $free, 'free_gb' => $freeGb], Severity::Medium)
-                : Check::pass($percent, ['free_gb' => $freeGb]);
+            return $lowSpace ? Check::fail($percent, $data, Severity::Medium) : Check::pass($percent, $data);
         },
     ],
     [
         'id' => 'L4', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
     ],
-    // L5 (core files writable in production) — disabled for now, kept here
-    // rather than deleted so it's a one-line uncomment to bring back.
+    // L5 (core files writable in production) is disabled: most managed hosts
+    // keep core writable by design so WordPress can update itself.
     // [
     //     'id' => 'L5', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
     //     'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
@@ -853,14 +1027,10 @@ return [
     ],
 
     // ===================================================================
-    //  N. CONTENU                                                  [DATA]
+    //  N. CONTENT                                                 [DATA]
     // ===================================================================
     [
-        // Only 'post' is ever a full wp_count_posts()-shaped breakdown in
-        // real payloads — page_count comes through as a bare integer on
-        // every real extraction checked, so trash on pages cannot be read
-        // here yet (the plugin's collector would need to report page_count
-        // the same shape as posts_count to close that gap).
+        // posts_count is the only full per-status breakdown; page_count is a bare integer.
         'id' => 'N2', 'category' => Category::CONTENT, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 20,
         'check' => static function (Context $c, Rule $rule) {
             $posts = $c->get('payload.posts_count');
@@ -889,12 +1059,10 @@ return [
     ],
 
     // ===================================================================
-    //  BV. BLOGVAULT — HACKED STATUS, VULNERABILITIES                [EXT]
+    //  BV. BLOGVAULT — MALWARE SCANNER                             [EXT]
     // ===================================================================
-    // BlogVault is the single agreed source for these (SOURCE 12). Every rule
-    // returns unknown when the site is not under BlogVault management, so an
-    // unmanaged site never looks like a failing one.
     [
+        // Unknown when the site isn't under BlogVault management.
         'id' => 'BV1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critical,
         'check' => static function (Context $c) {
             $status = $c->string('probe.blogvault.scanner.status');
@@ -908,60 +1076,11 @@ return [
                 : Check::pass($status);
         },
     ],
-    [
-        'id' => 'BV2', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critical,
-        'check' => static function (Context $c) {
-            $total = $c->number('probe.blogvault.vulnerabilities_total');
-            if ($total === null) {
-                return Check::unknown();
-            }
-            if ($total <= 0) {
-                return Check::pass(0);
-            }
-
-            $components = (int) ($c->number('probe.blogvault.plugins.vulnerable_count') ?? 0)
-                + (int) ($c->number('probe.blogvault.themes.vulnerable_count') ?? 0)
-                + (($c->bool('probe.blogvault.core.vulnerable') === true) ? 1 : 0);
-
-            return Check::fail((int) $total, ['components' => $components]);
-        },
-    ],
 
     // ===================================================================
-    //  WF. WORDFENCE INTELLIGENCE — second, independent detector       [EXT]
+    //  X. EXPOSURE — passive attack-surface checks                 [EXT]
     // ===================================================================
-    // BV2 already covers BlogVault's vulnerability signal. WF1 is not a
-    // duplicate: it is sourced from an entirely separate database (Wordfence
-    // Intelligence, matched locally against the site's own plugin/theme
-    // versions — see WordfenceProbe), so it catches gaps in either single
-    // source. A site can fail BV2, WF1, both, or neither.
-    [
-        'id' => 'WF1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critical,
-        'check' => static function (Context $c) {
-            $total = $c->number('probe.wordfence.vulnerabilities_total');
-            if ($total === null) {
-                return Check::unknown();
-            }
-            if ($total <= 0) {
-                return Check::pass(0);
-            }
-
-            $components = (int) ($c->number('probe.wordfence.plugins.vulnerable_count') ?? 0)
-                + (int) ($c->number('probe.wordfence.themes.vulnerable_count') ?? 0)
-                + (($c->count('probe.wordfence.core.vulnerabilities') ?? 0) > 0 ? 1 : 0);
-
-            return Check::fail((int) $total, ['components' => $components]);
-        },
-    ],
-
-    // ===================================================================
-    //  X. EXPOSURE — passive attack-surface probes                    [EXT]
-    // ===================================================================
-    // Not from the source document (no section letter to inherit): a new,
-    // distinct prefix, same reasoning as W*/PS* above. Every check here is a
-    // request an anonymous visitor could already make — this only automates
-    // the well-known targets (HttpProbe::exposureCheck()) so an analyst does
-    // not have to run a separate scanner for the basics.
+    // Every check is a request any anonymous visitor could make.
     [
         'id' => 'X1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.xmlrpc_enabled')),
@@ -977,9 +1096,7 @@ return [
     [
         'id' => 'X4', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critical,
         'check' => static function (Context $c) {
-            // null (skipped — the site has a soft-404 catch-all, see
-            // HttpProbe::exposureCheck()) must read as unknown, never as a
-            // clean pass: every path would have answered 200 regardless.
+            // null = not checked (soft-404 catch-all or auth gate): never a clean pass.
             $found = $c->get('probe.http.exposure.sensitive_files');
             if (!is_array($found)) {
                 return Check::unknown();

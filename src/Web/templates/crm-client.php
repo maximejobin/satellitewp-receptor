@@ -30,12 +30,7 @@ $unassigned = array_values(array_filter($subscriptions, static fn (array $s): bo
 <?php endif; ?>
 
 <?php
-// Explicit column 1 / column 2 split, NOT the section()/kv-cols-2
-// single-table pattern used everywhere else on this page — see the CSS
-// comment on .kv-cols-2. section() always wraps its rows in one <table>, and
-// a browser will not fragment a <table> across CSS multi-column layout, so
-// this card is built directly instead: a normal card shell around two
-// separate <table class="kv"> columns.
+// Two separate tables, not section(): a <table> never splits across CSS columns.
 $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $client['id'], 'Edit');
 ?>
 <section class="card info-card">

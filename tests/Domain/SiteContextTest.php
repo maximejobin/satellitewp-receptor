@@ -16,17 +16,15 @@ final class SiteContextTest extends TestCase
         return [
             'bare domain unchanged'                    => ['example.com', 'example.com'],
             'www stripped like any other subdomain'    => ['www.example.com', 'example.com'],
-            // The real bug: a hosting panel's multi-level vhost alias (e.g.
-            // RunCloud's "<app>.<n>.<hosting-domain>") was queried against
-            // WHOIS/RDAP verbatim, which always comes back empty — that host
-            // was never registered as its own domain, only the base one was.
-            'multi-level subdomain reduced to eTLD+1'  => ['latest.1.webint.ca', 'webint.ca'],
+            'multi-level subdomain reduced to eTLD+1'  => ['latest.1.example.ca', 'example.ca'],
             'deeply nested subdomain'                  => ['a.b.c.d.example.com', 'example.com'],
-            // Two-label public suffixes: naive "last two labels" would
-            // wrongly return the suffix itself ("co.uk").
             'two-label suffix (co.uk)'                 => ['www.example.co.uk', 'example.co.uk'],
             'two-label suffix, deeper subdomain'       => ['shop.blog.example.co.uk', 'example.co.uk'],
             'two-label suffix (com.au)'                => ['example.com.au', 'example.com.au'],
+            'provincial suffix (qc.ca)'                => ['www.exemple.qc.ca', 'exemple.qc.ca'],
+            'provincial suffix (on.ca)'                => ['shop.example.on.ca', 'example.on.ca'],
+            'three-label suffix (gouv.qc.ca)'          => ['www.ministere.gouv.qc.ca', 'ministere.gouv.qc.ca'],
+            'the suffix alone stays as-is'             => ['qc.ca', 'qc.ca'],
             'empty host stays empty'                   => ['', ''],
             'single-label host unchanged'              => ['localhost', 'localhost'],
         ];
@@ -41,12 +39,12 @@ final class SiteContextTest extends TestCase
     public function testFromExtractionPayloadUsesRegistrableDomainNotHost(): void
     {
         $context = SiteContext::fromExtractionPayload('site-1', [
-            'home_url' => 'https://latest.1.webint.ca',
-            'site_url' => 'https://latest.1.webint.ca',
+            'home_url' => 'https://latest.1.example.ca',
+            'site_url' => 'https://latest.1.example.ca',
         ]);
 
-        $this->assertSame('latest.1.webint.ca', $context->host, 'host stays the full hostname (DNS A/AAAA need it)');
-        $this->assertSame('webint.ca', $context->registrableDomain, 'RDAP/WHOIS/NS/MX need the registered domain');
+        $this->assertSame('latest.1.example.ca', $context->host, 'host stays the full hostname (DNS A/AAAA need it)');
+        $this->assertSame('example.ca', $context->registrableDomain, 'RDAP/WHOIS/NS/MX need the registered domain');
     }
 
     public function testFromExtractionPayloadCarriesTheGivenLocale(): void

@@ -50,9 +50,7 @@
           order: [[0, 'desc']],
           pageLength: 50,
           dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>',
-          // "Search by version only" — every other column is excluded from
-          // the global search box (an explicit list, not '_all' + an
-          // override, which is order-of-application-fragile).
+          // Search the version column only (explicit list; '_all' + override is order-fragile).
           columnDefs: [{ targets: [1, 2, 3], searchable: false }]
         });
         initExplicitSearch('#wp-versions', dt);

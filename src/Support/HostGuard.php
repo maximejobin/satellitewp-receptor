@@ -7,6 +7,15 @@ namespace SatelliteWP\Xtractor\Support;
 final class HostGuard
 {
     /**
+     * host => vetted IP, for the process lifetime. The cached address is both
+     * the one checked and the one pinned, so this never reopens a DNS-rebinding
+     * window. Failures are not cached: a transient lookup error is retried.
+     *
+     * @var array<string, string>
+     */
+    private static array $resolved = [];
+
+    /**
      * True when every address a hostname resolves to (or the address itself,
      * if $host is already an IP literal) is publicly routable. False for an
      * unresolvable host — refusing to guess is safer than assuming "fine".
@@ -43,18 +52,24 @@ final class HostGuard
             return self::selectPublicIp([$literal]);
         }
 
-        $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-        if (!is_array($records)) {
-            return null;
+        $key = strtolower($host);
+        if (isset(self::$resolved[$key])) {
+            return self::$resolved[$key];
         }
 
-        $ips = [];
-        foreach ($records as $record) {
-            $ip = $record['ip'] ?? $record['ipv6'] ?? null;
+        $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+        $ips     = [];
+        foreach (is_array($records) ? $records : [] as $record) {
+            $ip    = $record['ip'] ?? $record['ipv6'] ?? null;
             $ips[] = is_string($ip) ? $ip : '';
         }
 
-        return self::selectPublicIp($ips);
+        $ip = self::selectPublicIp($ips);
+        if ($ip !== null) {
+            self::$resolved[$key] = $ip;
+        }
+
+        return $ip;
     }
 
     /**

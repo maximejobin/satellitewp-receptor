@@ -9,8 +9,7 @@ use SatelliteWP\Xtractor\Tests\TestCase;
 
 /**
  * KeyStore::getHttpAuth()/setHttpAuth() — the per-site HTTP Basic Auth
- * credentials HttpProbe sends when a site is paired behind Basic Auth
- * (2026-08-30, user: "ça doit être paramétrable au niveau du site").
+ * credentials HttpProbe sends when a site is paired behind Basic Auth.
  */
 final class KeyStoreTest extends TestCase
 {

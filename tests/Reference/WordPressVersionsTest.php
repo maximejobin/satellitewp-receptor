@@ -40,9 +40,7 @@ final class WordPressVersionsTest extends TestCase
 
     public function testMajorVersionsBehindCountsBranchesNotPointReleases(): void
     {
-        // 7.0.4 installed, 7.1 latest, one point release apart on 7.0's own
-        // branch (7.1) — but still only ONE branch behind (7.0 -> 7.1), the
-        // distinction rule F1 now cares about (2026-09-07).
+        // 7.0.4 installed, 7.1 latest: one branch behind, whatever the point releases.
         $wp = $this->seed(['6.9' => '', '7.0.4' => '', '7.1' => 'latest']);
 
         $this->assertSame(1, $wp->majorVersionsBehind('7.0.4'));

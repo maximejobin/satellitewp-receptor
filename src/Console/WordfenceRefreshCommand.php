@@ -26,17 +26,9 @@ final class WordfenceRefreshCommand extends Command
     }
 
     /**
-     * Each feed variant is a single JSON document of 78-117 MB, and decoding
-     * one costs several times that in PHP arrays. The usual CLI default of
-     * 128M dies with an opaque "Allowed memory size exhausted" fatal, so the
-     * command raises its own ceiling rather than depending on the caller
-     * remembering `-d memory_limit=…`. An already-higher (or unlimited)
-     * setting is left alone.
-     *
-     * Sized from a real measurement, not a guess: decoding the 78 MB scanner
-     * feed peaks at 284 MB and still holds 274 MB once its index is built —
-     * and refresh() then decodes production (~1.5x larger) while holding that.
-     * 512M was measurably too tight.
+     * Each feed is a ~100 MB JSON document decoded whole, then the second is
+     * decoded while the first's index is held — the 128M CLI default dies and
+     * 512M is too tight. A higher or unlimited setting is left alone.
      */
     private const string MIN_MEMORY_LIMIT = '1G';
 
@@ -60,12 +52,7 @@ final class WordfenceRefreshCommand extends Command
             $output->writeln("<comment>{$error}</comment>");
         }
 
-        // Keep the SQLite cross-reference index in step with the same cadence
-        // as the cache file it mirrors — whatever the file holds now (fresh
-        // this run, or carried forward from a partial failure) is what the
-        // index should reflect. The catalogue side is re-synced here too,
-        // piggy-backing on this already-scheduled daily job rather than
-        // adding a second cron entry for it.
+        // Rebuild the SQLite index from whatever the cache now holds, catalogue side included.
         $vulnCount    = $this->app->catalogIndex()->rebuildVulnerabilities(
             (string) $this->app->config->get('data_dir') . '/reference/wordfence.json'
         );

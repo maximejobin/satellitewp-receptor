@@ -10,17 +10,10 @@ use SatelliteWP\Xtractor\Domain\SiteContext;
 use SatelliteWP\Xtractor\Reference\WordfenceIndex;
 
 /**
- * Cross-references the site's installed core/plugins/themes (from the
- * extraction payload, carried on SiteContext) against the local Wordfence
- * Intelligence index — a second, independent vulnerability source alongside
- * BlogVault. Unlike every other probe, this one makes no network call: the
- * index is a daily-refreshed local cache (see WordfenceIndex::refresh(),
- * `wordfence:refresh`), because the upstream feed is a ~100+ MB full dump with
- * a strict rate limit, not a per-site API.
- *
- * Output deliberately mirrors BlogVaultProbe's core/plugins/themes shape so
- * the two can be merged for display (merge_vulnerabilities() in
- * src/Web/helpers.php) without a translation step.
+ * Matches the site's core/plugins/themes against the local Wordfence index —
+ * no network call: the upstream feed is a rate-limited full dump, cached
+ * daily by `wordfence:refresh`. Output mirrors BlogVaultProbe's shape so both
+ * sources merge without translation.
  */
 final class WordfenceProbe extends AbstractProbe
 {
@@ -89,9 +82,6 @@ final class WordfenceProbe extends AbstractProbe
 
         foreach (['plugin' => $site->plugins, 'theme' => $site->themes] as $type => $items) {
             foreach ($items as $item) {
-                if (!is_array($item)) {
-                    continue;
-                }
                 $slug = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
                 if ($slug !== '') {
                     $keys[] = strtolower($type) . ':' . strtolower($slug);
@@ -105,11 +95,9 @@ final class WordfenceProbe extends AbstractProbe
     /** @return array<string, mixed> */
     private static function matchCore(WordfenceIndex $index, ?string $wpVersion): array
     {
-        $vulns = $wpVersion !== null ? $index->vulnerabilitiesFor('core', 'wordpress', $wpVersion) : [];
-
         return [
             'current_version' => $wpVersion,
-            'vulnerabilities'  => array_values($vulns),
+            'vulnerabilities' => $index->vulnerabilitiesFor('core', 'wordpress', $wpVersion),
         ];
     }
 
@@ -124,14 +112,11 @@ final class WordfenceProbe extends AbstractProbe
         $vulnTotal  = 0;
 
         foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $rawSlug = (string) ($item['slug'] ?? '');
-            $slug    = SoftwareCatalog::normalizeSlug($type, $rawSlug);
-            $version = isset($item['version']) ? (string) $item['version'] : null;
+            $slug    = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
+            $version = (string) ($item['version'] ?? '');
 
-            if ($slug === '' || $version === null) {
+            // No version means nothing to match against — never "checked, clean".
+            if ($slug === '' || $version === '') {
                 continue;
             }
 
@@ -145,7 +130,7 @@ final class WordfenceProbe extends AbstractProbe
                 'slug'            => $slug,
                 'name'            => (string) ($item['name'] ?? $slug),
                 'current_version' => $version,
-                'vulnerabilities' => array_values($vulns),
+                'vulnerabilities' => $vulns,
             ];
         }
 

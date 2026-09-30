@@ -159,7 +159,7 @@ final class IndexTest extends TestCase
         $this->assertSame(['20260722T110000Z'], array_column($queued, 'id'));
     }
 
-    /** The status page's (2026-09-03) extraction counts: pending+queued, running, done in the last 24h, error. */
+    /** The status page's extraction counts: pending+queued, running, done in the last 24h, error. */
     public function testStatusCountsBucketsByStatus(): void
     {
         $this->seedExtraction(self::SITE_A, 'e1'); // pending
@@ -186,13 +186,7 @@ final class IndexTest extends TestCase
         $this->assertSame(['pending' => 2, 'running' => 1, 'done_24h' => 1, 'error' => 1], $counts);
     }
 
-    /**
-     * An index.sqlite from before 2026-09-01 still has the old NOT NULL
-     * first_seen/last_seen columns. Opening it must drop them in place (same
-     * upgrade-on-open approach as the earlier database_type/database_version
-     * ADD COLUMN) rather than require a manual index:rebuild, and a row
-     * written under the old schema must survive with its real columns intact.
-     */
+    /** An index built by an older schema is upgraded in place on first open, rows intact. */
     public function testOpeningAPreExistingDatabaseDropsTheOldSeenColumns(): void
     {
         $file = $this->tmpDir . '/legacy-index.sqlite';
@@ -216,10 +210,8 @@ final class IndexTest extends TestCase
 
         $this->assertNotContains('first_seen', $columns);
         $this->assertNotContains('last_seen', $columns);
-        // "name" (the WordPress site_title, once rendered as if it were the
-        // site's own identity — removed 2026-09-10, see the docblock on
-        // migrate()) is dropped by the very same migration mechanism.
         $this->assertNotContains('name', $columns);
+        $this->assertSame(Index::SCHEMA_VERSION, (int) $index->pdo()->query('PRAGMA user_version')->fetchColumn());
 
         $sites = $index->listSites();
         $this->assertCount(1, $sites);
@@ -228,6 +220,30 @@ final class IndexTest extends TestCase
         // Still fully usable afterward.
         $index->upsertSite(self::SITE_B, ['site_url' => 'https://new.test']);
         $this->assertCount(2, $index->listSites());
+    }
+
+    public function testMigrationRunsOnlyOncePerSchemaVersion(): void
+    {
+        $file = $this->tmpDir . '/versioned.sqlite';
+        (new Index($file))->pdo();
+
+        // A column the migration would drop: it must survive a second open,
+        // proving the upgrade steps no longer run once the version is current.
+        $pdo = new PDO('sqlite:' . $file);
+        $pdo->exec('ALTER TABLE sites ADD COLUMN name TEXT');
+        unset($pdo);
+
+        $columns = array_column((new Index($file))->pdo()->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
+        $this->assertContains('name', $columns);
+    }
+
+    public function testListSitesSearchTreatsWildcardsLiterally(): void
+    {
+        $this->index->upsertSite(self::SITE_A, ['site_url' => 'https://a_b.test']);
+        $this->index->upsertSite(self::SITE_B, ['site_url' => 'https://axb.test']);
+
+        $this->assertSame([self::SITE_A], array_column($this->index->listSites('a_b'), 'site_id'));
+        $this->assertSame([], $this->index->listSites('%'));
     }
 
     public function testRebuildFromDataStore(): void

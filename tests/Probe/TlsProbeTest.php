@@ -66,4 +66,28 @@ final class TlsProbeTest extends TestCase
         $this->assertSame('ssl://93.184.216.34:443', TlsProbe::socketTarget('93.184.216.34'));
         $this->assertSame('ssl://[2606:2800:220:1::1]:443', TlsProbe::socketTarget('2606:2800:220:1::1'));
     }
+
+    public function testALegacyProtocolTheServerAcceptsIsReportedTrue(): void
+    {
+        $result = TlsProbe::interpretProtocolResults(['tls1_0' => true, 'tls1_1' => false, 'tls1_2' => true, 'tls1_3' => true], true);
+
+        $this->assertSame(['tls1_0' => true, 'tls1_1' => false, 'tls1_2' => true, 'tls1_3' => true], $result);
+    }
+
+    public function testLegacyProtocolsAreUnknownWhenTheLocalStackCannotSpeakThem(): void
+    {
+        $result = TlsProbe::interpretProtocolResults(['tls1_0' => false, 'tls1_1' => false, 'tls1_2' => true, 'tls1_3' => false], false);
+
+        $this->assertNull($result['tls1_0']);
+        $this->assertNull($result['tls1_1']);
+        $this->assertTrue($result['tls1_2']);
+        $this->assertFalse($result['tls1_3']);
+    }
+
+    public function testAnUnreachableServerYieldsUnknownNeverRefused(): void
+    {
+        $result = TlsProbe::interpretProtocolResults(['tls1_0' => false, 'tls1_1' => false, 'tls1_2' => false, 'tls1_3' => false], true);
+
+        $this->assertSame(['tls1_0' => null, 'tls1_1' => null, 'tls1_2' => null, 'tls1_3' => null], $result);
+    }
 }

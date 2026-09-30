@@ -2,6 +2,7 @@
 /**
  * @var bool $available
  * @var string|null $refreshedAt
+ * @var int $ignoredCount
  */
 ?>
 <h1>Vulnerabilities (Wordfence Intelligence)</h1>
@@ -15,8 +16,22 @@
         (<span class="mono">bin/xtractor wordfence:refresh</span>).</p>
 <?php else: ?>
     <p class="muted">Last refreshed <?= fmt_relative_time($refreshedAt) ?>.</p>
+    <?php if ($ignoredCount > 0): ?>
+        <?= notice('info', '<strong>' . $ignoredCount . ' ' . ($ignoredCount === 1 ? 'vulnerability is' : 'vulnerabilities are') . ' ignored</strong>'
+            . ' — excluded from findings, reports and the extraction page, but still listed here with an '
+            . '<span class="badge badge-muted">Ignored</span> tag. The list lives in '
+            . '<span class="mono">config/config.php</span> (<span class="mono">vulnerabilities.ignored</span>).') ?>
+    <?php endif; ?>
     <div class="search-group">
-    <p class="search"><?= dt_search_box('wf-vulnerabilities') ?></p>
+    <p class="search"><?= dt_search_box('wf-vulnerabilities') ?>
+        <?php if ($ignoredCount > 0): ?>
+            <select id="wf-ignored-filter" aria-label="Ignored vulnerabilities">
+                <option value="">All vulnerabilities</option>
+                <option value="only">Ignored only</option>
+                <option value="hide">Hide ignored</option>
+            </select>
+        <?php endif; ?>
+    </p>
     <table id="wf-vulnerabilities" class="display" style="width:100%">
         <thead>
         <tr>
@@ -41,7 +56,10 @@
           pageLength: 50,
           order: [[5, 'desc']],
           dom: '<"xt-dt-top">rt<"xt-dt-bottom"lip>',
-          ajax: '/data/vulnerabilities/search',
+          ajax: {
+            url: '/data/vulnerabilities/search',
+            data: function (d) { d.ignored = $('#wf-ignored-filter').val() || ''; }
+          },
           columnDefs: [
             { targets: [1, 7, 9], visible: false, searchable: false },
             { targets: [8, 10], orderable: false },
@@ -49,7 +67,8 @@
               targets: 0,
               render: function (data, type, row) {
                 if (type !== 'display') { return data; }
-                return '<div>' + xtEscapeHtml(data) + '</div>'
+                var tag = row[9] && row[9].ignored ? ' <span class="badge badge-muted" title="Excluded from findings and reports (config: vulnerabilities.ignored)">Ignored</span>' : '';
+                return '<div>' + xtEscapeHtml(data) + tag + '</div>'
                   + '<div class="muted mono" style="font-size:.8rem">' + xtEscapeHtml(row[1]) + '</div>';
               }
             },
@@ -76,8 +95,7 @@
                 if (type !== 'display') { return data === null ? '' : data; }
                 if (data === null || data === undefined || data === '') { return '—'; }
                 var score = parseFloat(data);
-                // A vulnerability is never --ok green, however low its
-                // score — badge-low mirrors cvss_badge() in helpers.php.
+                // Never green, however low the score (mirrors cvss_badge()).
                 var cls = score >= 9.0 ? 'badge-critical' : score >= 8.1 ? 'badge-error' : score >= 6.1 ? 'badge-warn' : 'badge-low';
                 var rating = row[7];
                 var title = 'CVSS ' + score + (rating ? ' — ' + rating : '');

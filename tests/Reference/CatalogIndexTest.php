@@ -122,6 +122,36 @@ final class CatalogIndexTest extends TestCase
         $this->assertSame(0, $index->searchVulnerabilities('no-such-match', 0, 100)['filtered']);
     }
 
+    public function testSearchVulnerabilitiesFlagsAndFiltersIgnoredIds(): void
+    {
+        $this->writeCache([
+            'V-1' => self::record('V-1', 'alpha-plugin'),
+            'v-2' => self::record('v-2', 'bravo-plugin'),
+        ]);
+        $index = $this->index();
+        $index->rebuildVulnerabilities($this->cacheFile());
+        $ignored = ['v-1'];
+
+        $all = $index->searchVulnerabilities('', 0, 100, 'name', 'asc', $ignored);
+        $this->assertSame(2, $all['filtered']);
+        $this->assertSame(['alpha-plugin' => true, 'bravo-plugin' => false], array_column(
+            array_map(static fn (array $r): array => ['slug' => $r['slug'], 'ignored' => $r['ignored']], $all['rows']),
+            'ignored',
+            'slug'
+        ));
+
+        $only = $index->searchVulnerabilities('', 0, 100, 'name', 'asc', $ignored, 'only');
+        $this->assertSame(1, $only['filtered']);
+        $this->assertSame('alpha-plugin', $only['rows'][0]['slug']);
+
+        $hidden = $index->searchVulnerabilities('', 0, 100, 'name', 'asc', $ignored, 'hide');
+        $this->assertSame(1, $hidden['filtered']);
+        $this->assertSame('bravo-plugin', $hidden['rows'][0]['slug']);
+
+        $this->assertSame(0, $index->searchVulnerabilities('', 0, 100, 'name', 'asc', [], 'only')['filtered']);
+        $this->assertSame(2, $index->searchVulnerabilities('', 0, 100, 'name', 'asc', [], 'hide')['filtered']);
+    }
+
     public function testSearchVulnerabilitiesPaginates(): void
     {
         $this->writeCache([

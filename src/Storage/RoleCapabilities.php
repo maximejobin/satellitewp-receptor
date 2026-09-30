@@ -5,12 +5,8 @@ declare(strict_types=1);
 namespace SatelliteWP\Xtractor\Storage;
 
 /**
- * Role -> capability lookup, loaded from config/roles.php.
- *
- * Router::requireCapability()/currentUserCan() call can() to gate every
- * mutation and data-sensitive page when Google sign-in is configured.
- * config/roles.php is the role => capability map itself ('*' = every
- * capability); the capability names are the strings passed at each call site.
+ * Role -> capability lookup from config/roles.php ('*' = every capability),
+ * checked by the controllers when Google sign-in is configured.
  */
 final class RoleCapabilities
 {

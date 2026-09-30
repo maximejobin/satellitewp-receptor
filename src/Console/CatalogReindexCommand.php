@@ -11,11 +11,8 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Rebuilds the SQLite catalogue/vulnerability index (CatalogIndex) from its
- * two JSON sources on demand — wordfence:refresh already does this as part
- * of its own daily run; this is for bootstrapping the index the first time,
- * or resyncing the catalogue side sooner (e.g. right after catalog:set /
- * catalog:suggest) without waiting for the next Wordfence refresh.
+ * Rebuilds CatalogIndex from its two JSON sources on demand (wordfence:refresh
+ * does it daily) — first-time bootstrap, or right after catalog:set/suggest.
  */
 #[AsCommand(name: 'catalog:reindex', description: 'Rebuild the catalogue/vulnerability cross-reference index')]
 final class CatalogReindexCommand extends Command

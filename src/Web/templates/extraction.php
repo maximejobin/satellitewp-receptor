@@ -4,6 +4,8 @@
  */
 use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
 use SatelliteWP\Xtractor\Rules\Category;
+use SatelliteWP\Xtractor\Rules\Pastille;
+use SatelliteWP\Xtractor\Web\HardeningConstants;
 
 $p    = $payload;
 $dns  = $probes['dns']['data'] ?? [];
@@ -11,62 +13,60 @@ $tls  = $probes['tls']['data'] ?? [];
 $rdap = $probes['rdap']['data'] ?? [];
 $http = $probes['http']['data'] ?? [];
 $ps   = $probes['pagespeed']['data'] ?? [];
-$bv   = $probes['blogvault']['data'] ?? [];
-$wf   = $probes['wordfence']['data'] ?? [];
+$bv    = $probes['blogvault']['data'] ?? [];
+$wf    = $probes['wordfence']['data'] ?? [];
+$wporg = $probes['wporg']['data'] ?? [];
 
-// Plugin/theme slug -> that component's probe record, for the vulnerability
-// columns below. Both probes already key their items by normalized slug.
+// Normalized slug -> that component's vulnerability record, per source.
 $bvPluginsBySlug = array_column($bv['plugins']['items'] ?? [], null, 'slug');
 $wfPluginsBySlug = array_column($wf['plugins']['items'] ?? [], null, 'slug');
 $bvThemesBySlug  = array_column($bv['themes']['items'] ?? [], null, 'slug');
 $wfThemesBySlug  = array_column($wf['themes']['items'] ?? [], null, 'slug');
 
-// Core is merged once here and reused by both §WordPress (the count) and
-// §Plugins & themes (the detailed table), so the two can never disagree.
-$coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['core']['vulnerabilities'] ?? [], $p['wp_version'] ?? null);
-
-/** "N CVE" cell for a table row, from an already-merged list — empty (not a "—") when there's nothing to report. */
-$vulnCell = static function (array $merged): string {
-    if ($merged === []) {
-        return '';
-    }
-
-    return '<span class="badge badge-error">' . count($merged) . ' CVE</span>';
-};
+// Merged once, shared by the WordPress card and the CVE table so they agree.
+$coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['core']['vulnerabilities'] ?? [], $p['wp_version'] ?? null, $ignoredVulnerabilities);
 
 /**
- * Quiet glyph indicators appended to a plugin/theme row's Status cell —
- * update available, known vulnerability, licence needing a look — the
- * Update/Vulnerabilities/Licence columns still carry the full detail, this
- * is only the "glance at Status and know if anything else on the row
- * needs attention" summary. Nothing shown at all when none apply.
+ * State column: Active/Inactive, then Auto-update/Vulnerable/Abandoned badges.
+ * "Abandoned" uses F8's default 365-day threshold, read from probe.wporg
+ * directly (a rules.thresholds.F8 override is not reflected here).
  *
  * @param list<array<string, mixed>> $merged
+ * @param array<string, mixed>|null $wporgEntry probe.wporg.plugins[slug] / .themes[slug]
  */
-$statusIcons = static function (bool $hasUpdate, ?string $newVersion, array $merged, string $licenseStatus): string {
-    $html = '';
-    if ($hasUpdate) {
-        $html .= status_icon('⬆', 'warn', 'Update available' . ($newVersion ? ": {$newVersion}" : ''));
+$stateCell = static function (bool $inactive, array $merged, ?array $wporgEntry, bool $autoUpdate = false): string {
+    $html = !$inactive
+        ? '<span class="badge badge-ok">Active</span>'
+        : '<span class="badge badge-muted">Inactive</span>';
+
+    if ($autoUpdate) {
+        $html .= ' <span class="badge badge-ok">Auto-update</span>';
     }
     if ($merged !== []) {
-        $count = count($merged);
-        $html .= status_icon('⚠', 'error', $count . ' known vulnerabilit' . ($count === 1 ? 'y' : 'ies'));
+        $html .= ' <span class="badge badge-error">Vulnerable</span>';
     }
-    if ($licenseStatus !== 'n_a') {
-        $glyph = ['active' => '✓', 'missing' => '✗', 'to_validate' => '?'][$licenseStatus] ?? '?';
-        $color = ['active' => 'ok', 'missing' => 'error', 'to_validate' => 'warn'][$licenseStatus] ?? 'warn';
-        $html .= status_icon($glyph, $color, 'Licence: ' . str_replace('_', ' ', $licenseStatus));
+
+    $lastUpdated = is_array($wporgEntry) ? ($wporgEntry['last_updated'] ?? null) : null;
+    $timestamp   = is_string($lastUpdated) ? strtotime($lastUpdated) : false;
+    if (!empty($wporgEntry['on_wporg']) && $timestamp !== false && $timestamp < time() - 365 * 86400) {
+        $html .= ' <span class="badge badge-warn">Abandoned</span>';
     }
 
     return $html;
 };
 
+/** Name linked to its wordpress.org page only when WporgProbe found it there; raw slug underneath. */
+$nameCell = static function (string $type, string $name, string $rawSlug, string $normalizedSlug, ?array $wporgEntry): string {
+    $label = is_array($wporgEntry) && !empty($wporgEntry['on_wporg'])
+        ? external_link('https://wordpress.org/' . $type . 's/{id}/', $normalizedSlug, $name)
+        : e($name);
+
+    return $label . '<div class="muted mono" style="font-size:.82em">' . e($rawSlug) . '</div>';
+};
+
 /**
- * Active theme first, its parent right after (forced "active" too — it has
- * to be loaded for the child to work, even though WordPress itself never
- * marks it active), everything else after that in its original order.
- * `parent_slug` (present only on an active child theme) is the same field
- * WordPress's own theme header exposes — no slug-guessing needed.
+ * Active theme first, then its parent (shown active: a child theme loads it),
+ * then the rest in their original order.
  *
  * @param array<string, array<string, mixed>> $themes keyed by theme file
  * @return array<string, array<string, mixed>>
@@ -118,19 +118,25 @@ $all      = $findings['findings'] ?? [];
 $counts   = $findings['counts'] ?? ['by_pastille' => [], 'total' => 0];
 $byPast   = $counts['by_pastille'] ?? [];
 
-// category → observation count, for the filter bar
+// category -> finding count, for the filter bar
 $catCount = [];
 foreach ($all as $f) { $catCount[$f['category']] = ($catCount[$f['category']] ?? 0) + 1; }
 
-// pastille → severity stripe class
-$stripe = static fn (string $c): string => in_array($c, ['red', 'orange', 'blue'], true) ? "sev-{$c}" : '';
+$stripe = static function (string $c): string {
+    $pastille = Pastille::tryFrom($c);
+
+    return $pastille !== null && ($pastille->needsAttention() || $pastille === Pastille::Blue) ? "sev-{$c}" : '';
+};
+$attentionCount = 0;
+foreach (Pastille::cases() as $pastille) {
+    if ($pastille->needsAttention()) {
+        $attentionCount += (int) ($byPast[$pastille->value] ?? 0);
+    }
+}
 $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 
-// Which rule categories live under which of the three groups below — purely
-// presentational (drives each group header's own pass-rate bar), not a rule
-// engine concept. Grouped to match where each topic actually sits on this
-// page: e.g. Category::HTTP's compression/redirect checks render inside
-// §Performance (Quality & Security), not §Hosting.
+// Categories per page group, for each group header's pass-rate bar — grouped
+// by where the topic renders on this page (HTTP sits under Performance).
 $groupCategories = [
     'infrastructure' => [Category::DOMAIN, Category::EMAIL, Category::DNS, Category::SSL, Category::PHP, Category::DATABASE, Category::HOSTING, Category::CRON],
     'content'        => [Category::UPDATES, Category::USERS, Category::CONTENT],
@@ -144,9 +150,9 @@ $groupRate = static function (string $group) use ($all, $groupCategories): ?arra
         if (!in_array($f['category'], $groupCategories[$group], true)) {
             continue;
         }
-        if ($f['pastille'] === 'green') {
+        if ($f['pastille'] === Pastille::Green->value) {
             $pass++;
-        } elseif (in_array($f['pastille'], ['red', 'orange'], true)) {
+        } elseif (in_array($f['pastille'], [Pastille::Red->value, Pastille::Orange->value], true)) {
             $fail++;
         }
     }
@@ -154,7 +160,7 @@ $groupRate = static function (string $group) use ($all, $groupCategories): ?arra
 
     return $applicable > 0 ? ['pass' => $pass, 'fail' => $fail, 'rate' => (int) round($pass / $applicable * 100)] : null;
 };
-/** Small pass-rate bar + caption for a group header, or nothing when $findings is null (not-yet-evaluated). */
+/** Pass-rate bar for a group header; nothing before findings exist. */
 $groupBadge = static function (string $group) use ($groupRate, $findings): string {
     if ($findings === null) {
         return '';
@@ -171,6 +177,12 @@ $groupBadge = static function (string $group) use ($groupRate, $findings): strin
 
 <?php
 $status = (string) ($row['status'] ?? '');
+echo match ($notice) {
+    'rerun-done'   => notice('info', 'Probes re-run and findings re-evaluated.'),
+    'rerun-none'   => notice('warning', 'No probe selected — nothing was re-run.'),
+    'rerun-failed' => notice('critical', 'The re-run failed' . ($noticeRef !== '' ? ' (log ref <span class="mono">' . e($noticeRef) . '</span>)' : '') . '.'),
+    default        => '',
+};
 if ($status !== 'done'):
     $bvFound = ($blogVault['found'] ?? false) === true;
 ?>
@@ -187,9 +199,7 @@ if ($status !== 'done'):
             · <?= badge($row['status'] ?? null) ?>
         <?php endif; ?>
     </p>
-    <!-- Analysis not done: pre-flight + the manual trigger, or a status message.
-         No data section below renders until status is "done" — an analyst
-         should never read partial/incomplete data as if it were final. -->
+    <!-- Nothing below renders before status "done": partial data must never read as a report. -->
     <section class="section">
         <h2>Analysis</h2>
         <div style="padding:0 1.1rem 1.1rem">
@@ -215,12 +225,8 @@ if ($status !== 'done'):
                No probe has run, no quota has been spent.</p>
 
             <?php
-            // Settled before anything else: behind Basic Auth with no
-            // credentials stored, every external probe answers 401 and the
-            // whole report says nothing about the site.
-            // The preflight sends whatever credentials are already stored, so a
-            // 401 here means blocked either way — but "none stored" and "the
-            // stored ones were refused" are different problems for the analyst.
+            // A 401 here means every external probe would come back empty;
+            // "no credentials stored" and "stored ones refused" need different fixes.
             $authBlocked = ($httpAuth['required'] ?? false) === true;
             if ($authBlocked): ?>
                 <?= notice('warning',
@@ -340,14 +346,14 @@ if ($status !== 'done'):
         <?php if ($findings !== null): ?>
             <div class="xt-sevbar" role="img" aria-label="<?= e($counts['total'] ?? 0) ?> checks total">
                 <?php $sevTotal = max(1, (int) ($counts['total'] ?? 0));
-                foreach (['red', 'orange', 'blue', 'green', 'grey'] as $c):
+                foreach (Pastille::values() as $c):
                     $n = (int) ($byPast[$c] ?? 0);
                     if ($n === 0) { continue; } ?>
                     <div class="xt-sevbar-seg dot-<?= $c ?>" style="width:<?= round($n / $sevTotal * 100, 2) ?>%" title="<?= e($t->pastille($c)) ?>: <?= e($n) ?>"></div>
                 <?php endforeach; ?>
             </div>
             <div class="xt-hero-tally">
-                <?php foreach (['red', 'orange', 'blue', 'green', 'grey'] as $c): ?>
+                <?php foreach (Pastille::values() as $c): ?>
                     <span class="chip"><span class="dot dot-<?= $c ?>"></span><?= e($t->pastille($c)) ?> <b><?= e($byPast[$c] ?? 0) ?></b></span>
                 <?php endforeach; ?>
             </div>
@@ -398,7 +404,7 @@ if ($status !== 'done'):
                 </header>
                 <div class="filt">
                     <button class="on" data-filter="all">All <b><?= e($counts['total'] ?? 0) ?></b></button>
-                    <button data-filter="attn">Needs attention <b><?= e(($byPast['red'] ?? 0) + ($byPast['orange'] ?? 0)) ?></b></button>
+                    <button data-filter="attn">Needs attention <b><?= e($attentionCount) ?></b></button>
                     <span class="filt-sep"></span>
                     <?php foreach ($catCount as $cat => $n): ?>
                         <button data-filter="<?= e($cat) ?>"><?= e($t->category($cat)) ?> <b><?= e($n) ?></b></button>
@@ -407,7 +413,7 @@ if ($status !== 'done'):
                 <table class="ftable"><tbody>
                 <?php foreach ($all as $f): ?>
                     <?php $col = $f['pastille']; ?>
-                    <tr class="frow <?= $stripe($col) ?>" data-cat="<?= e($f['category']) ?>" data-attn="<?= in_array($col, ['red', 'orange'], true) ? '1' : '0' ?>">
+                    <tr class="frow <?= $stripe($col) ?>" data-cat="<?= e($f['category']) ?>" data-attn="<?= Pastille::tryFrom((string) $col)?->needsAttention() ? '1' : '0' ?>">
                         <td><?= pastille($col, $t->pastille($col)) ?></td>
                         <td class="id"><?= e($f['id']) ?></td>
                         <td class="tag"><?= e($t->category($f['category'])) ?></td>
@@ -447,8 +453,7 @@ if ($status !== 'done'):
                     . field_raw('Nameservers', fmt_list($rdap['nameservers'] ?? ($dns['nameservers'] ?? [])), null, 'probe.rdap.nameservers')
                     . field('Source', $rdap['source'] ?? null, null, 'probe.rdap.source')
                 ); ?>
-                <?php // Mail-delivery/authentication records only — CAA and A/AAAA are
-                echo section('Email',
+                <?php echo section('Email',
                     field('SPF', ($dns['spf']['present'] ?? false) ? 'present' : 'absent', ($dns['spf']['present'] ?? false) ? 'ok' : 'warn', 'probe.dns.spf.present')
                     . field_raw('SPF record', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>', null, 'probe.dns.spf.record')
                     . field('DMARC', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent', ($dns['dmarc']['present'] ?? false) ? null : 'warn', 'probe.dns.dmarc')
@@ -463,6 +468,7 @@ if ($status !== 'done'):
             <div class="cards cards-full">
                 <?php echo section('Server',
                     field('Web server', $p['web_server'] ?? null, null, 'payload.web_server')
+                    . field('Operating system', $p['os_name'] ?? ($p['os_family'] ?? null), null, 'payload.os_name')
                     . field_raw('IP address (A / AAAA)', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'), null, 'probe.dns.a')
                     . field('Hosting provider', 'from ASN lookup — coming soon', 'muted')
                     . field('Document root', $p['document_root'] ?? null, null, 'payload.document_root')
@@ -471,7 +477,7 @@ if ($status !== 'done'):
                     . field('Max input vars', $p['php']['max_input_vars'] ?? null, null, 'payload.php.max_input_vars')
                 ); ?>
                 <?php
-                // SSL — TLS protocols shown independently, plus the cert facts.
+                // Each TLS version tested independently, next to the certificate facts.
                 $proto = $tls['protocols'] ?? [];
                 $protoRow = static function (string $label, ?bool $on, bool $legacy, string $source) {
                     if ($on === null) { return field($label, null, null, $source); }
@@ -482,9 +488,7 @@ if ($status !== 'done'):
                     . field('Subject (CN)', $tls['subject_cn'] ?? null, null, 'probe.tls.subject_cn')
                     . field_raw('Expires', e($tls['not_after'] ?? '—') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
                     . field_raw('SAN', fmt_list($tls['san'] ?? []), null, 'probe.tls.san')
-                    // CAA is a DNS record, not an email one — it restricts which CAs may
-                    // issue a certificate for this domain, so it belongs next to the
-                    // certificate facts, not in §Domain & email's Email card.
+                    // CAA restricts which CAs may issue for the domain: a certificate fact.
                     . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])), null, 'probe.dns.caa')
                     . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? 'ok' : 'error', 'probe.tls.chain_valid')
                     . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? 'ok' : 'error', 'probe.tls.hostname_covered')
@@ -499,8 +503,7 @@ if ($status !== 'done'):
                 <?php echo section('PHP',
                     field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t), null, 'payload.php.version')
                     . field('Memory limit', $p['php']['memory_limit'] ?? null, null, 'payload.php.memory_limit')
-                    // Full list, never truncated — a "+N" here hid exactly the
-                    // extensions/functions an analyst most needs to check.
+                    // Never truncated: the hidden tail is what an analyst needs to check.
                     . field_raw('Extensions (' . count($p['php']['extensions'] ?? []) . ')', fmt_list($p['php']['extensions'] ?? [], PHP_INT_MAX), null, 'payload.php.extensions')
                     . field_raw('Disabled functions (' . count($p['php']['disable_functions'] ?? []) . ')', fmt_list($p['php']['disable_functions'] ?? [], PHP_INT_MAX), null, 'payload.php.disable_functions')
                 ); ?>
@@ -571,15 +574,12 @@ if ($status !== 'done'):
             <?php
             $plugins = is_array($p['plugins'] ?? null) ? $p['plugins'] : [];
             $themes  = is_array($p['themes'] ?? null) ? $p['themes'] : [];
-            // Every merged vulnerability across core/plugins/themes, for the detailed
-            // CVE table further down. Core leads, then plugins and themes are appended
-            // as their tables render.
+            // Every merged vulnerability for the CVE table below, core first.
             $allVulns = array_map(
                 static fn (array $v): array => $v + ['component' => 'WordPress', 'slug' => 'wordpress'],
                 $coreVulns
             );
-            // Plugin-file keys (e.g. "akismet/akismet.php"), not normalized slugs — the
-            // shape the plugin's own collector reports these two lists in.
+            // Keyed by plugin file ("akismet/akismet.php"), as the collector reports them.
             $autoUpdatePlugins = is_array($p['auto_update_plugins'] ?? null) ? $p['auto_update_plugins'] : [];
             $pluginUpdates     = is_array($p['plugin_updates'] ?? null) ? $p['plugin_updates'] : [];
             $themeUpdates      = is_array($p['theme_updates'] ?? null) ? $p['theme_updates'] : [];
@@ -587,27 +587,25 @@ if ($status !== 'done'):
                 <h4 style="font-size:.9rem;margin:0 0 .3rem" class="muted">Plugins — <?= count($plugins) ?> installed,
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['active']))) ?> active,
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h4>
-                <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Auto-update</th><th>Requires</th><th>Status</th><th>Vulnerabilities</th><th>Licence</th></tr></thead><tbody>
+                <table><thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Requires</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($plugins as $file => $pl):
                     $slug   = SoftwareCatalog::normalizeSlug('plugin', (string) ($pl['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
                         $bvPluginsBySlug[$slug]['vulnerabilities'] ?? [],
                         $wfPluginsBySlug[$slug]['vulnerabilities'] ?? [],
-                        $pl['version'] ?? null
+                        $pl['version'] ?? null,
+                        $ignoredVulnerabilities
                     );
                     $hasUpdate = !empty($pl['new_version']) || in_array($file, $pluginUpdates, true);
                     $inactive  = empty($pl['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $pl['name'] ?? $slug, 'slug' => $slug]; } ?>
                     <tr<?= $inactive ? ' class="row-inactive"' : '' ?>>
-                        <td><?= e($pl['name'] ?? '?') ?></td>
-                        <td class="mono"><?= e($pl['slug'] ?? '') ?></td>
+                        <td><?= $nameCell('plugin', (string) ($pl['name'] ?? '?'), (string) ($pl['slug'] ?? ''), $slug, $wporg['plugins'][$slug] ?? null) ?></td>
                         <td class="mono"><?= e($pl['version'] ?? '?') ?></td>
                         <td><?= $hasUpdate ? '<span class="b-upd">' . e($pl['new_version'] ?: 'available') . '</span>' : '—' ?></td>
-                        <td><?= in_array($file, $autoUpdatePlugins, true) ? '<span class="badge badge-ok">Yes</span>' : '<span class="badge badge-muted">No</span>' ?></td>
                         <td><?= requirement_cell($pl['requires_wp'] ?? null, $pl['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
                         <?php $pluginLicense = $licenseStatuses['plugin:' . $slug] ?? 'n_a'; ?>
-                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?><?= $statusIcons($hasUpdate, $pl['new_version'] ?? null, $merged, $pluginLicense) ?></td>
-                        <td><?= $vulnCell($merged) ?></td>
+                        <td><?= $stateCell($inactive, $merged, $wporg['plugins'][$slug] ?? null, in_array($file, $autoUpdatePlugins, true)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'plugin', $slug, $pluginLicense, $csrf,
                             '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td>
                     </tr>
@@ -616,25 +614,25 @@ if ($status !== 'done'):
             <?php endif; ?>
             <?php if ($themes !== []): ?>
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
-                <table><thead><tr><th>Name</th><th>Slug</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>Status</th><th>Vulnerabilities</th><th>Licence</th></tr></thead><tbody>
+                <table><thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($orderThemes($themes) as $file => $th):
                     $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
                         $bvThemesBySlug[$slug]['vulnerabilities'] ?? [],
                         $wfThemesBySlug[$slug]['vulnerabilities'] ?? [],
-                        $th['version'] ?? null
+                        $th['version'] ?? null,
+                        $ignoredVulnerabilities
                     );
                     $hasUpdate = !empty($th['new_version']) || in_array($file, $themeUpdates, true);
                     $inactive  = empty($th['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $th['name'] ?? $slug, 'slug' => $slug]; } ?>
-                    <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= e($th['name'] ?? '?') ?></td><td class="mono"><?= e($th['slug'] ?? '') ?></td>
+                    <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= $nameCell('theme', (string) ($th['name'] ?? '?'), (string) ($th['slug'] ?? ''), $slug, $wporg['themes'][$slug] ?? null) ?></td>
                         <td class="mono"><?= e($th['version'] ?? '?') ?></td>
                         <td><?= $hasUpdate ? '<span class="b-upd">' . e($th['new_version'] ?: 'available') . '</span>' : '—' ?></td>
                         <td><?= requirement_cell($th['requires_wp'] ?? null, $th['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
                         <td class="mono"><?= e($th['template'] ?? '') ?></td>
                         <?php $themeLicense = $licenseStatuses['theme:' . $slug] ?? 'n_a'; ?>
-                        <td><?= !$inactive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Inactive</span>' ?><?= $statusIcons($hasUpdate, $th['new_version'] ?? null, $merged, $themeLicense) ?></td>
-                        <td><?= $vulnCell($merged) ?></td>
+                        <td><?= $stateCell($inactive, $merged, $wporg['themes'][$slug] ?? null) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'theme', $slug, $themeLicense, $csrf,
                             '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td></tr>
                 <?php endforeach; ?>
@@ -684,16 +682,17 @@ if ($status !== 'done'):
                     . field('Comments', wp_count($p['comments_count'] ?? null, 'approved', 'total_comments'), null, 'payload.comments_count')
                 ); ?>
                 <?php
-                $wpml = $p['connectors']['wpml'] ?? null;
-                if (is_array($wpml)) {
-                    echo section('Languages (WPML)',
-                        field('Default language', $wpml['default_language'] ?? null, null, 'payload.connectors.wpml.default_language')
-                        . field('Current language', $wpml['current_language'] ?? null, null, 'payload.connectors.wpml.current_language')
-                        . field_raw('Active languages', fmt_list($wpml['active_languages'] ?? []), null, 'payload.connectors.wpml.active_languages')
-                        . field('WPML version', $wpml['version'] ?? null, null, 'payload.connectors.wpml.version')
+                $ml = \SatelliteWP\Xtractor\Web\Multilingual::fromPayload($p);
+                if ($ml !== null) {
+                    $src = 'payload.connectors.' . $ml['plugin'];
+                    echo section('Languages (' . $ml['label'] . ')',
+                        field('Default language', $ml['default_language'], null, $src . '.default_language')
+                        . field('Current language', $ml['current_language'], null, $src . '.current_language')
+                        . field_raw('Active languages', fmt_list($ml['active_languages']), null, $src . '.active_languages')
+                        . field($ml['label'] . ' version', $ml['version'], null, $src . '.version')
                     );
                 } else {
-                    echo '<div class="card"><h3>Languages</h3><div style="padding:1rem 1.1rem"><div class="pending-note">No multilingual connector (WPML) detected on this site.</div></div></div>';
+                    echo '<div class="card"><h3>Languages</h3><div style="padding:1rem 1.1rem"><div class="pending-note">No multilingual plugin (WPML, Polylang, TranslatePress) detected on this site.</div></div></div>';
                 }
                 ?>
                 <?php
@@ -786,10 +785,7 @@ if ($status !== 'done'):
                     . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null, null, 'probe.http.http_version')
                     . field('Compression (HTML)', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) ? 'ok' : 'warn', 'probe.http.content_encoding')
                     . field('Compression (asset)', ($http['asset']['content_encoding'] ?? null) ?? (($http['asset']['checked'] ?? false) ? 'none' : 'n/a'), null, 'probe.http.asset.content_encoding')
-                    // Dedicated one-encoding-at-a-time requests (B1/B2) — distinct
-                    // from "Compression (HTML)" above, which reflects what the
-                    // server PREFERS when both gzip and br are on offer together,
-                    // not which ones it can actually produce.
+                    // One encoding offered at a time (B1/B2), unlike the preference shown above.
                     . field('Gzip capability', $http['compression']['gzip'] ?? null, ($http['compression']['gzip'] ?? null) === false ? 'warn' : (($http['compression']['gzip'] ?? null) === true ? 'ok' : null), 'probe.http.compression.gzip')
                     . field('Brotli capability', $http['compression']['brotli'] ?? null, ($http['compression']['brotli'] ?? null) === false ? 'warn' : (($http['compression']['brotli'] ?? null) === true ? 'ok' : null), 'probe.http.compression.brotli')
                     . field('HTTP/2 supported', $http['protocols']['http2'] ?? null, ($http['protocols']['http2'] ?? null) === false ? 'warn' : (($http['protocols']['http2'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http2')
@@ -832,15 +828,9 @@ if ($status !== 'done'):
             <div class="xt-subsection-head"><?= report_icon('security') ?><h3>Security</h3></div>
             <div class="cards">
                 <?php
-                $const = $p['constants'] ?? [];
                 $constRows = '';
-                foreach ($const as $name => $value) {
-                    $bad = in_array($name, ['WP_DEBUG', 'WP_DEBUG_DISPLAY'], true) && $value === true;
-                    // The literal constant value, not field()'s usual yes/no
-                    // humanization — this card shows exactly what WordPress
-                    // itself reports for each PHP constant, true/false as-is.
-                    $display = is_bool($value) ? ($value ? 'true' : 'false') : (string) ($value ?? '—');
-                    $constRows .= field_raw($name, e($display), $bad ? 'error' : null, 'payload.constants.' . $name);
+                foreach (HardeningConstants::rows(is_array($p['constants'] ?? null) ? $p['constants'] : []) as $row) {
+                    $constRows .= field_raw($row['name'], e($row['display']), $row['flagged'] ? 'error' : null, 'payload.constants.' . $row['name']);
                 }
                 echo section('Hardening (constants)', $constRows ?: field('constants', null), class: 'card-full');
                 ?>
@@ -875,10 +865,7 @@ if ($status !== 'done'):
                 }
                 ?>
                 <?php
-                // Passive attack-surface checks (HttpProbe::exposureCheck()) — every
-                // one of these is a request an anonymous visitor could already make.
-                // Every row carries its own evidence (exact URL + status an analyst
-                // could re-run by hand with curl) rather than asking to be trusted.
+                // Passive checks an anonymous visitor could run; each row shows its evidence (URL + status).
                 $exp      = $http['exposure'] ?? [];
                 $evidence = $exp['evidence'] ?? [];
                 $evNote   = static function (?array $ev, ?string $extra = null): string {
@@ -950,7 +937,10 @@ if ($status !== 'done'):
                 <?php foreach ($perms as $key => $perm): ?>
                     <tr><td><?= e($permLabels[$key] ?? $key) ?></td>
                         <td class="mono"><?= e($perm['mode'] ?? '?') ?></td>
-                        <td><?= !empty($perm['writable']) ? '<span class="badge badge-warn">Yes</span>' : '<span class="badge badge-ok">No</span>' ?></td>
+                        <?php // uploads/ must be writable for media; anywhere else, writable is worth flagging. ?>
+                        <td><?= !empty($perm['writable'])
+                            ? '<span class="badge ' . ($key === 'uploads_dir' ? 'badge-ok' : 'badge-warn') . '">Yes</span>'
+                            : '<span class="badge badge-ok">No</span>' ?></td>
                         <td><?= !empty($perm['readable']) ? '<span class="badge badge-ok">Yes</span>' : '<span class="badge badge-error">No</span>' ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
@@ -1011,7 +1001,7 @@ if ($status !== 'done'):
                                     <?php endforeach; ?>
                                 </select>
                                 <select name="color" style="padding:.35rem .5rem;font:inherit">
-                                    <?php foreach (['blue', 'green', 'orange', 'red', 'grey'] as $c): ?>
+                                    <?php foreach (Pastille::values() as $c): ?>
                                         <option value="<?= e($c) ?>" <?= $c === ($rec['color'] ?? null) ? 'selected' : '' ?>><?= e($t->pastille($c)) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -1045,8 +1035,8 @@ if ($status !== 'done'):
                     <?php endforeach; ?>
                 </select>
                 <select name="color" style="padding:.35rem .5rem;font:inherit">
-                    <?php foreach (['blue', 'green', 'orange', 'red', 'grey'] as $c): ?>
-                        <option value="<?= e($c) ?>"><?= e($t->pastille($c)) ?></option>
+                    <?php foreach (Pastille::values() as $c): ?>
+                        <option value="<?= e($c) ?>" <?= $c === Pastille::Blue->value ? 'selected' : '' ?>><?= e($t->pastille($c)) ?></option>
                     <?php endforeach; ?>
                 </select>
                 <input type="text" name="title" placeholder="Title" required style="padding:.35rem .5rem;font:inherit;min-width:12rem">
@@ -1089,3 +1079,23 @@ if ($status !== 'done'):
 
 </div>
 <?php endif; // status === 'done' ?>
+
+<?php if ($debuggingTools): ?>
+    <details class="section" style="margin-top:1.5rem">
+        <summary style="padding:.8rem 1.1rem;cursor:pointer"><b>Debugging tools</b> <span class="muted">(debugging_tools is on)</span></summary>
+        <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/rerun"
+              style="padding:0 1.1rem 1.1rem;display:flex;flex-direction:column;gap:.6rem"
+              onsubmit="return confirm('Re-run the selected probes now? This overwrites their stored results and re-evaluates every rule.')">
+            <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+            <p class="muted" style="margin:0">Runs synchronously in this request, whatever the extraction's status — this bypasses the frozen-snapshot rule.</p>
+            <div style="display:flex;gap:1rem;flex-wrap:wrap">
+                <?php foreach ($rerunProbes as $probeName): ?>
+                    <label style="display:flex;gap:.3rem;align-items:center" class="mono">
+                        <input type="checkbox" name="probes[]" value="<?= e($probeName) ?>"> <?= e($probeName) ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <div><button type="submit" class="btn btn-secondary">Re-run selected probes</button></div>
+        </form>
+    </details>
+<?php endif; ?>

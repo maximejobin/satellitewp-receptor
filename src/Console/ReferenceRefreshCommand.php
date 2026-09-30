@@ -54,10 +54,7 @@ final class ReferenceRefreshCommand extends Command
             $output->writeln("<info>{$product}</info> : {$count} cycles mis en cache.");
         }
 
-        // The explicit per-version wordpress.org list (used by /data/wp-versions
-        // for its secure/insecure/uptodate status) is a distinct source from
-        // endoflife.date's per-branch cycles above, but it changes on the same
-        // rhythm — every "wordpress" refresh keeps both in step with one command.
+        // wordpress.org's per-version verdicts refresh alongside the WordPress branch cycles.
         if (in_array('wordpress', $products, true)) {
             try {
                 $count = $this->app->wordPressVersions()->refresh();

@@ -156,4 +156,17 @@ final class WordfenceProbeTest extends TestCase
         $this->assertSame(ProbeResult::STATUS_OK, $result->status);
         $this->assertSame(0, $result->data['plugins']['total']);
     }
+
+    public function testAnEmptyVersionIsSkippedNeverMatchedAsEveryRange(): void
+    {
+        $sample = $this->samples()['single_plugin_wildcard'];
+        $probe  = new WordfenceProbe($this->indexWith([$sample['id'] => $sample]));
+
+        $site = $this->site(plugins: [['slug' => 'opening-hours/opening-hours.php', 'name' => 'X', 'version' => '']]);
+
+        $result = $probe->run($site);
+
+        $this->assertSame(0, $result->data['plugins']['total']);
+        $this->assertSame(0, $result->data['vulnerabilities_total']);
+    }
 }
