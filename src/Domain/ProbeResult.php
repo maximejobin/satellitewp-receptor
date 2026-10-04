@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Domain;
+namespace SatelliteWP\Manager\Domain;
 
 /**
  * Common result envelope written as probes/<name>.json for every probe.

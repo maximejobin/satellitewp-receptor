@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Storage;
+namespace SatelliteWP\Manager\Storage;
 
 use PDO;
 

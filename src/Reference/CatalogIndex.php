@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Reference;
+namespace SatelliteWP\Manager\Reference;
 
 use PDO;
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
 
 /**
  * Rebuildable SQLite copy of the Wordfence cache and the software catalogue —

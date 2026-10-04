@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Web;
+namespace SatelliteWP\Manager\Web;
 
 /**
  * payload.constants as display rows — shared by the extraction page and the

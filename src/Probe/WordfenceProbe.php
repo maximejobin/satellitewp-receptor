@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Reference\WordfenceIndex;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Reference\WordfenceIndex;
 
 /**
  * Matches the site's core/plugins/themes against the local Wordfence index —

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Rules;
+namespace SatelliteWP\Manager\Rules;
 
 /**
  * Read-only view of one extraction for rule evaluation: the plugin payload plus

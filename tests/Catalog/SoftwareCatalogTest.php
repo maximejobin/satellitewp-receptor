@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Catalog;
+namespace SatelliteWP\Manager\Tests\Catalog;
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class SoftwareCatalogTest extends TestCase
 {

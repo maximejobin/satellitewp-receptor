@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Console;
+namespace SatelliteWP\Manager\Console;
 
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Storage\UserStore;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Storage\UserStore;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;

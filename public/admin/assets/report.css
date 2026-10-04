@@ -118,7 +118,7 @@
 .xt-group-rate span { font-size: .76rem; color: var(--muted); white-space: nowrap; }
 
 /* Data-provenance marker (src_note() in helpers.php) — every field's "where
-   did this come from, and did Xtractor verify it or just relay it" note.
+   did this come from, and did Manager verify it or just relay it" note.
    Native title tooltip: zero JS, works everywhere, keyboard-reachable via
    tabindex. Deliberately quiet (not another colored badge) — it should be
    discoverable, not compete with the actual pass/fail signal on the row. */

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
-use SatelliteWP\Xtractor\Support\ErrorLog;
+use SatelliteWP\Manager\Support\ErrorLog;
 use Throwable;
 
 /**
@@ -16,7 +16,7 @@ use Throwable;
  *   2. a fatal error (OOM, type error in a template, missing file)
  *                                     -> register_shutdown_function
  *   3. code that just sets the status -> the same shutdown pass, which logs any
- *      5xx response that nothing else has recorded (the receptor's own storage
+ *      5xx response that nothing else has recorded (the extractor's own storage
  *      failure logs itself, and is not counted twice).
  *
  * Installed by each front controller right after the autoloader, before the
@@ -27,8 +27,8 @@ final class ErrorHandler
     private bool $handled = false;
 
     /**
-     * @param string $source which front controller — 'receptor' or 'admin'
-     * @param bool   $json   answer in JSON (the receptor) rather than plain text
+     * @param string $source which front controller — 'extractor' or 'admin'
+     * @param bool   $json   answer in JSON (the extractor) rather than plain text
      */
     public function __construct(
         private readonly ErrorLog $log,

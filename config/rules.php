@@ -11,15 +11,16 @@
 
 declare(strict_types=1);
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Category;
-use SatelliteWP\Xtractor\Rules\Check;
-use SatelliteWP\Xtractor\Rules\Context;
-use SatelliteWP\Xtractor\Rules\Rule;
-use SatelliteWP\Xtractor\Rules\Severity;
-use SatelliteWP\Xtractor\Rules\VulnerabilityMerge;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Category;
+use SatelliteWP\Manager\Rules\Check;
+use SatelliteWP\Manager\Rules\CheckResult;
+use SatelliteWP\Manager\Rules\Context;
+use SatelliteWP\Manager\Rules\Rule;
+use SatelliteWP\Manager\Rules\Severity;
+use SatelliteWP\Manager\Rules\VulnerabilityMerge;
 
 // Behind HTTP Basic Auth the probe sees the auth gate, not the site: anything
 // read from the homepage response is unknown, never a failure. A bare 401
@@ -32,8 +33,24 @@ $homepageReadable = static fn (Context $c): bool => $c->probeRan('http')
 $dnsKnown = static fn (Context $c, string $field): bool => $c->probeRan('dns')
     && $c->get("probe.dns.{$field}") !== null;
 
-// No MX at all: the domain sends/receives no mail, which changes the SPF/DMARC advice.
-$hasNoMx = static fn (Context $c): bool => $dnsKnown($c, 'mx') && $c->list('probe.dns.mx') === [];
+// SPF/DKIM/DMARC verdicts come from the receiving server's own check of the
+// site's test email. Unknown when no message was found or the receiver hit a
+// transient error; anything else that is not "pass" is a failure.
+$mailAuth = static function (Context $c, string $method): CheckResult {
+    $verdict = $c->probeRan('mail') && $c->bool('probe.mail.found') === true
+        ? $c->string("probe.mail.{$method}")
+        : null;
+    if ($verdict === null) {
+        return Check::unknown();
+    }
+
+    return match ($verdict) {
+        'pass'  => Check::pass($verdict),
+        'none'  => Check::fail($verdict, ['variant' => 'none']),
+        'fail', 'softfail', 'neutral', 'permerror', 'policy' => Check::fail($verdict),
+        default => Check::unknown(),
+    };
+};
 
 /**
  * First $max names plus an "et N autres" count, for truncated lists.
@@ -320,45 +337,20 @@ return [
         },
     ],
 
-    // ===================================================================
-    //  D. EMAIL DELIVERABILITY (DNS side only)                     [EXT]
-    // ===================================================================
+    // ====================================================================
+    //  D. EMAIL DELIVERABILITY                                     [EXT]
+    // ====================================================================
     [
-        // "~all" passes like "-all": forwarding routinely breaks SPF, and a hard
-        // fail would then reject legitimate mail. "?all"/"+all" protect nothing.
         'id' => 'D1', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
-            if (!$dnsKnown($c, 'spf')) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.dns.spf.present') !== true) {
-                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
-            }
-            $record = $c->string('probe.dns.spf.record') ?? '';
-            if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
-                return Check::fail('no all', ['variant' => 'no_all'], Severity::Medium);
-            }
-
-            return in_array($m[1], ['-', '~'], true)
-                ? Check::pass($m[1] . 'all')
-                : Check::fail($m[1] . 'all', ['variant' => 'weak'], Severity::Medium);
-        },
+        'check' => static fn (Context $c) => $mailAuth($c, 'spf'),
+    ],
+    [
+        'id' => 'D2', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
+        'check' => static fn (Context $c) => $mailAuth($c, 'dkim'),
     ],
     [
         'id' => 'D3', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
-            if (!$dnsKnown($c, 'dmarc')) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.dns.dmarc.present') !== true) {
-                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
-            }
-            $policy = $c->string('probe.dns.dmarc.policy') ?? 'none';
-
-            return in_array($policy, ['quarantine', 'reject'], true)
-                ? Check::pass($policy)
-                : Check::fail($policy, ['variant' => 'weak'], Severity::Medium);
-        },
+        'check' => static fn (Context $c) => $mailAuth($c, 'dmarc'),
     ],
     [
         'id' => 'D4', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::Medium,
@@ -1108,9 +1100,5 @@ return [
     [
         'id' => 'X5', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.directory_listing')),
-    ],
-    [
-        'id' => 'X6', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.trace_enabled')),
     ],
 ];

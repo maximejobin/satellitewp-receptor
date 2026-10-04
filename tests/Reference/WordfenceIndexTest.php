@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Reference;
+namespace SatelliteWP\Manager\Tests\Reference;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
-use SatelliteWP\Xtractor\Integration\WordfenceClient;
-use SatelliteWP\Xtractor\Reference\WordfenceIndex;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Integration\WordfenceClient;
+use SatelliteWP\Manager\Reference\WordfenceIndex;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /**
  * buildIndex()/rangesInclude() are exercised against real records captured

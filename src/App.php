@@ -2,45 +2,46 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor;
+namespace SatelliteWP\Manager;
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Crm\ClientsDb;
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
-use SatelliteWP\Xtractor\Http\GoogleAuth;
-use SatelliteWP\Xtractor\Http\LoginLockout;
-use SatelliteWP\Xtractor\Http\PayloadValidator;
-use SatelliteWP\Xtractor\Http\Receptor;
-use SatelliteWP\Xtractor\Http\ReplayCache;
-use SatelliteWP\Xtractor\Http\SignatureVerifier;
-use SatelliteWP\Xtractor\Integration\BlogVaultClient;
-use SatelliteWP\Xtractor\Integration\WordfenceClient;
-use SatelliteWP\Xtractor\Pipeline\Pipeline;
-use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
-use SatelliteWP\Xtractor\Probe\DnsProbe;
-use SatelliteWP\Xtractor\Probe\HttpProbe;
-use SatelliteWP\Xtractor\Probe\MailProbe;
-use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
-use SatelliteWP\Xtractor\Probe\ProbeRegistry;
-use SatelliteWP\Xtractor\Probe\RdapProbe;
-use SatelliteWP\Xtractor\Probe\TlsProbe;
-use SatelliteWP\Xtractor\Probe\WordfenceProbe;
-use SatelliteWP\Xtractor\Probe\WporgProbe;
-use SatelliteWP\Xtractor\Reference\CatalogIndex;
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Reference\WordfenceIndex;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\RuleCatalog;
-use SatelliteWP\Xtractor\Rules\RuleEngine;
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Rules\VulnerabilityMerge;
-use SatelliteWP\Xtractor\Storage\DataStore;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Storage\KeyStore;
-use SatelliteWP\Xtractor\Storage\ReportTokenStore;
-use SatelliteWP\Xtractor\Storage\RoleCapabilities;
-use SatelliteWP\Xtractor\Storage\UserStore;
-use SatelliteWP\Xtractor\Support\ErrorLog;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Crm\ClientsDb;
+use SatelliteWP\Manager\Crm\ClientsRepository;
+use SatelliteWP\Manager\Http\GoogleAuth;
+use SatelliteWP\Manager\Http\LoginLockout;
+use SatelliteWP\Manager\Http\PayloadValidator;
+use SatelliteWP\Manager\Http\Extractor;
+use SatelliteWP\Manager\Http\ReplayCache;
+use SatelliteWP\Manager\Http\SignatureVerifier;
+use SatelliteWP\Manager\Integration\BlogVaultClient;
+use SatelliteWP\Manager\Integration\WordfenceClient;
+use SatelliteWP\Manager\Pipeline\Pipeline;
+use SatelliteWP\Manager\Probe\BlogVaultProbe;
+use SatelliteWP\Manager\Probe\CrmProbe;
+use SatelliteWP\Manager\Probe\DnsProbe;
+use SatelliteWP\Manager\Probe\HttpProbe;
+use SatelliteWP\Manager\Probe\MailProbe;
+use SatelliteWP\Manager\Probe\PageSpeedProbe;
+use SatelliteWP\Manager\Probe\ProbeRegistry;
+use SatelliteWP\Manager\Probe\RdapProbe;
+use SatelliteWP\Manager\Probe\TlsProbe;
+use SatelliteWP\Manager\Probe\WordfenceProbe;
+use SatelliteWP\Manager\Probe\WporgProbe;
+use SatelliteWP\Manager\Reference\CatalogIndex;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Reference\WordfenceIndex;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\RuleCatalog;
+use SatelliteWP\Manager\Rules\RuleEngine;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Rules\VulnerabilityMerge;
+use SatelliteWP\Manager\Storage\DataStore;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Storage\KeyStore;
+use SatelliteWP\Manager\Storage\ReportTokenStore;
+use SatelliteWP\Manager\Storage\RoleCapabilities;
+use SatelliteWP\Manager\Storage\UserStore;
+use SatelliteWP\Manager\Support\ErrorLog;
 
 /**
  * Tiny hand-rolled service registry. Everything is lazy and cached.
@@ -111,9 +112,9 @@ final class App
         return $this->services[PayloadValidator::class] ??= new PayloadValidator();
     }
 
-    public function receptor(): Receptor
+    public function extractor(): Extractor
     {
-        return $this->services[Receptor::class] ??= new Receptor(
+        return $this->services[Extractor::class] ??= new Extractor(
             $this->signatureVerifier(),
             $this->payloadValidator(),
             $this->dataStore(),
@@ -131,7 +132,7 @@ final class App
 
             $connectTimeout = (int) $this->config->get('probes.connect_timeout', 5);
             $timeout        = (int) $this->config->get('probes.timeout', 15);
-            $userAgent      = (string) $this->config->get('probes.user_agent', 'SatelliteWP-Xtractor/1.0');
+            $userAgent      = (string) $this->config->get('probes.user_agent', 'SatelliteWP-Manager/1.0');
 
             $registry->register(new HttpProbe($connectTimeout, $timeout, $userAgent));
             $registry->register(new DnsProbe());
@@ -160,6 +161,9 @@ final class App
             $registry->register(new BlogVaultProbe(
                 $this->isConfigured('blogvault') ? $this->blogVault() : null
             ));
+
+            // Links the BlogVault site id to its CRM client and maintenance plan (SELECT only).
+            $registry->register(new CrmProbe(fn () => $this->crmRepository()));
 
             // Reads the local cache only; the API client is for wordfence:refresh.
             $registry->register(new WordfenceProbe(

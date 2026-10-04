@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\Http\LoginLockout;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\LoginLockout;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class LoginLockoutTest extends TestCase
 {

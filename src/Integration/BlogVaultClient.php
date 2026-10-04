@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Integration;
+namespace SatelliteWP\Manager\Integration;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use InvalidArgumentException;
-use SatelliteWP\Xtractor\Support\Secret;
+use SatelliteWP\Manager\Support\Secret;
 
 /**
  * Generic, parameter-driven client for the BlogVault API v6.

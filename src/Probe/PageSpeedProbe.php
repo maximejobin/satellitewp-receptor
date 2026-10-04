@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Support\Secret;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Support\Secret;
 
 /**
  * Performance via Google PageSpeed Insights v5 (Lighthouse + CrUX field data).

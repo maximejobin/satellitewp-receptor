@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
-use SatelliteWP\Xtractor\Http\Router;
-use SatelliteWP\Xtractor\Support\SiteDisplay;
+use SatelliteWP\Manager\Crm\ClientsRepository;
+use SatelliteWP\Manager\Http\Router;
+use SatelliteWP\Manager\Support\SiteDisplay;
 
 /**
  * The external CRM browser: clients, websites, products and items as flat

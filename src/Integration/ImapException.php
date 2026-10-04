@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Integration;
+namespace SatelliteWP\Manager\Integration;
 
 use RuntimeException;
 

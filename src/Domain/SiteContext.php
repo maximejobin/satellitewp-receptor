@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Domain;
+namespace SatelliteWP\Manager\Domain;
 
 /**
  * Everything a probe needs to know about a site, derived from an extraction payload.
@@ -15,6 +15,8 @@ final readonly class SiteContext
      * @param array{username: string, password: string}|null $httpAuth per-site Basic Auth for
      *        HttpProbe (KeyStore::setHttpAuth()), not part of the payload
      * @param ?string $locale the analyst's chosen report language (meta.json), null = config default
+     * @param ?string $blogvaultSiteId the BlogVault site id the blogvault probe resolved
+     *        for this extraction, handed to probes that link on it (CrmProbe)
      */
     public function __construct(
         public string $siteId,
@@ -27,7 +29,25 @@ final readonly class SiteContext
         public ?string $wpVersion = null,
         public ?array $httpAuth = null,
         public ?string $locale = null,
+        public ?string $blogvaultSiteId = null,
     ) {
+    }
+
+    public function withBlogvaultSiteId(?string $id): self
+    {
+        return new self(
+            $this->siteId,
+            $this->siteUrl,
+            $this->homeUrl,
+            $this->host,
+            $this->registrableDomain,
+            $this->plugins,
+            $this->themes,
+            $this->wpVersion,
+            $this->httpAuth,
+            $this->locale,
+            $id,
+        );
     }
 
     /**

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Domain;
+namespace SatelliteWP\Manager\Domain;
 
 /**
  * A specific extraction of a site: its context plus where it lives on disk.

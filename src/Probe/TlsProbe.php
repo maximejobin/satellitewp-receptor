@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Support\HostGuard;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Support\HostGuard;
 
 /**
  * TLS certificate and protocol support: issuer, SAN coverage, validity,

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Http\Session;
+use SatelliteWP\Manager\Http\Session;
 
 /** Google sign-in, the Basic-auth dev fallback and sign-out. */
 final class AuthController extends Controller
@@ -75,7 +75,7 @@ final class AuthController extends Controller
             $lockout->recordFailure($ip);
         }
 
-        $this->response->header('WWW-Authenticate: Basic realm="SatelliteWP Xtractor"');
+        $this->response->header('WWW-Authenticate: Basic realm="SatelliteWP Manager"');
         $this->response->text(401, 'Authentication required.');
 
         return false;
@@ -152,7 +152,7 @@ final class AuthController extends Controller
         // No "first sign-in becomes admin": this host is public, so the first
         // visitor would claim it. Seed the list with `users:add`.
         if ($users->isEmpty()) {
-            $this->loginPage('No user registered yet. Seed the list with: bin/xtractor users:add <email>');
+            $this->loginPage('No user registered yet. Seed the list with: bin/swpmgr users:add <email>');
 
             return;
         }

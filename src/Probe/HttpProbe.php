@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use Closure;
 use GuzzleHttp\Client;
@@ -13,9 +13,9 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\TransferStats;
 use Psr\Http\Message\RequestInterface;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Support\HostGuard;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Support\HostGuard;
 
 /**
  * HTTP behaviour of the site: redirect chain (http→https, www canonical),

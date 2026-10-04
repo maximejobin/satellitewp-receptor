@@ -4,7 +4,7 @@
  * @var string $selectedType
  * @var string|null $lastSyncedAt
  */
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 
 $types = [
     ''                                          => 'All',

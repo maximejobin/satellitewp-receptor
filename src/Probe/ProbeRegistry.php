@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use InvalidArgumentException;
 

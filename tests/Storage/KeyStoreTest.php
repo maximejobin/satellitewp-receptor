@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Storage;
+namespace SatelliteWP\Manager\Tests\Storage;
 
-use SatelliteWP\Xtractor\Storage\KeyStore;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Storage\KeyStore;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /**
  * KeyStore::getHttpAuth()/setHttpAuth() — the per-site HTTP Basic Auth

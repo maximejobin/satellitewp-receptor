@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Display contract of the "Bilan de santé" Google Docs report: which
- * {{variable}} gets which value, table or set of findings. What Xtractor
+ * {{variable}} gets which value, table or set of findings. What Manager
  * knows lives in the rules and probes; this file only decides what this one
  * report shows. Web\ReportBuilder resolves it.
  *
@@ -33,6 +33,9 @@ return [
         'extraction_date' => ['type' => 'value', 'from' => 'meta.received_at', 'transform' => 'date'],
         'report_by'       => ['type' => 'value', 'from' => 'report_by', 'default' => '—'],
         'date'            => ['type' => 'value', 'from' => 'today', 'transform' => 'date'],
+        // From the CRM snapshot (probes/crm.json); empty when the site isn't linked or has no single active plan.
+        'client'           => ['type' => 'value', 'from' => 'probe.crm.clients', 'transform' => 'crm_client_labels', 'default' => '—'],
+        'maintenance_plan' => ['type' => 'value', 'from' => 'probe.crm.maintenance_plan.name', 'default' => '—'],
 
         // Nom de domaine.
         'domain_name'            => ['type' => 'value', 'from' => 'host', 'transform' => 'registrable_domain', 'default' => '—'],
@@ -41,6 +44,8 @@ return [
         'domain_date_update'     => ['type' => 'value', 'from' => 'probe.rdap.updated_at', 'transform' => 'date', 'default' => '—'],
         'domain_date_expiration' => ['type' => 'value', 'from' => 'probe.rdap.expires_at', 'transform' => 'date', 'default' => '—'],
         'domain_nameservers'     => ['type' => 'value', 'from' => 'probe.rdap.nameservers', 'transform' => 'join_lines', 'default' => '—'],
+        'email_spf_record'       => ['type' => 'value', 'from' => 'probe.dns.spf.record', 'default' => '—'],
+        'email_dmarc_policy'     => ['type' => 'value', 'from' => 'probe.dns.dmarc.policy', 'default' => '—'],
         'domain_observations'    => ['type' => 'observations', 'categories' => ['DOMAIN', 'DNS', 'EMAIL']],
 
         // Infrastructure web.
@@ -74,7 +79,7 @@ return [
         // WordPress.
         'wp_core_version'      => ['type' => 'value', 'from' => 'payload.wp_version', 'default' => '—'],
         'wp_core_status'       => ['type' => 'value', 'from' => 'reference.wordpress_status', 'transform' => 'wordpress_status_label', 'color_transform' => 'wordpress_status_color'],
-        // Xtractor's own wordpress.org cache — the site's self-report can be stale.
+        // Manager's own wordpress.org cache — the site's self-report can be stale.
         'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version', 'default' => '—'],
         'wp_install_type'      => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type'],
         'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.core_update.auto_update_core', 'transform' => 'auto_update_core'],

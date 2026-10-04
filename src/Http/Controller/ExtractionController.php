@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
-use SatelliteWP\Xtractor\Http\ReportContract;
-use SatelliteWP\Xtractor\Http\Router;
-use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
-use SatelliteWP\Xtractor\Rules\Pastille;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Support\HostGuard;
+use SatelliteWP\Manager\Http\ReportContract;
+use SatelliteWP\Manager\Http\Router;
+use SatelliteWP\Manager\Probe\BlogVaultProbe;
+use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Support\HostGuard;
 
 /** One extraction: its report page, raw files and every action on it. */
 final class ExtractionController extends Controller
@@ -317,7 +317,7 @@ final class ExtractionController extends Controller
                     'timeout'         => 10,
                     'http_errors'     => false,
                     'allow_redirects' => false,
-                    'headers'         => ['User-Agent' => (string) $this->app->config->get('probes.user_agent', 'SatelliteWP-Xtractor/1.0')],
+                    'headers'         => ['User-Agent' => (string) $this->app->config->get('probes.user_agent', 'SatelliteWP-Manager/1.0')],
                     'curl'            => [\CURLOPT_RESOLVE => [HostGuard::curlResolveEntry($hopHost, $port, $ip)]],
                 ];
                 // Basic credentials only over https, and only to the site itself.

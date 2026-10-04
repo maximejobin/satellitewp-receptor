@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
 use DateTimeImmutable;
 use DateTimeZone;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Integration\ImapClient;
-use SatelliteWP\Xtractor\Probe\MailProbe;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Integration\ImapClient;
+use SatelliteWP\Manager\Probe\MailProbe;
 
 final class MailProbeTest extends TestCase
 {
@@ -65,11 +65,15 @@ final class MailProbeTest extends TestCase
         self::assertSame('pass', MailProbe::authResults([$header], 'mx.google.com')['dkim']);
     }
 
-    public function testMissingMethodsStayUnknownRatherThanFailed(): void
+    public function testMethodsTheReceiverDidNotRecordAreNoneExceptSpf(): void
     {
         self::assertSame(
-            ['spf' => 'pass', 'dkim' => null, 'dmarc' => null],
+            ['spf' => 'pass', 'dkim' => 'none', 'dmarc' => 'none'],
             MailProbe::authResults(['mx.google.com; spf=pass'], 'mx.google.com')
+        );
+        self::assertSame(
+            ['spf' => null, 'dkim' => 'pass', 'dmarc' => 'none'],
+            MailProbe::authResults(['mx.google.com; dkim=pass'], 'mx.google.com')
         );
     }
 
@@ -109,10 +113,11 @@ final class MailProbeTest extends TestCase
 
         $client = $this->client([
             'A1 OK logged in',
-            "* 3 EXISTS\r\nA2 OK [READ-ONLY] examined",
-            "* SEARCH 41 42\r\nA3 OK done",
-            $this->fetch(41, '29-Sep-2026 15:00:00 +0000', $old) . $this->fetch(42, '30-Sep-2026 09:00:00 +0000', $new) . 'A4 OK done',
-            "* BYE\r\nA5 OK bye",
+            $this->inboxOnly(),
+            "* 3 EXISTS\r\nA3 OK [READ-ONLY] examined",
+            "* SEARCH 41 42\r\nA4 OK done",
+            $this->fetch(41, '29-Sep-2026 15:00:00 +0000', $old) . $this->fetch(42, '30-Sep-2026 09:00:00 +0000', $new) . 'A5 OK done',
+            "* BYE\r\nA6 OK bye",
         ]);
 
         $result = $this->probe($client)->run($this->site());
@@ -133,14 +138,15 @@ final class MailProbeTest extends TestCase
     {
         $client = $this->client([
             'A1 OK logged in',
-            'A2 OK examined',
-            "* SEARCH\r\nA3 OK done",
-            "* BYE\r\nA4 OK bye",
+            $this->inboxOnly(),
+            'A3 OK examined',
+            "* SEARCH\r\nA4 OK done",
+            "* BYE\r\nA5 OK bye",
         ]);
 
         $result = $this->probe($client)->run($this->site());
 
-        self::assertSame(ProbeResult::STATUS_OK, $result->status, implode(" | ", $result->errors));
+        self::assertSame(ProbeResult::STATUS_OK, $result->status, implode(' | ', $result->errors));
         self::assertFalse($result->data['found']);
         self::assertNull($result->data['spf']);
         self::assertNull($result->data['dkim']);
@@ -154,10 +160,11 @@ final class MailProbeTest extends TestCase
 
         $client = $this->client([
             'A1 OK logged in',
-            'A2 OK examined',
-            "* SEARCH 7\r\nA3 OK done",
-            $this->fetch(7, '30-Sep-2026 10:00:00 +0000', $raw) . 'A4 OK done',
-            "* BYE\r\nA5 OK bye",
+            $this->inboxOnly(),
+            'A3 OK examined',
+            "* SEARCH 7\r\nA4 OK done",
+            $this->fetch(7, '30-Sep-2026 10:00:00 +0000', $raw) . 'A5 OK done',
+            "* BYE\r\nA6 OK bye",
         ]);
 
         $result = $this->probe($client)->run($this->site());
@@ -167,25 +174,40 @@ final class MailProbeTest extends TestCase
         self::assertSame('example.com', $result->data['from_domain']);
     }
 
-    public function testASpamFolderThatDoesNotExistIsSkippedButInboxFailureIsAnError(): void
+    public function testAMessageFiledAsSpamIsFoundInTheServersJunkFolder(): void
     {
-        $client = $this->client([
-            'A1 OK logged in',
-            'A2 OK examined',
-            "* SEARCH\r\nA3 OK done",
-            'A4 NO [NONEXISTENT] Unknown Mailbox',
-            "* BYE\r\nA5 OK bye",
-        ]);
-        $result = $this->probe($client, ['INBOX', '[Gmail]/Spam'])->run($this->site());
-        self::assertSame(ProbeResult::STATUS_OK, $result->status, implode(" | ", $result->errors));
+        $ref = MailProbe::reference(self::SITE_ID);
+        $raw = "Subject: Test [{$ref}]\r\nFrom: wordpress@example.com\r\n"
+            . "Authentication-Results: mx.google.com; spf=softfail; dkim=none; dmarc=fail\r\n\r\n";
 
         $client = $this->client([
             'A1 OK logged in',
-            'A2 NO [NONEXISTENT] Unknown Mailbox',
-            "* BYE\r\nA3 OK bye",
+            "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\HasNoChildren \\Junk) \"/\" \"[Gmail]/Pourriel\"\r\nA2 OK listed",
+            'A3 OK examined',
+            "* SEARCH\r\nA4 OK done",
+            'A5 OK examined',
+            "* SEARCH 3\r\nA6 OK done",
+            $this->fetch(3, '30-Sep-2026 10:00:00 +0000', $raw) . 'A7 OK done',
+            "* BYE\r\nA8 OK bye",
         ]);
+
         $result = $this->probe($client)->run($this->site());
-        self::assertSame(ProbeResult::STATUS_ERROR, $result->status);
+
+        self::assertTrue($result->data['found'], implode(' | ', $result->errors));
+        self::assertSame('softfail', $result->data['spf']);
+        self::assertSame('fail', $result->data['dmarc']);
+    }
+
+    public function testAnInboxThatCannotBeOpenedIsAnError(): void
+    {
+        $client = $this->client([
+            'A1 OK logged in',
+            $this->inboxOnly(),
+            'A3 NO [NONEXISTENT] Unknown Mailbox',
+            "* BYE\r\nA4 OK bye",
+        ]);
+
+        self::assertSame(ProbeResult::STATUS_ERROR, $this->probe($client)->run($this->site())->status);
     }
 
     public function testARefusedLoginIsAnErrorThatNeverCarriesThePassword(): void
@@ -215,11 +237,10 @@ final class MailProbeTest extends TestCase
         return SiteContext::fromExtractionPayload(self::SITE_ID, ['site_url' => 'https://example.com', 'home_url' => 'https://example.com']);
     }
 
-    /** @param list<string> $mailboxes */
-    private function probe(ImapClient $client, array $mailboxes = ['INBOX']): MailProbe
+    private function probe(ImapClient $client): MailProbe
     {
         return new MailProbe(
-            ['username' => 'validator@example.com', 'password' => 'app-password-1234', 'mailboxes' => $mailboxes, 'max_age_hours' => 24],
+            ['username' => 'validator@example.com', 'password' => 'app-password-1234', 'max_age_hours' => 24],
             static fn (): ImapClient => $client,
             static fn (): DateTimeImmutable => new DateTimeImmutable('2026-09-30 12:00:00', new DateTimeZone('UTC')),
         );
@@ -242,6 +263,11 @@ final class MailProbeTest extends TestCase
         stream_set_timeout($clientEnd, 1);
 
         return new ImapClient($clientEnd);
+    }
+
+    private function inboxOnly(): string
+    {
+        return "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\nA2 OK listed";
     }
 
     private function fetch(int $uid, string $internalDate, string $headers): string

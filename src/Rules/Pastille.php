@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Rules;
+namespace SatelliteWP\Manager\Rules;
 
 /**
  * The coloured signal shown instead of a severity label:

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Reference\WordPressVersions;
 
 /** /status and the cross-site reference data pages under /data. */
 final class DataController extends Controller

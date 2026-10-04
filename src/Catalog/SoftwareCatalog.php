@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Catalog;
+namespace SatelliteWP\Manager\Catalog;
 
-use SatelliteWP\Xtractor\Support\AtomicFile;
+use SatelliteWP\Manager\Support\AtomicFile;
 
 /**
  * A growing, cross-site reference of every plugin and theme ever seen, keyed by

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor;
+namespace SatelliteWP\Manager;
 
 /**
  * Builds the App from the project configuration.

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Console;
+namespace SatelliteWP\Manager\Console;
 
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Storage\Index;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Storage\Index;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,7 +18,7 @@ use Throwable;
  * arrivals, so a push spends no probe quota; the slow work stays out of web
  * requests.
  *
- * Crontab: * * * * * php /path/to/bin/xtractor ingest:process --requeue-stale=30
+ * Crontab: * * * * * php /path/to/bin/swpmgr ingest:process --requeue-stale=30
  */
 #[AsCommand(name: 'ingest:process', description: 'Run the probe pipeline on queued extractions')]
 final class IngestProcessCommand extends Command

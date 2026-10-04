@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Rules;
+namespace SatelliteWP\Manager\Rules;
 
 /**
  * What a rule's check closure returns. Language-neutral: it carries the outcome

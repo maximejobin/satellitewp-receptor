@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Integration\BlogVaultClient;
-use SatelliteWP\Xtractor\Integration\BlogVaultException;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Integration\BlogVaultClient;
+use SatelliteWP\Manager\Integration\BlogVaultException;
 
 /**
  * BlogVault v6 — the single agreed source for vulnerabilities, malware/hacked

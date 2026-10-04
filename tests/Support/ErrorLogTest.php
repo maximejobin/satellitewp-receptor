@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Support;
+namespace SatelliteWP\Manager\Tests\Support;
 
 use RuntimeException;
-use SatelliteWP\Xtractor\Support\ErrorLog;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Support\ErrorLog;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class ErrorLogTest extends TestCase
 {
@@ -34,7 +34,7 @@ final class ErrorLogTest extends TestCase
     {
         self::assertDirectoryDoesNotExist($this->tmpDir . '/logs');
 
-        $this->log->record('receptor', 'Storage failure');
+        $this->log->record('extractor', 'Storage failure');
 
         self::assertDirectoryExists($this->tmpDir . '/logs');
     }
@@ -51,13 +51,13 @@ final class ErrorLogTest extends TestCase
 
     public function testEachEntryIsOneJsonLine(): void
     {
-        $this->log->record('receptor', 'first');
+        $this->log->record('extractor', 'first');
         $this->log->record('admin', 'second');
 
         $entries = $this->entries();
 
         self::assertCount(2, $entries);
-        self::assertSame(['receptor', 'first'], [$entries[0]['source'], $entries[0]['message']]);
+        self::assertSame(['extractor', 'first'], [$entries[0]['source'], $entries[0]['message']]);
         self::assertSame(['admin', 'second'], [$entries[1]['source'], $entries[1]['message']]);
     }
 
@@ -79,7 +79,7 @@ final class ErrorLogTest extends TestCase
 
     public function testAThrowableIsRecordedWithItsTypeOriginAndTrace(): void
     {
-        $this->log->recordThrowable('receptor', new RuntimeException('disk full'));
+        $this->log->recordThrowable('extractor', new RuntimeException('disk full'));
 
         $entry = $this->entries()[0];
 
@@ -93,7 +93,7 @@ final class ErrorLogTest extends TestCase
     public function testThePreviousExceptionChainIsFollowed(): void
     {
         $this->log->recordThrowable(
-            'receptor',
+            'extractor',
             new RuntimeException('storing failed', 0, new RuntimeException('database is locked'))
         );
 
@@ -105,7 +105,7 @@ final class ErrorLogTest extends TestCase
 
     public function testContextIsRecordedAlongsideTheMessage(): void
     {
-        $this->log->record('receptor', 'boom', ['site_id' => 'abc', 'payload' => 'extraction']);
+        $this->log->record('extractor', 'boom', ['site_id' => 'abc', 'payload' => 'extraction']);
 
         self::assertSame(
             ['site_id' => 'abc', 'payload' => 'extraction'],

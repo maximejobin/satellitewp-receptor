@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
 use InvalidArgumentException;
-use SatelliteWP\Xtractor\Storage\DataStore;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Storage\KeyStore;
-use SatelliteWP\Xtractor\Support\ErrorLog;
+use SatelliteWP\Manager\Storage\DataStore;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Storage\KeyStore;
+use SatelliteWP\Manager\Support\ErrorLog;
 use Throwable;
 
 /**
  * Handles incoming plugin POSTs (extraction | event | integrity).
  * Verifies, stores, indexes — never runs probes (the cron worker does).
  */
-final class Receptor
+final class Extractor
 {
     public function __construct(
         private readonly SignatureVerifier $signatures,
@@ -82,16 +82,16 @@ final class Receptor
                 PayloadValidator::TYPE_INTEGRITY => $this->storeIntegrity($siteId, $payload, $receivedAt),
             };
         } catch (Throwable $e) {
-            // The one 500 the receptor raises on purpose. It logs itself rather
+            // The one 500 the extractor raises on purpose. It logs itself rather
             // than falling through to the shutdown handler, so the entry carries
             // which site and which payload type were being stored.
-            $ref = $this->errorLog?->recordThrowable('receptor', $e, [
+            $ref = $this->errorLog?->recordThrowable('extractor', $e, [
                 'site_id' => $siteId,
                 'payload' => $type,
             ]);
 
             if ($ref === null) {
-                error_log('[xtractor] receptor storage failure: ' . $e->getMessage());
+                error_log('[manager] extractor storage failure: ' . $e->getMessage());
 
                 return $this->error(500, 'Storage failure');
             }
@@ -198,7 +198,7 @@ final class Receptor
             409,
             "This site is registered as {$bound} but reported from {$claimed}. "
             . 'Refusing it so a restored copy cannot report over the original. '
-            . "Run 'xtractor keys:rebind' if the site really moved."
+            . "Run 'manager keys:rebind' if the site really moved."
         );
     }
 

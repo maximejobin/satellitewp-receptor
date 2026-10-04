@@ -5,20 +5,20 @@ declare(strict_types=1);
 /**
  * Admin front controller — the analyst UI, behind Google sign-in.
  *
- * Deliberately a separate application from the receptor: it never accepts a
+ * Deliberately a separate application from the extractor: it never accepts a
  * plugin push, so no unauthenticated request can reach the data store through
- * this vhost. Keep it off the public receptor hostname.
+ * this vhost. Keep it off the public extractor hostname.
  *
  * Docroot this directory on its own vhost, e.g.
- *   xtractor.satellitewp.com -> /var/www/xtractor/public/admin
+ *   manager.satellitewp.com -> /var/www/manager/public/admin
  */
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-use SatelliteWP\Xtractor\Bootstrap;
-use SatelliteWP\Xtractor\Http\ErrorHandler;
-use SatelliteWP\Xtractor\Http\Router;
-use SatelliteWP\Xtractor\Support\ErrorLog;
+use SatelliteWP\Manager\Bootstrap;
+use SatelliteWP\Manager\Http\ErrorHandler;
+use SatelliteWP\Manager\Http\Router;
+use SatelliteWP\Manager\Support\ErrorLog;
 
 // Before anything else, including the config load: a 500 raised while booting
 // is exactly the one nobody would otherwise see.

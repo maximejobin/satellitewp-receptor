@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Console;
+namespace SatelliteWP\Manager\Console;
 
 use ReflectionFunction;
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Rules\RuleCatalog;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Rules\RuleCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -56,7 +56,7 @@ final class RulesDocCommand extends Command
         }
 
         $out   = [];
-        $out[] = '# Catalogue des règles — SatelliteWP Xtractor';
+        $out[] = '# Catalogue des règles — SatelliteWP Manager';
         $out[] = '';
         $out[] = '**Généré, pas écrit à la main** — ne pas éditer ce fichier directement, les';
         $out[] = 'modifications seraient perdues au prochain export. La vérité vit dans';
@@ -64,7 +64,7 @@ final class RulesDocCommand extends Command
         $out[] = 'republier cette page après un changement de règle :';
         $out[] = '';
         $out[] = '```';
-        $out[] = 'php bin/xtractor rules:doc > docs/rules-catalog.md';
+        $out[] = 'php bin/swpmgr rules:doc > docs/rules-catalog.md';
         $out[] = '```';
         $out[] = '';
         $out[] = sprintf('%d règles, %d groupes.', count($rules), count($grouped));

@@ -1,6 +1,6 @@
 <?php
 /**
- * @var \SatelliteWP\Xtractor\Rules\Translator $t
+ * @var \SatelliteWP\Manager\Rules\Translator $t
  * @var array<string, mixed>|null $keyRow
  * @var array{site_id: string, key: string, origin: string|null}|null $createdKey
  */

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /**
  * title() picks the pass/fail-specific headline (title_success/

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Crm;
+namespace SatelliteWP\Manager\Tests\Crm;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Crm\ClientsDb;
+use SatelliteWP\Manager\Crm\ClientsDb;
 
 final class ClientsDbTest extends TestCase
 {

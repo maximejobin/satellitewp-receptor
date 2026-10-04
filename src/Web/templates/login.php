@@ -1,5 +1,5 @@
 <div class="login-card card">
-    <h1 style="margin-bottom:.3rem"><b>SatelliteWP</b> Xtractor</h1>
+    <h1 style="margin-bottom:.3rem"><b>SatelliteWP</b> Manager</h1>
     <p class="muted" style="margin-top:0">Analyst interface — restricted access.</p>
 
     <?php if ($message !== ''): ?>
@@ -10,10 +10,10 @@
         <p class="pending-note" style="text-align:left">
             No user is registered yet, so no one can sign in.
             Seed the list from the server:
-            <br><span class="mono">bin/xtractor users:add your@address.com admin</span>
+            <br><span class="mono">bin/swpmgr users:add your@address.com admin</span>
             <br>The role argument matters — omit it and it defaults to
             <span class="mono">maintenance</span>, not admin. Got the role
-            wrong after the fact? <span class="mono">bin/xtractor users:set-role
+            wrong after the fact? <span class="mono">bin/swpmgr users:set-role
             your@address.com admin</span> fixes it.
         </p>
     <?php endif; ?>

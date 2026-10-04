@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Http\Router;
+use SatelliteWP\Manager\Http\Router;
 
 /** /catalog — the cross-site free/premium plugin & theme classification. */
 final class CatalogController extends Controller

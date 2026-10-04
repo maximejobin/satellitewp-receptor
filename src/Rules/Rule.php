@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Rules;
+namespace SatelliteWP\Manager\Rules;
 
 use Closure;
 use InvalidArgumentException;

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Web;
+namespace SatelliteWP\Manager\Tests\Web;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Rules\Pastille;
-use SatelliteWP\Xtractor\Rules\RuleCatalog;
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Web\ReportBuilder;
+use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Rules\RuleCatalog;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Web\ReportBuilder;
 
 final class ReportBuilderTest extends TestCase
 {
@@ -17,7 +17,7 @@ final class ReportBuilderTest extends TestCase
     {
         $t = new Translator($locale, dirname(__DIR__, 2) . '/config/lang', 'en');
 
-        return new ReportBuilder($t, 'https://xtractor.test/assets/report-icons');
+        return new ReportBuilder($t, 'https://manager.test/assets/report-icons');
     }
 
     /** @return array<string, mixed> */
@@ -172,16 +172,16 @@ final class ReportBuilderTest extends TestCase
         // Akismet: active, no update, one Wordfence-only vulnerability.
         self::assertSame(['text' => '5.3', 'color' => null], $table['rows'][0][1]);
         self::assertSame(
-            '[img url="https://xtractor.test/assets/report-icons/dot-green.png"]'
-            . ' [img url="https://xtractor.test/assets/report-icons/vulnerable.png"]',
+            '[img url="https://manager.test/assets/report-icons/dot-green.png"]'
+            . ' [img url="https://manager.test/assets/report-icons/vulnerable.png"]',
             $table['rows'][0][2]['text']
         );
 
         // Old Plugin: inactive, update 1.0 → 2.0, no known vulnerability.
         self::assertSame(['text' => '1.0 → 2.0', 'color' => 'orange'], $table['rows'][1][1]);
         self::assertSame(
-            '[img url="https://xtractor.test/assets/report-icons/dot-red.png"]'
-            . ' [img url="https://xtractor.test/assets/report-icons/upgrade.png"]',
+            '[img url="https://manager.test/assets/report-icons/dot-red.png"]'
+            . ' [img url="https://manager.test/assets/report-icons/upgrade.png"]',
             $table['rows'][1][2]['text']
         );
     }
@@ -233,6 +233,24 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['text' => '2.0 → 2.1', 'color' => 'orange'], $table['rows'][1][1]); // parent, update offered
         self::assertStringContainsString('dot-green.png', $table['rows'][0][2]['text']);
         self::assertStringContainsString('dot-red.png', $table['rows'][1][2]['text']);
+    }
+
+    public function testClientAndMaintenancePlanComeFromTheCrmSnapshot(): void
+    {
+        $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
+        $crm      = [
+            'linked'           => true,
+            'clients'          => [['id' => 1, 'label' => 'Acme Inc'], ['id' => 2, 'label' => 'Bob Builder']],
+            'maintenance_plan' => ['subscription_id' => 1, 'name' => 'Care Gold', 'next_renewal' => '2027-01-01'],
+        ];
+
+        $fields = $this->builder()->build($contract, ['probe' => ['crm' => $crm]] + $this->context(), [])['fields'];
+        self::assertSame('Acme Inc, Bob Builder', $fields['client']['value']);
+        self::assertSame('Care Gold', $fields['maintenance_plan']['value']);
+
+        $fields = $this->builder()->build($contract, ['probe' => ['crm' => ['linked' => false, 'reason' => 'website_not_found']]] + $this->context(), [])['fields'];
+        self::assertSame('—', $fields['client']['value']);
+        self::assertSame('—', $fields['maintenance_plan']['value']);
     }
 
     public function testAdministratorsTableShowsRoleAndIncludesSuperAdmins(): void

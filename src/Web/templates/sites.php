@@ -1,4 +1,4 @@
-<?php /** @var \SatelliteWP\Xtractor\Rules\Translator $t */ ?>
+<?php /** @var \SatelliteWP\Manager\Rules\Translator $t */ ?>
 <h1><?= e($t->ui('sites')) ?></h1>
 
 <form method="get" class="search">
@@ -20,7 +20,7 @@ if (isset($notices[$notice ?? ''])):
     <summary class="muted" style="cursor:pointer">Pair a new site</summary>
     <div style="margin-top:.6rem">
         <p class="muted" style="font-size:.85rem;max-width:46rem">
-            A site must be paired before the receptor accepts its pushes. On the site,
+            A site must be paired before the extractor accepts its pushes. On the site,
             <b>Settings → SatelliteWP</b> shows its "Site identifier" — a UUID the plugin
             generates itself on first load. Paste that same UUID here to create its key
             (shown once, on the site's own page next).

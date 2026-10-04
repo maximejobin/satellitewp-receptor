@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\Http\ReplayCache;
-use SatelliteWP\Xtractor\Http\SignatureException;
-use SatelliteWP\Xtractor\Http\SignatureVerifier;
-use SatelliteWP\Xtractor\Storage\KeyStore;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\ReplayCache;
+use SatelliteWP\Manager\Http\SignatureException;
+use SatelliteWP\Manager\Http\SignatureVerifier;
+use SatelliteWP\Manager\Storage\KeyStore;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class SignatureVerifierTest extends TestCase
 {

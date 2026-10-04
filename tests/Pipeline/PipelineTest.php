@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Pipeline;
+namespace SatelliteWP\Manager\Tests\Pipeline;
 
 use RuntimeException;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Pipeline\Pipeline;
-use SatelliteWP\Xtractor\Probe\AbstractProbe;
-use SatelliteWP\Xtractor\Probe\ProbeRegistry;
-use SatelliteWP\Xtractor\Storage\DataStore;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Pipeline\Pipeline;
+use SatelliteWP\Manager\Probe\AbstractProbe;
+use SatelliteWP\Manager\Probe\ProbeRegistry;
+use SatelliteWP\Manager\Storage\DataStore;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class PipelineTest extends TestCase
 {
@@ -72,8 +72,8 @@ final class PipelineTest extends TestCase
 
     public function testWritesNeutralFindingsWhenRuleEnginePresent(): void
     {
-        $rules  = \SatelliteWP\Xtractor\Rules\RuleCatalog::load(dirname(__DIR__, 2) . '/config/rules.php');
-        $engine = new \SatelliteWP\Xtractor\Rules\RuleEngine($rules);
+        $rules  = \SatelliteWP\Manager\Rules\RuleCatalog::load(dirname(__DIR__, 2) . '/config/rules.php');
+        $engine = new \SatelliteWP\Manager\Rules\RuleEngine($rules);
 
         $registry = new ProbeRegistry(['fine']);
         $registry->register(new StubProbe('fine', ProbeResult::STATUS_WARN));
@@ -113,6 +113,31 @@ final class PipelineTest extends TestCase
 
         $this->assertSame(['b'], array_keys($results));
         $this->assertNull($this->store->readProbeResult(self::SITE_ID, $this->extractionId, 'a'));
+    }
+
+    public function testCrmProbeReceivesTheBlogvaultIdFromThisRunOrTheStoredFile(): void
+    {
+        $registry = new ProbeRegistry(['blogvault', 'crm']);
+        $registry->register(new BlogvaultIdProbe('abc123'));
+        $registry->register(new SiteIdEchoProbe());
+
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId);
+        $this->assertSame('abc123', $results['crm']->data['blogvault_site_id']);
+
+        // A lone re-run of crm reads the id from the stored blogvault probe.
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId, ['crm']);
+        $this->assertSame('abc123', $results['crm']->data['blogvault_site_id']);
+    }
+
+    public function testCrmProbeGetsNoIdWhenBlogvaultDoesNotLinkTheSite(): void
+    {
+        $registry = new ProbeRegistry(['blogvault', 'crm']);
+        $registry->register(new BlogvaultIdProbe('abc123', linked: false));
+        $registry->register(new SiteIdEchoProbe());
+
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId);
+
+        $this->assertNull($results['crm']->data['blogvault_site_id']);
     }
 
     public function testAFailureMidRunMarksTheExtractionErrorNotRunning(): void
@@ -190,5 +215,45 @@ final class ThrowingProbe extends AbstractProbe
     protected function collect(SiteContext $site): array
     {
         throw new RuntimeException('kaboom');
+    }
+}
+
+final class BlogvaultIdProbe extends AbstractProbe
+{
+    public function __construct(private readonly string $id, private readonly bool $linked = true)
+    {
+    }
+
+    public function name(): string
+    {
+        return 'blogvault';
+    }
+
+    public function version(): string
+    {
+        return '1.0';
+    }
+
+    protected function collect(SiteContext $site): array
+    {
+        return ['data' => ['linked' => $this->linked, 'site' => ['id' => $this->id]]];
+    }
+}
+
+final class SiteIdEchoProbe extends AbstractProbe
+{
+    public function name(): string
+    {
+        return 'crm';
+    }
+
+    public function version(): string
+    {
+        return '1.0';
+    }
+
+    protected function collect(SiteContext $site): array
+    {
+        return ['data' => ['blogvault_site_id' => $site->blogvaultSiteId]];
     }
 }

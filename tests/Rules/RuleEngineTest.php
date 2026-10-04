@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use SatelliteWP\Xtractor\Rules\Category;
-use SatelliteWP\Xtractor\Rules\Check;
-use SatelliteWP\Xtractor\Rules\Context;
-use SatelliteWP\Xtractor\Rules\Rule;
-use SatelliteWP\Xtractor\Rules\RuleEngine;
-use SatelliteWP\Xtractor\Rules\Severity;
-use SatelliteWP\Xtractor\Rules\Status;
+use SatelliteWP\Manager\Rules\Category;
+use SatelliteWP\Manager\Rules\Check;
+use SatelliteWP\Manager\Rules\Context;
+use SatelliteWP\Manager\Rules\Rule;
+use SatelliteWP\Manager\Rules\RuleEngine;
+use SatelliteWP\Manager\Rules\Severity;
+use SatelliteWP\Manager\Rules\Status;
 
 final class RuleEngineTest extends TestCase
 {

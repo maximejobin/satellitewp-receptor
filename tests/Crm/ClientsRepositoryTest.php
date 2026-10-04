@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Crm;
+namespace SatelliteWP\Manager\Tests\Crm;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 
 /**
  * ClientsRepository sticks to portable SQL so it runs here on SQLite. The
@@ -514,6 +514,23 @@ final class ClientsRepositoryTest extends TestCase
         $this->assertCount(1, $subs);
         $this->assertSame('Acme Inc', $subs[0]['company']);
         $this->assertSame('WooCommerce Pro License', $subs[0]['product_name']);
+    }
+
+    public function testSubscriptionsForWebsiteFlagsMaintenancePlans(): void
+    {
+        $this->seedBasicPortfolio();
+
+        $this->assertSame(0, (int) $this->repo->subscriptionsForWebsite(1)[0]['is_maintenance_plan']);
+        $this->assertSame(1, (int) $this->repo->subscriptionsForWebsite(2)[0]['is_maintenance_plan']);
+    }
+
+    public function testWebsitesByBlogvaultSiteIdMatchesCaseInsensitivelyAndExactly(): void
+    {
+        $this->seedBasicPortfolio();
+
+        $this->assertSame([1], array_map(static fn (array $w): int => (int) $w['id'], $this->repo->websitesByBlogvaultSiteId('BV-1')));
+        $this->assertSame([], $this->repo->websitesByBlogvaultSiteId('bv'));
+        $this->assertSame([], $this->repo->websitesByBlogvaultSiteId(''));
     }
 
     public function testItemsForWebsiteGroupsByTypePluginThemeOther(): void

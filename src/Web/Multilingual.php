@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Web;
+namespace SatelliteWP\Manager\Web;
 
 /**
  * The multilingual plugin a payload reports, if any. The plugin's connectors

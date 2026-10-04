@@ -6,7 +6,7 @@
  * @var string $notice
  * @var array<string, string|null> $links external_links config (see config/config.php)
  */
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 
 $notices = [
     'website-updated'       => ['badge-ok', 'Linked website updated.'],

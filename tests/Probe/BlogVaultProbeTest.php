@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Probe\BlogVaultProbe;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Probe\BlogVaultProbe;
 
 /**
  * Parsing is pure and runs offline against captured v6 responses for

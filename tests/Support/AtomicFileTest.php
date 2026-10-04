@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Support;
+namespace SatelliteWP\Manager\Tests\Support;
 
 use RuntimeException;
-use SatelliteWP\Xtractor\Support\AtomicFile;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Support\AtomicFile;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class AtomicFileTest extends TestCase
 {

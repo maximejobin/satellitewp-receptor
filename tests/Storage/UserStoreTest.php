@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Storage;
+namespace SatelliteWP\Manager\Tests\Storage;
 
-use SatelliteWP\Xtractor\Storage\UserStore;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Storage\UserStore;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class UserStoreTest extends TestCase
 {

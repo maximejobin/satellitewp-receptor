@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Receptor front controller — the ONLY thing exposed to the internet.
+ * Extractor front controller — the ONLY thing exposed to the internet.
  *
  * Deliberately a separate application from the admin UI: it never loads the
  * Router, never starts a session, and serves no HTML. A site pushing here can
  * reach the signature check and the data store, and nothing else.
  *
  * Docroot this directory on its own vhost, e.g.
- *   receptor.satellitewp.com -> /var/www/xtractor/public/receptor
+ *   extractor.satellitewp.com -> /var/www/manager/public/receptor
  *
  * The plugin may POST to any path under it; anything that is not a signed
  * POST gets a flat 404, which tells an unauthenticated visitor nothing.
@@ -18,13 +18,13 @@ declare(strict_types=1);
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-use SatelliteWP\Xtractor\Bootstrap;
-use SatelliteWP\Xtractor\Http\ErrorHandler;
-use SatelliteWP\Xtractor\Support\ErrorLog;
+use SatelliteWP\Manager\Bootstrap;
+use SatelliteWP\Manager\Http\ErrorHandler;
+use SatelliteWP\Manager\Support\ErrorLog;
 
 // Before anything else, including the config load: a 500 raised while booting
 // is exactly the one nobody would otherwise see.
-ErrorHandler::install(new ErrorLog(ErrorLog::defaultDir()), 'receptor', json: true);
+ErrorHandler::install(new ErrorLog(ErrorLog::defaultDir()), 'extractor', json: true);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' || !isset($_SERVER['HTTP_X_SWP_TYPE'])) {
     http_response_code(404);
@@ -33,7 +33,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' || !isset($_SERVER['HTTP_X_
     exit;
 }
 
-$result = Bootstrap::app()->receptor()->handle(
+$result = Bootstrap::app()->extractor()->handle(
     [
         'site'      => $_SERVER['HTTP_X_SWP_SITE'] ?? null,
         'type'      => $_SERVER['HTTP_X_SWP_TYPE'] ?? null,

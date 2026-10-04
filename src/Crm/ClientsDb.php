@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Crm;
+namespace SatelliteWP\Manager\Crm;
 
 use PDO;
 

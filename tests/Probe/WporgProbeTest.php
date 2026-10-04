@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Probe\WporgProbe;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Probe\WporgProbe;
 
 final class WporgProbeTest extends TestCase
 {

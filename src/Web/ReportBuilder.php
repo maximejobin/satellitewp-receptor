@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Web;
+namespace SatelliteWP\Manager\Web;
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Pastille;
-use SatelliteWP\Xtractor\Rules\Translator;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Rules\Translator;
 
 require_once __DIR__ . '/helpers.php';
 
@@ -210,6 +210,7 @@ final class ReportBuilder
             'site_display'           => site_display((string) ($v ?? '')),
             'date'                   => $this->formatDate($v),
             'join_lines'             => implode("\n", array_map('strval', (array) ($v ?? []))),
+            'crm_client_labels'      => implode(', ', array_map(static fn (mixed $c): string => (string) ((array) $c)['label'], (array) ($v ?? []))),
             'join_comma'             => implode(', ', array_map('strval', (array) ($v ?? []))),
             'registrable_domain'     => is_string($v) && $v !== '' ? SiteContext::registrableDomain($v) : '',
             'active_theme'           => (string) (self::activeTheme($v)['name'] ?? ''),

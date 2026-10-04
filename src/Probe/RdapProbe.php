@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
 
 /**
  * Domain registration data. RDAP first (structured JSON, via rdap.org

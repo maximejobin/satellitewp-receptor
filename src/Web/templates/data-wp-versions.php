@@ -11,7 +11,7 @@
 <p><?= fmt_refreshed($eolRefreshedAt, 2 * 3600, 'Last EOL sync', 'Source: endoflife.date') ?></p>
 
 <?php if ($rows === []): ?>
-    <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
+    <p class="empty">Cache empty: run <code>bin/swpmgr reference:refresh</code> to fill it.</p>
 <?php else: ?>
     <div class="search-group">
     <p class="search"><?= dt_search_box('wp-versions') ?></p>

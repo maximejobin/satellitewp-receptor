@@ -2,19 +2,23 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Http\ReportContext;
-use SatelliteWP\Xtractor\Http\ReportContract;
-use SatelliteWP\Xtractor\Web\ReportBuilder;
+use RuntimeException;
+use SatelliteWP\Manager\Http\ReportContext;
+use SatelliteWP\Manager\Http\ReportContract;
+use SatelliteWP\Manager\Web\ReportBuilder;
 
 /**
  * GET /site/{id}/extraction/{id}/report.json — the Google Docs report
- * script's data feed. The script holds no browser session, so this route is
- * gated by its own credentials instead of the sign-in.
+ * script's data feed — and report-script.json, the rendering engine the Doc's
+ * loader runs. The script holds no browser session, so both routes are gated
+ * by the same report credentials instead of the sign-in.
  */
 final class ReportController extends Controller
 {
+    public const string ENGINE_FILE = 'resources/apps-script/report-engine.gs';
+
     /** @param array<string, string> $params */
     public function json(array $params): void
     {
@@ -64,6 +68,39 @@ final class ReportController extends Controller
             'fields'        => $report['fields'],
             'findings'      => $findings,
         ], 200, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /** @param array<string, string> $params */
+    public function script(array $params): void
+    {
+        if (!$this->accessGranted($params['site_id'], $params['extraction_id'])) {
+            $this->response->json(['error' => 'Invalid or missing credentials'], 401);
+
+            return;
+        }
+
+        $engine = self::engineScript(dirname(__DIR__, 3) . '/' . self::ENGINE_FILE);
+        if ($engine === null) {
+            throw new RuntimeException('Report engine script missing or without a VERSION line: ' . self::ENGINE_FILE);
+        }
+
+        $this->response->json($engine, 200, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * The engine's code and its `var VERSION = <n>;` — the number the loader
+     * compares with the copy stored in the Doc. Null when unreadable or unversioned.
+     *
+     * @return array{version: int, code: string}|null
+     */
+    public static function engineScript(string $file): ?array
+    {
+        $code = is_file($file) ? file_get_contents($file) : false;
+        if ($code === false || preg_match('/^var VERSION = (\d+);$/m', $code, $m) !== 1) {
+            return null;
+        }
+
+        return ['version' => (int) $m[1], 'code' => $code];
     }
 
     /**

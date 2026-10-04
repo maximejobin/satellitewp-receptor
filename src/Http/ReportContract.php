@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
-use SatelliteWP\Xtractor\App;
+use SatelliteWP\Manager\App;
 
 /** The active report contract file (config/reports/*.php, config `reports.bilan_de_sante`). */
 final class ReportContract

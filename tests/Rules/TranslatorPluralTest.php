@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
 use PHPUnit\Framework\Attributes\DataProvider;
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /** The {name|singular|plural} placeholder: French treats 0 and 1 as singular, English only 1. */
 final class TranslatorPluralTest extends TestCase

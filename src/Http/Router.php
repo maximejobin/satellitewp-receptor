@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Http\Controller\AuthController;
-use SatelliteWP\Xtractor\Http\Controller\CatalogController;
-use SatelliteWP\Xtractor\Http\Controller\Controller;
-use SatelliteWP\Xtractor\Http\Controller\CrmController;
-use SatelliteWP\Xtractor\Http\Controller\DataController;
-use SatelliteWP\Xtractor\Http\Controller\ExtractionController;
-use SatelliteWP\Xtractor\Http\Controller\HomeController;
-use SatelliteWP\Xtractor\Http\Controller\ReportController;
-use SatelliteWP\Xtractor\Http\Controller\SiteController;
-use SatelliteWP\Xtractor\Http\Controller\UserController;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Http\Controller\AuthController;
+use SatelliteWP\Manager\Http\Controller\CatalogController;
+use SatelliteWP\Manager\Http\Controller\Controller;
+use SatelliteWP\Manager\Http\Controller\CrmController;
+use SatelliteWP\Manager\Http\Controller\DataController;
+use SatelliteWP\Manager\Http\Controller\ExtractionController;
+use SatelliteWP\Manager\Http\Controller\HomeController;
+use SatelliteWP\Manager\Http\Controller\ReportController;
+use SatelliteWP\Manager\Http\Controller\SiteController;
+use SatelliteWP\Manager\Http\Controller\UserController;
 
 /**
  * Admin UI front router: resolves a path to a named route (pure, tested),
@@ -31,6 +31,7 @@ final class Router
         'extraction'                  => [ExtractionController::class, 'show'],
         'raw'                         => [ExtractionController::class, 'raw'],
         'extraction_report_json'      => [ReportController::class, 'json'],
+        'extraction_report_script'    => [ReportController::class, 'script'],
         'status'                      => [DataController::class, 'status'],
         'data_wp_versions'            => [DataController::class, 'wordPressVersions'],
         'data_php_versions'           => [DataController::class, 'phpVersions'],
@@ -99,8 +100,8 @@ final class Router
 
         $match = self::matchRoute($path);
 
-        // report.json is fetched by a script with no browser session; it has its own credentials.
-        if ($match['route'] !== 'extraction_report_json' && !$this->auth()->authenticate()) {
+        // Fetched by the Google Docs script with no browser session; they carry their own credentials.
+        if (!in_array($match['route'], ['extraction_report_json', 'extraction_report_script'], true) && !$this->auth()->authenticate()) {
             return;
         }
 
@@ -185,6 +186,9 @@ final class Router
             }
             if ($count === 5 && $segments[4] === 'report.json') {
                 return ['route' => 'extraction_report_json', 'params' => $extraction];
+            }
+            if ($count === 5 && $segments[4] === 'report-script.json') {
+                return ['route' => 'extraction_report_script', 'params' => $extraction];
             }
             if ($count === 6 && $segments[4] === 'raw') {
                 return ['route' => 'raw', 'params' => $extraction + ['file' => $segments[5]]];

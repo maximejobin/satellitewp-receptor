@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
-use SatelliteWP\Xtractor\Http\PayloadValidator;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\PayloadValidator;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class PayloadValidatorTest extends TestCase
 {

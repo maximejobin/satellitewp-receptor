@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Support;
+namespace SatelliteWP\Manager\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Support\HostGuard;
+use SatelliteWP\Manager\Support\HostGuard;
 
 /**
  * A probe must refuse any private, loopback, link-local or reserved address,

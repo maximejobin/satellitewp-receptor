@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Support;
+namespace SatelliteWP\Manager\Support;
 
 final class HostGuard
 {

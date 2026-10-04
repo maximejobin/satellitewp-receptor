@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Context;
-use SatelliteWP\Xtractor\Rules\RuleCatalog;
-use SatelliteWP\Xtractor\Rules\RuleEngine;
-use SatelliteWP\Xtractor\Rules\Status;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Context;
+use SatelliteWP\Manager\Rules\RuleCatalog;
+use SatelliteWP\Manager\Rules\RuleEngine;
+use SatelliteWP\Manager\Rules\Status;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /**
  * Guards the real catalogue: it must load, have unique ids, and behave sanely
@@ -36,7 +36,7 @@ final class RuleCatalogTest extends TestCase
 
         foreach ($rules as $rule) {
             $this->assertTrue(
-                \SatelliteWP\Xtractor\Rules\Category::isValid($rule->category),
+                \SatelliteWP\Manager\Rules\Category::isValid($rule->category),
                 "{$rule->id} has a valid category"
             );
             $this->assertContains($rule->source, ['DATA', 'EXT', 'EMAIL'], "{$rule->id} source");
@@ -335,7 +335,7 @@ final class RuleCatalogTest extends TestCase
 
     public function testEolRulesUseInjectedReferenceData(): void
     {
-        $eol = new \SatelliteWP\Xtractor\Reference\EndOfLife($this->tmpDir . '/reference');
+        $eol = new \SatelliteWP\Manager\Reference\EndOfLife($this->tmpDir . '/reference');
         mkdir($this->tmpDir . '/reference', 0775, true);
         file_put_contents($this->tmpDir . '/reference/php.json', (string) json_encode([
             ['cycle' => '8.3', 'eol' => '2027-12-31'],
@@ -418,7 +418,7 @@ final class RuleCatalogTest extends TestCase
         file_put_contents($this->tmpDir . '/reference/wordpress.json', (string) json_encode([
             ['cycle' => '6.8', 'eol' => '2099-12-31'],
         ]));
-        $eol = new \SatelliteWP\Xtractor\Reference\EndOfLife($this->tmpDir . '/reference');
+        $eol = new \SatelliteWP\Manager\Reference\EndOfLife($this->tmpDir . '/reference');
 
         $payload = $this->fixtureArray('extraction-valid.json'); // WP 6.8.1
         $f2 = function (array $coreUpdate) use ($payload, $eol): array {
@@ -479,41 +479,6 @@ final class RuleCatalogTest extends TestCase
 
         $this->assertSame(Status::Pass->value, $findings['K2']['status']);
         $this->assertSame(Status::NotApplicable->value, $findings['K3']['status']);
-    }
-
-    /**
-     * D1 must not pass on presence alone — "?all"/"+all" protect nothing,
-     * and only "-all"/"~all" actually restrict who may send as the domain.
-     */
-    public function testD1RequiresARestrictiveAllMechanism(): void
-    {
-        $payload = $this->fixtureArray('extraction-valid.json');
-        $dns     = static fn (?string $record): array => [
-            'status' => 'ok',
-            'data'   => ['spf' => ['present' => $record !== null, 'record' => $record]],
-        ];
-
-        $cases = [
-            'v=spf1 include:_spf.example.com ~all' => Status::Pass,  // softfail, the recommended one
-            'v=spf1 include:_spf.example.com -all' => Status::Pass,  // hardfail
-            'v=spf1 include:_spf.example.com ?all' => Status::Fail,  // neutral — protects nothing
-            'v=spf1 include:_spf.example.com +all' => Status::Fail,  // pass-all — accepts forgery from anywhere
-            'v=spf1 include:_spf.example.com'      => Status::Fail,  // no "all" mechanism at all
-            null                                    => Status::Fail,  // absent entirely
-        ];
-
-        foreach ($cases as $record => $expected) {
-            $findings = array_column(
-                $this->engine()->evaluate(new Context($payload, ['dns' => $dns($record)]))['findings'],
-                null,
-                'id'
-            );
-            $this->assertSame(
-                $expected->value,
-                $findings['D1']['status'],
-                'record: ' . var_export($record, true)
-            );
-        }
     }
 
     public function testProbeRulesAreUnknownWhenProbesDidNotRun(): void

@@ -11,25 +11,25 @@ declare(strict_types=1);
  * PHP resolves an unqualified call inside a namespace against that namespace
  * first, so declaring symlink() in DataStore's namespace is what a disabled
  * function looks like from its point of view. The production error named
- * SatelliteWP\Xtractor\Storage\symlink() for exactly this reason.
+ * SatelliteWP\Manager\Storage\symlink() for exactly this reason.
  */
 
-namespace SatelliteWP\Xtractor\Storage {
+namespace SatelliteWP\Manager\Storage {
 
     function symlink(string $target, string $link): bool
     {
-        if (\SatelliteWP\Xtractor\Tests\Storage\DataStoreDisabledSymlinkTest::$disabled) {
-            throw new \Error('Call to undefined function SatelliteWP\Xtractor\Storage\symlink()');
+        if (\SatelliteWP\Manager\Tests\Storage\DataStoreDisabledSymlinkTest::$disabled) {
+            throw new \Error('Call to undefined function SatelliteWP\Manager\Storage\symlink()');
         }
 
         return \symlink($target, $link);
     }
 }
 
-namespace SatelliteWP\Xtractor\Tests\Storage {
+namespace SatelliteWP\Manager\Tests\Storage {
 
-    use SatelliteWP\Xtractor\Storage\DataStore;
-    use SatelliteWP\Xtractor\Tests\TestCase;
+    use SatelliteWP\Manager\Storage\DataStore;
+    use SatelliteWP\Manager\Tests\TestCase;
 
     final class DataStoreDisabledSymlinkTest extends TestCase
     {

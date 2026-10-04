@@ -1,4 +1,4 @@
-# SatelliteWP Xtractor
+# SatelliteWP Manager
 
 Contrepartie serveur du plugin **SatelliteWP Maintenance** : reçoit les payloads
 signés du plugin (extractions, événements, intégrité), les stocke en JSON dans
@@ -13,7 +13,7 @@ et produit des fichiers JSON exploitables pour l'affichage brut et les rapports
   n'est qu'un index reconstructible (`index:rebuild`).
 - **Une probe = une classe** derrière `ProbeInterface`, exécutable seule au CLI
   ou dans le pipeline. Une probe qui plante n'arrête jamais le run.
-- **La requête HTTP ne fait jamais de probe.** Le receptor stocke et répond ;
+- **La requête HTTP ne fait jamais de probe.** L'Extractor stocke et répond ;
   un analyste lance l'analyse depuis l'UI, un cron l'exécute hors requête web.
 
 ## Installation
@@ -31,15 +31,15 @@ code et `data/`, rien d'autre :
 | `public/receptor` | **public** | reçoit les push signés du plugin — ne charge jamais le Router, n'ouvre aucune session, ne sert aucun HTML |
 | `public/admin` | **protégé** (Google OAuth) | l'interface analyste — n'accepte jamais un push |
 
-Le receptor est la seule surface exposée à Internet, et tout ce qui n'est pas un
+L'Extractor est la seule surface exposée à Internet, et tout ce qui n'est pas un
 POST signé y reçoit un 404 sec. L'admin, lui, ne peut pas servir de porte
-d'entrée aux données : le code du receptor n'y est pas.
+d'entrée aux données : le code de l'Extractor n'y est pas.
 
 ```nginx
 # Réception des extractions — public
 server {
-    server_name receptor.satellitewp.com;
-    root /var/www/xtractor/public/receptor;
+    server_name extractor.satellitewp.com;
+    root /var/www/manager/public/receptor;
 
     location / { try_files $uri /index.php$is_args$args; }
 
@@ -52,8 +52,8 @@ server {
 
 # Interface analyste — derrière Google OAuth
 server {
-    server_name xtractor.satellitewp.com;
-    root /var/www/xtractor/public/admin;
+    server_name manager.satellitewp.com;
+    root /var/www/manager/public/admin;
 
     location / { try_files $uri /index.php$is_args$args; }
 
@@ -71,7 +71,7 @@ server {
 Crontab (worker de la file d'analyse + relance des runs plantés) :
 
 ```cron
-* * * * * php /var/www/xtractor/bin/xtractor ingest:process --requeue-stale=30 >> /var/www/xtractor/data/xtractor.log 2>&1
+* * * * * php /var/www/manager/bin/swpmgr ingest:process --requeue-stale=30 >> /var/www/manager/data/manager.log 2>&1
 ```
 
 **Une extraction reçue n'est jamais analysée toute seule.** Elle est stockée en
@@ -106,17 +106,17 @@ réessaie 3 fois avec backoff, et un run partiel est signalé `warn` (jamais `ok
 ## Enregistrer un site
 
 ```bash
-./bin/xtractor keys:add <site_id> --origin="https://client-x.example.com"
+./bin/swpmgr keys:add <site_id> --origin="https://client-x.example.com"
 ```
 
 La clé affichée (une seule fois) va dans le `wp-config.php` du site :
 
 ```php
 define( 'SWP_API_KEY', '…' );
-define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://receptor.satellitewp.com' );
+define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://extractor.satellitewp.com' );
 ```
 
-Le plugin ne connaît que l'hôte du receptor. L'interface analyste vit ailleurs
+Le plugin ne connaît que l'hôte de l'Extractor. L'interface analyste vit ailleurs
 et n'est jamais joignable depuis un site client.
 
 ## CLI
@@ -141,7 +141,7 @@ rafraîchi **toutes les heures**, pour que la sortie d'une nouvelle version
 n'attende pas une semaine :
 
 ```cron
-0 * * * * php /var/www/xtractor/bin/xtractor reference:refresh --product=wordpress,php,mysql,mariadb >> /var/www/xtractor/logs/xtractor-cron.log 2>&1
+0 * * * * php /var/www/manager/bin/swpmgr reference:refresh --product=wordpress,php,mysql,mariadb >> /var/www/manager/logs/manager-cron.log 2>&1
 ```
 
 Wordfence est différent — la base change en continu, mais son API est sous un
@@ -203,8 +203,8 @@ Seuils ajustables **sans toucher au catalogue**, par identifiant :
 ```
 
 ```bash
-./bin/xtractor rules:list                          # catalogue
-./bin/xtractor rules:evaluate <site_id> [--all]    # ré-évalue (sans réseau)
+./bin/swpmgr rules:list                          # catalogue
+./bin/swpmgr rules:evaluate <site_id> [--all]    # ré-évalue (sans réseau)
 ```
 
 Ajouter une règle = un tableau dans `config/rules.php` avec une closure `check`
@@ -286,7 +286,7 @@ fichier** derrière plutôt qu'un cache vide mais « présent » — sinon la so
 croirait le site propre alors que l'index n'a jamais existé.
 
 ```cron
-0 5 * * * php /var/www/xtractor/bin/xtractor wordfence:refresh >> /var/www/xtractor/data/xtractor.log 2>&1
+0 5 * * * php /var/www/manager/bin/swpmgr wordfence:refresh >> /var/www/manager/data/manager.log 2>&1
 ```
 
 **Câblée** via la probe `wordfence` — la seule sans appel réseau : elle
@@ -323,9 +323,9 @@ slugs vus ; un analyste classe ensuite chacun : `free` / `premium` / `mixed`
 (gratuit mais connectable à une licence, ex. MailPoet) / `unknown`.
 
 ```bash
-./bin/xtractor catalog:suggest              # présence wp.org -> suggère free/premium
-./bin/xtractor catalog:list --needs-license # premium + mixed = licence probable
-./bin/xtractor catalog:set plugin mailpoet mixed
+./bin/swpmgr catalog:suggest              # présence wp.org -> suggère free/premium
+./bin/swpmgr catalog:list --needs-license # premium + mixed = licence probable
+./bin/swpmgr catalog:set plugin mailpoet mixed
 ```
 
 Stocké dans `data/catalog/software.json`. Vu aussi dans l'UI web (`/catalog`,

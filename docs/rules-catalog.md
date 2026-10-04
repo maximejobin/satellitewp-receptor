@@ -1,4 +1,4 @@
-# Catalogue des règles — SatelliteWP Xtractor
+# Catalogue des règles — SatelliteWP Manager
 
 **Généré, pas écrit à la main** — ne pas éditer ce fichier directement, les
 modifications seraient perdues au prochain export. La vérité vit dans
@@ -6,7 +6,7 @@ modifications seraient perdues au prochain export. La vérité vit dans
 republier cette page après un changement de règle :
 
 ```
-php bin/xtractor rules:doc > docs/rules-catalog.md
+php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
 79 règles, 17 groupes.
@@ -432,51 +432,34 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ## D. Délivrabilité e-mail (DNS)
 
-### D1 — Protection contre l'usurpation du domaine (SPF)
+### D1 — Autorisation d'envoi des courriels (SPF)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** L'enregistrement SPF limite les serveurs autorisés à envoyer des courriels au nom de votre domaine ({observed}).
-- **Échec (FR) :** Aucun enregistrement SPF n'indique quels serveurs peuvent envoyer des courriels au nom de votre domaine : n'importe qui peut usurper votre adresse et vos courriels risquent de finir en indésirables. Faites publier un enregistrement SPF.
+- **Réussite (FR) :** Le courriel envoyé par votre site est autorisé par l'enregistrement SPF de votre domaine.
+- **Échec (FR) :** Le courriel envoyé par votre site n'est pas autorisé par l'enregistrement SPF de votre domaine : il risque de finir en indésirables ou d'être refusé. Faites ajouter le serveur d'envoi à l'enregistrement SPF, ou passez par un service d'envoi authentifié.
 
 ```php
-        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
-            if (!$dnsKnown($c, 'spf')) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.dns.spf.present') !== true) {
-                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
-            }
-            $record = $c->string('probe.dns.spf.record') ?? '';
-            if (preg_match('/([+\-~?])all\b/i', $record, $m) !== 1) {
-                return Check::fail('no all', ['variant' => 'no_all'], Severity::Medium);
-            }
-
-            return in_array($m[1], ['-', '~'], true)
-                ? Check::pass($m[1] . 'all')
-                : Check::fail($m[1] . 'all', ['variant' => 'weak'], Severity::Medium);
-        },
+        'check' => static fn (Context $c) => $mailAuth($c, 'spf'),
 ```
 
-### D3 — Politique contre les courriels frauduleux (DMARC)
+### D2 — Signature des courriels (DKIM)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** La politique DMARC demande d'isoler ou de rejeter les courriels frauduleux (p={observed}).
-- **Échec (FR) :** Aucune politique DMARC n'indique aux fournisseurs de courriel quoi faire des messages frauduleux envoyés en votre nom. Faites publier un enregistrement DMARC.
+- **Réussite (FR) :** Le courriel envoyé par votre site porte une signature valide.
+- **Échec (FR) :** La signature du courriel envoyé par votre site est invalide : les fournisseurs peuvent le classer en indésirables. Faites corriger la configuration DKIM du service d'envoi.
 
 ```php
-        'check' => static function (Context $c) use ($dnsKnown, $hasNoMx) {
-            if (!$dnsKnown($c, 'dmarc')) {
-                return Check::unknown();
-            }
-            if ($c->bool('probe.dns.dmarc.present') !== true) {
-                return Check::fail('absent', ['variant' => $hasNoMx($c) ? 'absent_no_mx' : 'absent']);
-            }
-            $policy = $c->string('probe.dns.dmarc.policy') ?? 'none';
+        'check' => static fn (Context $c) => $mailAuth($c, 'dkim'),
+```
 
-            return in_array($policy, ['quarantine', 'reject'], true)
-                ? Check::pass($policy)
-                : Check::fail($policy, ['variant' => 'weak'], Severity::Medium);
-        },
+### D3 — Protection contre l'usurpation du domaine (DMARC)
+
+- **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Réussite (FR) :** Le courriel envoyé par votre site réussit la vérification DMARC de votre domaine.
+- **Échec (FR) :** Le courriel envoyé par votre site échoue à la vérification DMARC : les fournisseurs peuvent le refuser ou le classer en indésirables. Faites corriger l'authentification (SPF et DKIM) du serveur d'envoi.
+
+```php
+        'check' => static fn (Context $c) => $mailAuth($c, 'dmarc'),
 ```
 
 ### D4 — Réception des courriels (MX)
@@ -1461,15 +1444,5 @@ php bin/xtractor rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.directory_listing')),
-```
-
-### X6 — Méthode de diagnostic TRACE désactivée
-
-- **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Le serveur refuse la méthode de diagnostic HTTP TRACE.
-- **Échec (FR) :** Le serveur accepte la méthode de diagnostic HTTP TRACE, inutile en production. Faites-la désactiver.
-
-```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.trace_enabled')),
 ```
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests;
+namespace SatelliteWP\Manager\Tests;
 
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
@@ -12,7 +12,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/xtractor-test-' . bin2hex(random_bytes(6));
+        $this->tmpDir = sys_get_temp_dir() . '/manager-test-' . bin2hex(random_bytes(6));
         mkdir($this->tmpDir, 0775, true);
     }
 

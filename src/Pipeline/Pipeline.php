@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Pipeline;
+namespace SatelliteWP\Manager\Pipeline;
 
 use RuntimeException;
-use SatelliteWP\Xtractor\Domain\ExtractionContext;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Probe\ProbeInterface;
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Probe\ProbeRegistry;
-use SatelliteWP\Xtractor\Rules\Context as RuleContext;
-use SatelliteWP\Xtractor\Rules\RuleEngine;
-use SatelliteWP\Xtractor\Storage\DataStore;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Manager\Domain\ExtractionContext;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Probe\ProbeInterface;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Probe\ProbeRegistry;
+use SatelliteWP\Manager\Rules\Context as RuleContext;
+use SatelliteWP\Manager\Rules\RuleEngine;
+use SatelliteWP\Manager\Storage\DataStore;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Storage\KeyStore;
 use Throwable;
 
 /**
@@ -63,7 +63,10 @@ final class Pipeline
 
             $results = [];
             foreach ($this->selectProbes($onlyProbes) as $probe) {
-                $result = $this->runProbe($probe, $context->site);
+                $site = $probe->name() === 'crm'
+                    ? $context->site->withBlogvaultSiteId($this->blogvaultSiteId($siteId, $extractionId, $results))
+                    : $context->site;
+                $result = $this->runProbe($probe, $site);
 
                 $this->store->writeProbeResult($siteId, $extractionId, $probe->name(), $result->toArray());
                 $this->index->upsertProbeRun(
@@ -90,6 +93,22 @@ final class Pipeline
         $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_DONE);
 
         return $results;
+    }
+
+    /**
+     * The BlogVault site id from this run's blogvault result, else from the one
+     * already stored (a lone `probe:run crm`). Null when BlogVault has no such site.
+     *
+     * @param array<string, ProbeResult> $results
+     */
+    private function blogvaultSiteId(string $siteId, string $extractionId, array $results): ?string
+    {
+        $data = isset($results['blogvault'])
+            ? $results['blogvault']->data
+            : (array) ($this->store->readProbeResult($siteId, $extractionId, 'blogvault')['data'] ?? []);
+        $id = $data['site']['id'] ?? null;
+
+        return ($data['linked'] ?? false) === true && is_string($id) && $id !== '' ? $id : null;
     }
 
     /**

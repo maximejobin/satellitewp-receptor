@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Integration;
+namespace SatelliteWP\Manager\Tests\Integration;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
@@ -11,8 +11,8 @@ use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Integration\WordfenceClient;
-use SatelliteWP\Xtractor\Integration\WordfenceException;
+use SatelliteWP\Manager\Integration\WordfenceClient;
+use SatelliteWP\Manager\Integration\WordfenceException;
 
 final class WordfenceClientTest extends TestCase
 {

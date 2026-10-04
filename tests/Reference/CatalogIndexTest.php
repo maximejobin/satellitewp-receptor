@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Reference;
+namespace SatelliteWP\Manager\Tests\Reference;
 
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Reference\CatalogIndex;
-use SatelliteWP\Xtractor\Reference\WordfenceIndex;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Reference\CatalogIndex;
+use SatelliteWP\Manager\Reference\WordfenceIndex;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class CatalogIndexTest extends TestCase
 {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Probe\DnsProbe;
+use SatelliteWP\Manager\Probe\DnsProbe;
 
 final class DnsProbeTest extends TestCase
 {

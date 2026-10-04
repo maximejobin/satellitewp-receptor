@@ -1,7 +1,7 @@
 <?php
 /**
  * @var list<array<string, mixed>> $cycles
- * @var \SatelliteWP\Xtractor\Reference\EndOfLife $eol
+ * @var \SatelliteWP\Manager\Reference\EndOfLife $eol
  * @var string|null $mysqlRefreshedAt
  * @var string|null $mariadbRefreshedAt
  */
@@ -12,7 +12,7 @@
 <p><?= fmt_refreshed($mariadbRefreshedAt, 2 * 3600, 'Last MariaDB sync', 'Source: endoflife.date') ?></p>
 
 <?php if ($cycles === []): ?>
-    <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
+    <p class="empty">Cache empty: run <code>bin/swpmgr reference:refresh</code> to fill it.</p>
 <?php else: ?>
     <div class="search-group">
     <form class="search" onsubmit="return false">

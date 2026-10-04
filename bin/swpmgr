@@ -5,13 +5,13 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-use SatelliteWP\Xtractor\Bootstrap;
-use SatelliteWP\Xtractor\Console;
+use SatelliteWP\Manager\Bootstrap;
+use SatelliteWP\Manager\Console;
 use Symfony\Component\Console\Application;
 
 $app = Bootstrap::app();
 
-$console = new Application('SatelliteWP Xtractor', '1.0.0');
+$console = new Application('SatelliteWP Manager', '1.0.0');
 $console->addCommands([
     new Console\IngestProcessCommand($app),
     new Console\PipelineRunCommand($app),

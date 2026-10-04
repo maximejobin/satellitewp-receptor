@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Web;
+namespace SatelliteWP\Manager\Tests\Web;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Web\Multilingual;
+use SatelliteWP\Manager\Web\Multilingual;
 
 final class MultilingualTest extends TestCase
 {

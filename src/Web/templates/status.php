@@ -14,7 +14,7 @@
  *     error?: string,
  * }|null $crm
  */
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 
 /** Short "name (N more)" list of client links, capped so this page never grows without bound. */
 $clientLinks = static function (array $clients, int $cap = 8): string {

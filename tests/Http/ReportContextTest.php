@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\Http\ReportContext;
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\ReportContext;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class ReportContextTest extends TestCase
 {
@@ -35,7 +35,7 @@ final class ReportContextTest extends TestCase
         $this->assertSame(['wordpress_status' => 'latest'], $context['reference']);
     }
 
-    public function testReferenceUsesXtractorsOwnCachesNotThePayloadsClaims(): void
+    public function testReferenceUsesManagersOwnCachesNotThePayloadsClaims(): void
     {
         mkdir($this->tmpDir . '/reference', 0775, true);
         file_put_contents($this->tmpDir . '/reference/wordpress-versions.json', (string) json_encode(['6.8.1' => 'latest', '6.7.2' => 'insecure']));

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Console;
+namespace SatelliteWP\Manager\Console;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use SatelliteWP\Xtractor\App;
+use SatelliteWP\Manager\App;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

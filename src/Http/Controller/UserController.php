@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Storage\UserStore;
+use SatelliteWP\Manager\Storage\UserStore;
 
 /** /users (admin allowlist management) and /profile (self-service). */
 final class UserController extends Controller

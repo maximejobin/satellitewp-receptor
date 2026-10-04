@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Rules;
+namespace SatelliteWP\Manager\Rules;
 
 /**
  * The result of one rule against one extraction — language-neutral. It carries

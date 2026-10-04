@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Storage;
+namespace SatelliteWP\Manager\Tests\Storage;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Storage\ReportTokenStore;
+use SatelliteWP\Manager\Storage\ReportTokenStore;
 
 final class ReportTokenStoreTest extends TestCase
 {

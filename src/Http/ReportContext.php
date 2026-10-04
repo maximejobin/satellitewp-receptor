@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Translator;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Translator;
 
 /**
  * The data a report contract (config/reports/*.php) is resolved against —
- * pure functions of one extraction's stored files plus Xtractor's own
+ * pure functions of one extraction's stored files plus Manager's own
  * reference caches, so report.json's inputs are unit-testable.
  */
 final class ReportContext
@@ -52,7 +52,7 @@ final class ReportContext
     }
 
     /**
-     * Xtractor's own reference facts — never the extraction's claim about itself.
+     * Manager's own reference facts — never the extraction's claim about itself.
      *
      * @param array<string, mixed> $payload
      * @return array{wordpress_latest_version: string, wordpress_status: string|null, php_eol: bool|null, database_eol: bool|null, database_eol_date: string}

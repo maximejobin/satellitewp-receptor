@@ -38,8 +38,8 @@ rm -rf data/sites data/index.sqlite data/keys.json
 ## 1. Reference data
 
 ```bash
-./bin/xtractor reference:refresh
-./bin/xtractor wordfence:refresh     # optional, needs wordfence.api_key
+./bin/swpmgr reference:refresh
+./bin/swpmgr wordfence:refresh     # optional, needs wordfence.api_key
 ```
 
 - ✅ `reference:refresh` reports cycles for php, wordpress, mysql, mariadb and
@@ -55,8 +55,8 @@ rm -rf data/sites data/index.sqlite data/keys.json
 
 ```bash
 SITE=3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c   # site_id of tests/fixtures/extraction-valid.json
-./bin/xtractor keys:add $SITE
-./bin/xtractor keys:list
+./bin/swpmgr keys:add $SITE
+./bin/swpmgr keys:list
 KEY=<the key printed once by keys:add>
 ```
 
@@ -67,7 +67,7 @@ KEY=<the key printed once by keys:add>
 ## 3. Receive a signed extraction
 
 ```bash
-php -S 127.0.0.1:8080 -t public/receptor &   # receptor
+php -S 127.0.0.1:8080 -t public/receptor &   # extractor
 php -S 127.0.0.1:8081 -t public/admin &      # admin UI
 BODY=tests/fixtures/extraction-valid.json
 TS=$(date +%s)
@@ -81,7 +81,7 @@ curl -s -X POST http://127.0.0.1:8080/ \
 - ✅ HTTP 200 `{"status":"received","id":"..."}`.
 - ✅ `data/sites/$SITE/extractions/<id>/payload.json` equals the body;
   `meta.json` has `"signature_valid": true`.
-- ✅ `./bin/xtractor extractions:list $SITE` shows it `pending` — nothing runs
+- ✅ `./bin/swpmgr extractions:list $SITE` shows it `pending` — nothing runs
   until an analyst asks for it.
 
 Rejections (nothing stored):
@@ -92,7 +92,7 @@ Rejections (nothing stored):
 | `X-SWP-Type: bogus`              | 400      |
 | `X-SWP-Timestamp: 1000000000`    | 401      |
 | same body re-sent (replay)       | 401      |
-| any `GET` on the receptor        | 404      |
+| any `GET` on the extractor        | 404      |
 
 `event-valid.json` (type `event`) and `integrity-valid.json` (type
 `integrity`) are accepted the same way and land under `events/` and
@@ -106,26 +106,29 @@ Either press **Run analysis** on the extraction page (queues it for the next
 `ingest:process`), or run it directly:
 
 ```bash
-./bin/xtractor pipeline:run $SITE
-./bin/xtractor extractions:list $SITE
+./bin/swpmgr pipeline:run $SITE
+./bin/swpmgr extractions:list $SITE
 ```
 
 - ✅ One line per probe: dns, rdap, tls, http, pagespeed, blogvault, wordfence,
-  mail, wporg.
+  mail, crm, wporg.
 - ✅ `probes/*.json` and `findings.json` exist; status is `done`.
 - `pagespeed` without a key, `blogvault` for a site absent from the account
   (`"linked": false`) and `wordfence` before its first refresh report
   `warn`/`error`; the pipeline still completes. `mail` reports `error` until
   `mail.username`/`mail.password` are set, then `found: false` until a test email
   from the site (plugin → send test email) has reached the validation mailbox.
+  `crm` reports `error` when `crm_db` is unset; a site absent from BlogVault or
+  from the CRM is `ok` with `"linked": false` and a `reason`. Relink with
+  `probe:run crm <site>`.
 
 Re-run one probe (rewrites that probe's file and findings.json) or inspect:
 
 ```bash
-./bin/xtractor probe:run tls $SITE          # re-runs and stores one probe, prints its envelope
-./bin/xtractor rules:evaluate $SITE --all   # every finding + pastille counts
-./bin/xtractor rules:list --category=SSL
-./bin/xtractor rules:reevaluate --dry-run   # effect of a rules.php edit on every stored extraction
+./bin/swpmgr probe:run tls $SITE          # re-runs and stores one probe, prints its envelope
+./bin/swpmgr rules:evaluate $SITE --all   # every finding + pastille counts
+./bin/swpmgr rules:list --category=SSL
+./bin/swpmgr rules:reevaluate --dry-run   # effect of a rules.php edit on every stored extraction
 ```
 
 ---
@@ -161,7 +164,7 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8081/site/$SITE/extra
 ## 6. Index rebuild
 
 ```bash
-rm data/index.sqlite && ./bin/xtractor index:rebuild && ./bin/xtractor sites:list
+rm data/index.sqlite && ./bin/swpmgr index:rebuild && ./bin/swpmgr sites:list
 ```
 
 - ✅ The site is back: the SQLite index is disposable, JSON is the source of truth.

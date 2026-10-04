@@ -10,7 +10,7 @@ return [
     'app' => [
         // Sidebar footer label, bumped by hand on a release.
         'version'  => 'v1',
-        // Public origin of the admin UI (e.g. https://xtractor.example.com) for
+        // Public origin of the admin UI (e.g. https://manager.example.com) for
         // absolute links handed outside the browser (report data key, report
         // icons, OAuth callback). Empty: derived from the request's Host header.
         'base_url' => '',
@@ -48,10 +48,10 @@ return [
 
     // Probes executed by the pipeline, in order.
     'probes' => [
-        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'wordfence', 'wporg', 'mail'],
+        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'crm', 'wordfence', 'wporg', 'mail'],
         'connect_timeout' => 5,
         'timeout' => 15,
-        'user_agent' => 'SatelliteWP-Xtractor/1.0',
+        'user_agent' => 'SatelliteWP-Manager/1.0',
     ],
 
     // Base URL of the RDAP bootstrap service.
@@ -105,8 +105,6 @@ return [
         'timeout'       => 15,
         // A test email older than this is ignored.
         'max_age_hours' => 24,
-        // Searched in order; a failing SPF/DKIM message is often filed as spam.
-        'mailboxes'     => ['INBOX', '[Gmail]/Spam'],
     ],
 
     // endoflife.date products cached by `reference:refresh`, read offline by rules.
@@ -156,7 +154,7 @@ return [
     // stay visible, tagged "Ignored", in the /data/vulnerabilities catalogue.
     // Edit the list here: a list in config.local.php is merged by position with
     // this one, not appended. Re-score stored extractions afterwards with
-    // `bin/xtractor rules:reevaluate`.
+    // `bin/swpmgr rules:reevaluate`.
     'vulnerabilities' => [
         'ignored' => [
             '112ed4f2-fe91-4d83-a3f7-eaf889870af4',

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Support;
+namespace SatelliteWP\Manager\Support;
 
 use Throwable;
 
@@ -110,13 +110,13 @@ final class ErrorLog
         }
 
         if (!is_dir($this->dir) && !@mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
-            error_log('[xtractor] cannot create log directory ' . $this->dir . ' — ' . $line);
+            error_log('[manager] cannot create log directory ' . $this->dir . ' — ' . $line);
 
             return;
         }
 
         if (@file_put_contents($this->file(), $line . "\n", FILE_APPEND | LOCK_EX) === false) {
-            error_log('[xtractor] cannot write ' . $this->file() . ' — ' . $line);
+            error_log('[manager] cannot write ' . $this->file() . ' — ' . $line);
         }
     }
 
@@ -147,7 +147,7 @@ final class ErrorLog
     /**
      * What the request was, from $_SERVER only. The site id is the plugin's
      * X-SWP-Site header — an opaque uuid, and the one thing that ties a
-     * receptor failure to a site; the signature and body are never touched.
+     * extractor failure to a site; the signature and body are never touched.
      *
      * @return array<string, string>
      */

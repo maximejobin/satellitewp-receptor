@@ -1,14 +1,16 @@
 <?php
 /**
- * @var \SatelliteWP\Xtractor\Rules\Translator $t
+ * @var \SatelliteWP\Manager\Rules\Translator $t
  */
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Rules\Category;
-use SatelliteWP\Xtractor\Rules\Pastille;
-use SatelliteWP\Xtractor\Web\HardeningConstants;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Rules\Category;
+use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Web\HardeningConstants;
 
 $p    = $payload;
 $dns  = $probes['dns']['data'] ?? [];
+$mail = $probes['mail']['data'] ?? [];
+$crm  = $probes['crm']['data'] ?? [];
 $tls  = $probes['tls']['data'] ?? [];
 $rdap = $probes['rdap']['data'] ?? [];
 $http = $probes['http']['data'] ?? [];
@@ -437,7 +439,30 @@ if ($status !== 'done'):
 
         <div class="xt-subsection">
             <div class="xt-subsection-head"><?= report_icon('account') ?><h3>Account &amp; plan</h3></div>
-            <div class="pending-note">Client, care plan and next renewal — sourced from the WooCommerce platform (not collected by the extraction). Coming soon.</div>
+            <?php
+            $crmReasons = [
+                'no_blogvault_id'   => 'This site is not linked in BlogVault, so it cannot be matched to the CRM.',
+                'website_not_found' => 'No CRM website carries this BlogVault site id.',
+                'website_ambiguous' => 'Several CRM websites carry this BlogVault site id — not guessed.',
+                'no_client'         => 'The CRM website has no subscription, hence no client.',
+            ];
+            $crmPlan = $crm['maintenance_plan'] ?? null;
+            $crmNote = ($crm['linked'] ?? false) ? (is_array($crmPlan) ? null : 'No single active maintenance plan') : ($crmReasons[$crm['reason'] ?? ''] ?? null);
+            if ($crm === []) : ?>
+                <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
+            <?php elseif (($probes['crm']['status'] ?? '') === 'error') : ?>
+                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">CRM snapshot failed: <?= e(implode(' ', (array) ($probes['crm']['errors'] ?? []))) ?></div>
+            <?php else : ?>
+                <div class="cards">
+                    <?php echo section('Client & plan',
+                        field('Client', implode(', ', array_column((array) ($crm['clients'] ?? []), 'label')), null, 'probe.crm.clients')
+                        . field('Maintenance plan', is_array($crmPlan) ? $crmPlan['name'] : null, null, 'probe.crm.maintenance_plan')
+                        . field('Next renewal', is_array($crmPlan) ? $crmPlan['next_renewal'] : null, null, 'probe.crm.maintenance_plan')
+                        . field('CRM website', $crm['website']['url'] ?? null, null, 'probe.crm.website')
+                        . ($crmNote !== null ? field('Note', $crmNote, 'warn', 'probe.crm.reason') : '')
+                    ); ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="xt-subsection">
@@ -453,11 +478,21 @@ if ($status !== 'done'):
                     . field_raw('Nameservers', fmt_list($rdap['nameservers'] ?? ($dns['nameservers'] ?? [])), null, 'probe.rdap.nameservers')
                     . field('Source', $rdap['source'] ?? null, null, 'probe.rdap.source')
                 ); ?>
-                <?php echo section('Email',
-                    field('SPF', ($dns['spf']['present'] ?? false) ? 'present' : 'absent', ($dns['spf']['present'] ?? false) ? 'ok' : 'warn', 'probe.dns.spf.present')
-                    . field_raw('SPF record', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>', null, 'probe.dns.spf.record')
-                    . field('DMARC', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent', ($dns['dmarc']['present'] ?? false) ? null : 'warn', 'probe.dns.dmarc')
-                    . field('DKIM', 'requires validation email', 'warn')
+                <?php
+                $mailFound   = ($mail['found'] ?? false) === true;
+                $mailVerdict = static fn (string $label, string $key): string => field(
+                    $label,
+                    $mailFound ? ($mail[$key] ?? null) : ($mail === [] ? null : 'no test email found'),
+                    $mailFound ? (($mail[$key] ?? null) === 'pass' ? 'ok' : (($mail[$key] ?? null) === null ? null : 'warn')) : null,
+                    'probe.mail.' . $key
+                );
+                echo section('Email',
+                    $mailVerdict('SPF (test email)', 'spf')
+                    . $mailVerdict('DKIM (test email)', 'dkim')
+                    . $mailVerdict('DMARC (test email)', 'dmarc')
+                    . field('Test email received', $mailFound ? trim(($mail['received_at'] ?? '') . ' · ' . ($mail['from_domain'] ?? ''), ' ·') : null, null, 'probe.mail.received_at')
+                    . field_raw('SPF record (DNS)', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>', null, 'probe.dns.spf.record')
+                    . field('DMARC policy (DNS)', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent', null, 'probe.dns.dmarc')
                     . field_raw('MX', fmt_list(array_map(static fn ($m) => $m['host'] ?? '', $dns['mx'] ?? [])), null, 'probe.dns.mx')
                 ); ?>
             </div>
@@ -682,7 +717,7 @@ if ($status !== 'done'):
                     . field('Comments', wp_count($p['comments_count'] ?? null, 'approved', 'total_comments'), null, 'payload.comments_count')
                 ); ?>
                 <?php
-                $ml = \SatelliteWP\Xtractor\Web\Multilingual::fromPayload($p);
+                $ml = \SatelliteWP\Manager\Web\Multilingual::fromPayload($p);
                 if ($ml !== null) {
                     $src = 'payload.connectors.' . $ml['plugin'];
                     echo section('Languages (' . $ml['label'] . ')',

@@ -8,12 +8,12 @@
 <h1>Vulnerabilities (Wordfence Intelligence)</h1>
 <p class="muted">The full Wordfence Intelligence catalogue — not just what was detected on your
     sites. Search matches plugin/theme name, slug, title or CVE; click a column header to sort,
-    defaults to most recently published first. Click a row's view icon to see everything Xtractor
+    defaults to most recently published first. Click a row's view icon to see everything Manager
     has cached for that vulnerability.</p>
 
 <?php if (!$available): ?>
     <p class="empty">The Wordfence Intelligence cache has not been refreshed yet
-        (<span class="mono">bin/xtractor wordfence:refresh</span>).</p>
+        (<span class="mono">bin/swpmgr wordfence:refresh</span>).</p>
 <?php else: ?>
     <p class="muted">Last refreshed <?= fmt_relative_time($refreshedAt) ?>.</p>
     <?php if ($ignoredCount > 0): ?>

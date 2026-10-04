@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Probe\WordfenceProbe;
-use SatelliteWP\Xtractor\Reference\WordfenceIndex;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Probe\WordfenceProbe;
+use SatelliteWP\Manager\Reference\WordfenceIndex;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class WordfenceProbeTest extends TestCase
 {

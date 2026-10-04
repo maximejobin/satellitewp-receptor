@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\Http\PayloadValidator;
-use SatelliteWP\Xtractor\Http\Session;
+use SatelliteWP\Manager\Http\PayloadValidator;
+use SatelliteWP\Manager\Http\Session;
 
 /** The extraction-tracked sites list, a site's page and its API key management. */
 final class SiteController extends Controller

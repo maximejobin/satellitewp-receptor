@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\Http\PayloadValidator;
-use SatelliteWP\Xtractor\Http\Receptor;
-use SatelliteWP\Xtractor\Http\SignatureVerifier;
-use SatelliteWP\Xtractor\Storage\DataStore;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Storage\KeyStore;
-use SatelliteWP\Xtractor\Support\ErrorLog;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\PayloadValidator;
+use SatelliteWP\Manager\Http\Extractor;
+use SatelliteWP\Manager\Http\SignatureVerifier;
+use SatelliteWP\Manager\Storage\DataStore;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Storage\KeyStore;
+use SatelliteWP\Manager\Support\ErrorLog;
+use SatelliteWP\Manager\Tests\TestCase;
 
-final class ReceptorTest extends TestCase
+final class ExtractorTest extends TestCase
 {
     private const string SITE_ID = '3f2b1a9c-4d5e-4f6a-8b7c-9d0e1f2a3b4c';
-    private const string API_KEY = 'receptor-test-key';
+    private const string API_KEY = 'extractor-test-key';
 
     private DataStore $store;
     private Index $index;
-    private Receptor $receptor;
+    private Extractor $extractor;
     private KeyStore $keys;
 
     protected function setUp(): void
@@ -33,7 +33,7 @@ final class ReceptorTest extends TestCase
         $this->keys = new KeyStore($this->tmpDir . '/keys.json');
         $this->keys->addKey(self::SITE_ID, self::API_KEY);
 
-        $this->receptor = new Receptor(
+        $this->extractor = new Extractor(
             new SignatureVerifier($this->keys, 300, false),
             new PayloadValidator(),
             $this->store,
@@ -59,7 +59,7 @@ final class ReceptorTest extends TestCase
     public function testExtractionIsStoredAndIndexed(): void
     {
         $body   = $this->fixture('extraction-valid.json');
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body, '192.0.2.10');
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body, '192.0.2.10');
 
         $this->assertSame(200, $result['status']);
         $this->assertSame('received', $result['body']['status']);
@@ -86,7 +86,7 @@ final class ReceptorTest extends TestCase
     public function testEventsAreAppendedAsJsonl(): void
     {
         $body   = $this->fixture('event-valid.json');
-        $result = $this->receptor->handle($this->headers('event', $body), $body);
+        $result = $this->extractor->handle($this->headers('event', $body), $body);
 
         $this->assertSame(200, $result['status']);
         $this->assertSame(2, $result['body']['events']);
@@ -103,7 +103,7 @@ final class ReceptorTest extends TestCase
     public function testIntegrityIsStored(): void
     {
         $body   = $this->fixture('integrity-valid.json');
-        $result = $this->receptor->handle($this->headers('integrity', $body), $body);
+        $result = $this->extractor->handle($this->headers('integrity', $body), $body);
 
         $this->assertSame(200, $result['status']);
 
@@ -117,7 +117,7 @@ final class ReceptorTest extends TestCase
         $headers = $this->headers('extraction', $body);
         $headers['signature'] = 'tampered';
 
-        $result = $this->receptor->handle($headers, $body);
+        $result = $this->extractor->handle($headers, $body);
 
         $this->assertSame(401, $result['status']);
         $this->assertDirectoryDoesNotExist($this->tmpDir . '/sites/' . self::SITE_ID);
@@ -129,7 +129,7 @@ final class ReceptorTest extends TestCase
         $payload['site_id'] = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
         $body               = (string) json_encode($payload);
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(422, $result['status']);
     }
@@ -137,7 +137,7 @@ final class ReceptorTest extends TestCase
     public function testUnknownTypeIsRejected(): void
     {
         $body   = $this->fixture('extraction-valid.json');
-        $result = $this->receptor->handle($this->headers('bogus', $body), $body);
+        $result = $this->extractor->handle($this->headers('bogus', $body), $body);
 
         $this->assertSame(400, $result['status']);
     }
@@ -148,7 +148,7 @@ final class ReceptorTest extends TestCase
         $headers         = $this->headers('extraction', $body);
         $headers['site'] = 'not-a-uuid';
 
-        $result = $this->receptor->handle($headers, $body);
+        $result = $this->extractor->handle($headers, $body);
 
         $this->assertSame(400, $result['status']);
     }
@@ -157,7 +157,7 @@ final class ReceptorTest extends TestCase
     {
         $keys = new KeyStore($this->tmpDir . '/keys.json');
 
-        $receptor = new Receptor(
+        $extractor = new Extractor(
             new SignatureVerifier($keys, 300, true),
             new PayloadValidator(),
             $this->store,
@@ -166,7 +166,7 @@ final class ReceptorTest extends TestCase
         );
 
         $body   = $this->fixture('extraction-valid.json');
-        $result = $receptor->handle(['site' => self::SITE_ID, 'type' => 'extraction', 'timestamp' => (string) time()], $body);
+        $result = $extractor->handle(['site' => self::SITE_ID, 'type' => 'extraction', 'timestamp' => (string) time()], $body);
 
         $this->assertSame(413, $result['status']);
     }
@@ -177,7 +177,7 @@ final class ReceptorTest extends TestCase
 
         $this->assertNull($this->keys->getOrigin(self::SITE_ID), 'unbound before the first push');
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(200, $result['status']);
         $this->assertSame('example.com', $this->keys->getOrigin(self::SITE_ID));
@@ -196,7 +196,7 @@ final class ReceptorTest extends TestCase
         $payload['site_url'] = 'https://staging.example.com';
         $body                = (string) json_encode($payload);
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(409, $result['status']);
         $this->assertStringContainsString('staging.example.com', $result['body']['message']);
@@ -212,7 +212,7 @@ final class ReceptorTest extends TestCase
         $payload['home_url'] = 'http://www.example.com/';
         $body                = (string) json_encode($payload);
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(200, $result['status']);
     }
@@ -222,17 +222,17 @@ final class ReceptorTest extends TestCase
         $this->keys->setOrigin(self::SITE_ID, 'old-domain.com');
 
         $body   = $this->fixture('extraction-valid.json');
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
         $this->assertSame(409, $result['status']);
 
         $this->keys->setOrigin(self::SITE_ID, 'example.com');
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
         $this->assertSame(200, $result['status']);
     }
 
     /**
-     * The one 500 the receptor raises on purpose. It must leave a full entry in
+     * The one 500 the extractor raises on purpose. It must leave a full entry in
      * logs/ and hand the plugin the reference that points at it — the storage
      * failure itself is invisible from the site's side.
      */
@@ -240,7 +240,7 @@ final class ReceptorTest extends TestCase
     {
         $log = new ErrorLog($this->tmpDir . '/logs');
 
-        $receptor = new Receptor(
+        $extractor = new Extractor(
             new SignatureVerifier($this->keys, 300, false),
             new PayloadValidator(),
             $this->store,
@@ -253,7 +253,7 @@ final class ReceptorTest extends TestCase
         );
 
         $body   = $this->fixture('extraction-valid.json');
-        $result = $receptor->handle($this->headers('extraction', $body), $body);
+        $result = $extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(500, $result['status']);
         $this->assertSame(1, preg_match('/ref ([a-f0-9]{8})/', (string) $result['body']['message'], $m));
@@ -264,7 +264,7 @@ final class ReceptorTest extends TestCase
         );
 
         $this->assertSame($m[1], $entry['ref']);
-        $this->assertSame('receptor', $entry['source']);
+        $this->assertSame('extractor', $entry['source']);
         $this->assertSame(self::SITE_ID, $entry['context']['site_id']);
         $this->assertSame('extraction', $entry['context']['payload']);
         $this->assertNotEmpty($entry['exception']['trace']);

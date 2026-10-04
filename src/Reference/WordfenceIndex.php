@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Reference;
+namespace SatelliteWP\Manager\Reference;
 
 use RuntimeException;
-use SatelliteWP\Xtractor\Integration\WordfenceClient;
-use SatelliteWP\Xtractor\Integration\WordfenceException;
-use SatelliteWP\Xtractor\Support\AtomicFile;
+use SatelliteWP\Manager\Integration\WordfenceClient;
+use SatelliteWP\Manager\Integration\WordfenceException;
+use SatelliteWP\Manager\Support\AtomicFile;
 
 /**
  * Local Wordfence Intelligence cache (data/reference/wordfence.json), refreshed

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
-use SatelliteWP\Xtractor\Storage\KeyStore;
+use SatelliteWP\Manager\Storage\KeyStore;
 
 /**
  * Verifies X-SWP-Signature = HMAC-SHA256(timestamp . '.' . raw_body, api_key)

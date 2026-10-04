@@ -1,18 +1,18 @@
 <?php
 /**
  * @var list<array<string, mixed>> $cycles
- * @var \SatelliteWP\Xtractor\Reference\EndOfLife $eol
+ * @var \SatelliteWP\Manager\Reference\EndOfLife $eol
  * @var string|null $refreshedAt
  */
 ?>
 <h1>PHP versions</h1>
 <p class="muted">Known PHP branches, from the local endoflife.date cache
-    (<code>bin/xtractor reference:refresh</code>) — not the versions installed on tracked sites.
+    (<code>bin/swpmgr reference:refresh</code>) — not the versions installed on tracked sites.
     Search, sort or filter with the search box; always sorted by version descending.</p>
 <p><?= fmt_refreshed($refreshedAt, 2 * 3600) ?></p>
 
 <?php if ($cycles === []): ?>
-    <p class="empty">Cache empty: run <code>bin/xtractor reference:refresh</code> to fill it.</p>
+    <p class="empty">Cache empty: run <code>bin/swpmgr reference:refresh</code> to fill it.</p>
 <?php else: ?>
     <div class="search-group">
     <p class="search"><?= dt_search_box('php-versions') ?></p>

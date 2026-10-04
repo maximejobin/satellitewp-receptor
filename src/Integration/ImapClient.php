@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Integration;
+namespace SatelliteWP\Manager\Integration;
 
 /**
  * The read-only slice of IMAP the mail probe needs: LOGIN, EXAMINE, UID SEARCH
@@ -44,6 +44,22 @@ final class ImapClient
     public function login(string $username, string $password): void
     {
         $this->command('LOGIN ' . self::quote($username) . ' ' . self::quote($password), 'IMAP login refused');
+    }
+
+    /**
+     * The mailbox the server flags as spam (RFC 6154 \Junk), in the server's own
+     * encoding, ready for examine(). Gmail localizes the folder's name.
+     */
+    public function junkMailbox(): ?string
+    {
+        foreach ($this->command('LIST "" "*"', 'IMAP list failed') as $line) {
+            if (preg_match('/^\* LIST \(([^)]*)\) (?:"[^"]*"|NIL) "((?:[^"\\\\]|\\\\.)*)"\r?$/i', $line, $m) === 1
+                && preg_match('/\\\\Junk\b/i', $m[1]) === 1) {
+                return stripcslashes($m[2]);
+            }
+        }
+
+        return null;
     }
 
     /** Read-only select: nothing is ever marked read, moved or deleted. */

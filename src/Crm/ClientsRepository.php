@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Crm;
+namespace SatelliteWP\Manager\Crm;
 
 use PDO;
-use SatelliteWP\Xtractor\Storage\SqlLike;
+use SatelliteWP\Manager\Storage\SqlLike;
 
 /**
  * The external CRM database (portable SQL only, so the suite can test it on
@@ -348,6 +348,20 @@ final class ClientsRepository
         return $websites;
     }
 
+    /**
+     * The CRM websites carrying this BlogVault site id (the full id, matched
+     * case-insensitively; one row expected).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function websitesByBlogvaultSiteId(string $blogvaultSiteId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM swp_websites WHERE LOWER(blogvault_site_id) = :id');
+        $stmt->execute(['id' => strtolower($blogvaultSiteId)]);
+
+        return $stmt->fetchAll();
+    }
+
     /** @return array<string, mixed>|null carries 'tags' (list<string>) */
     public function getWebsite(int $id): ?array
     {
@@ -374,12 +388,14 @@ final class ClientsRepository
             SELECT s.*,
                    p.name AS product_name, p.category AS product_category,
                    l.slug AS license_slug,
+                   CASE WHEN mp.auto_id IS NOT NULL THEN 1 ELSE 0 END AS is_maintenance_plan,
                    c.id AS client_id, c.email AS client_email,
                    c.first_name, c.last_name, c.company
             FROM swp_subscriptions_websites sw
             JOIN swp_subscriptions s ON s.id = sw.subscription_id
             JOIN swp_products p ON p.id = s.product_id
             LEFT JOIN swp_licenses l ON l.auto_id = p.auto_id
+            LEFT JOIN swp_maintenance_plans mp ON mp.auto_id = p.auto_id
             JOIN swp_clients c ON c.id = s.client_id
             WHERE sw.website_id = :website_id
             ORDER BY s.creation_date DESC

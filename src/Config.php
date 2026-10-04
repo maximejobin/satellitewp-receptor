@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor;
+namespace SatelliteWP\Manager;
 
 /**
  * Merged configuration: config/config.php defaults + config/config.local.php overrides.

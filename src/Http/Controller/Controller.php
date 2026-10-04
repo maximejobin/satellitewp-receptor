@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http\Controller;
+namespace SatelliteWP\Manager\Http\Controller;
 
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Http\Response;
-use SatelliteWP\Xtractor\Http\Session;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Http\Response;
+use SatelliteWP\Manager\Http\Session;
 
 /**
  * Shared request plumbing for the admin UI controllers: identity,

@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Rules\Check;
-use SatelliteWP\Xtractor\Rules\Context;
-use SatelliteWP\Xtractor\Rules\Rule;
-use SatelliteWP\Xtractor\Rules\RuleCatalog;
-use SatelliteWP\Xtractor\Rules\RuleEngine;
-use SatelliteWP\Xtractor\Rules\Severity;
-use SatelliteWP\Xtractor\Rules\Status;
-use SatelliteWP\Xtractor\Rules\Translator;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Rules\Check;
+use SatelliteWP\Manager\Rules\Context;
+use SatelliteWP\Manager\Rules\Rule;
+use SatelliteWP\Manager\Rules\RuleCatalog;
+use SatelliteWP\Manager\Rules\RuleEngine;
+use SatelliteWP\Manager\Rules\Severity;
+use SatelliteWP\Manager\Rules\Status;
+use SatelliteWP\Manager\Rules\Translator;
+use SatelliteWP\Manager\Tests\TestCase;
 
 /** Branch-level behaviour of individual catalogue rules, and the catalogue's text contract. */
 final class RuleBehaviourTest extends TestCase
@@ -172,18 +172,50 @@ final class RuleBehaviourTest extends TestCase
         $dns = ['spf' => null, 'dmarc' => null, 'mx' => null, 'caa' => null, 'a' => null, 'aaaa' => null];
         $findings = $this->evaluate($this->payload(), ['dns' => $dns]);
 
-        foreach (['C1', 'C2', 'D1', 'D3', 'D4'] as $id) {
+        foreach (['C1', 'C2', 'D4'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
         }
     }
 
-    public function testSpfAndDmarcAdviceChangesForADomainWithoutMail(): void
+    public function testMailAuthRulesFollowTheReceiversVerdicts(): void
     {
-        $dns = ['spf' => ['present' => false], 'dmarc' => ['present' => false], 'mx' => []];
-        $findings = $this->evaluate($this->payload(), ['dns' => $dns]);
+        $evaluate = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail]);
 
-        $this->assertSame('absent_no_mx', $findings['D1']['data']['variant']);
-        $this->assertSame('absent_no_mx', $findings['D3']['data']['variant']);
+        $pass = $evaluate(['found' => true, 'spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass']);
+        foreach (['D1', 'D2', 'D3'] as $id) {
+            $this->assertSame(Status::Pass->value, $pass[$id]['status'], $id);
+        }
+
+        $bad = $evaluate(['found' => true, 'spf' => 'softfail', 'dkim' => 'none', 'dmarc' => 'none']);
+        $this->assertSame(Status::Fail->value, $bad['D1']['status']);
+        $this->assertArrayNotHasKey('variant', $bad['D1']['data'] ?? []);
+        $this->assertSame('none', $bad['D2']['data']['variant']);
+        $this->assertSame('none', $bad['D3']['data']['variant']);
+
+        $transient = $evaluate(['found' => true, 'spf' => 'temperror', 'dkim' => null, 'dmarc' => 'pass']);
+        $this->assertSame(Status::Unknown->value, $transient['D1']['status']);
+        $this->assertSame(Status::Unknown->value, $transient['D2']['status']);
+        $this->assertSame(Status::Pass->value, $transient['D3']['status']);
+    }
+
+    public function testMailAuthRulesAreUnknownWithoutATestEmail(): void
+    {
+        $notFound = $this->evaluate($this->payload(), ['mail' => ['found' => false, 'spf' => null, 'dkim' => null, 'dmarc' => null]]);
+        $noProbe  = $this->evaluate($this->payload());
+        $errored  = array_column(
+            (new RuleEngine(RuleCatalog::load(self::CATALOG)))->evaluate(new Context(
+                $this->payload(),
+                ['mail' => ['status' => 'error', 'data' => ['found' => true, 'spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass']]]
+            ))['findings'],
+            null,
+            'id'
+        );
+
+        foreach ([$notFound, $noProbe, $errored] as $findings) {
+            foreach (['D1', 'D2', 'D3'] as $id) {
+                $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
+            }
+        }
     }
 
     public function testG1TreatsUnlimitedMemoryAsAPassAndLargeLimitsAsFine(): void
@@ -351,7 +383,7 @@ final class RuleBehaviourTest extends TestCase
             $rules[$rule->id] = $rule->severity;
         }
 
-        foreach (['C1', 'I4', 'K3', 'F12', 'X6'] as $id) {
+        foreach (['C1', 'I4', 'K3', 'F12'] as $id) {
             $this->assertSame(Severity::Info, $rules[$id], $id);
         }
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
@@ -359,6 +391,7 @@ final class RuleBehaviourTest extends TestCase
         foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a', 'H4'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
+        $this->assertArrayNotHasKey('X6', $rules);
         $this->assertArrayNotHasKey('BV2', $rules);
         $this->assertArrayNotHasKey('WF1', $rules);
         $this->assertArrayNotHasKey('PS2a', $rules);

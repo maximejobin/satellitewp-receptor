@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/helpers.php';
-/** @var \SatelliteWP\Xtractor\Rules\Translator $t */
+/** @var \SatelliteWP\Manager\Rules\Translator $t */
 $nav = $nav ?? 'sites';
 ?>
 <!DOCTYPE html>
@@ -9,7 +9,7 @@ $nav = $nav ?? 'sites';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= e($title ?? 'Xtractor') ?> — SatelliteWP Xtractor</title>
+    <title><?= e($title ?? 'Manager') ?> — SatelliteWP Manager</title>
     <link rel="stylesheet" href="/assets/style.css">
     <?php // jQuery is shared by dataTables and select2 — loaded once, before either. ?>
     <?php if (!empty($dataTables) || !empty($select2)): ?>
@@ -59,11 +59,11 @@ $nav = $nav ?? 'sites';
                 <line x1="2" y1="5" x2="16" y2="5"/><line x1="2" y1="9" x2="16" y2="9"/><line x1="2" y1="13" x2="16" y2="13"/>
             </svg>
         </button>
-        <a class="brand" href="/"><b>SatelliteWP</b> Xtractor</a>
+        <a class="brand" href="/"><b>SatelliteWP</b> Manager</a>
     </div>
     <div class="nav-backdrop" id="navBackdrop"></div>
     <aside class="side" id="sideNav">
-        <a class="brand" href="/"><b>SatelliteWP</b> Xtractor</a>
+        <a class="brand" href="/"><b>SatelliteWP</b> Manager</a>
 
         <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status</a>
 
@@ -72,7 +72,7 @@ $nav = $nav ?? 'sites';
         <a class="nav-item <?= $nav === 'crm-items' ? 'active' : '' ?>" href="/items">Items</a>
         <a class="nav-item <?= $nav === 'crm-products' ? 'active' : '' ?>" href="/products">Products</a>
 
-        <div class="nav-label">Receptor</div>
+        <div class="nav-label">Extractor</div>
         <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?></a>
         <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue</a>
 

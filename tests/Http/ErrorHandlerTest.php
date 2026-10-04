@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
-use SatelliteWP\Xtractor\Http\ErrorHandler;
-use SatelliteWP\Xtractor\Support\ErrorLog;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Http\ErrorHandler;
+use SatelliteWP\Manager\Support\ErrorLog;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class ErrorHandlerTest extends TestCase
 {
@@ -45,10 +45,10 @@ final class ErrorHandlerTest extends TestCase
         self::assertStringContainsString($entry['ref'], $output);
     }
 
-    /** The receptor speaks JSON to the plugin, never HTML or a bare line. */
-    public function testTheReceptorAnswersAnUncaughtThrowableInJson(): void
+    /** The extractor speaks JSON to the plugin, never HTML or a bare line. */
+    public function testTheExtractorAnswersAnUncaughtThrowableInJson(): void
     {
-        $handler = new ErrorHandler($this->log, 'receptor', json: true);
+        $handler = new ErrorHandler($this->log, 'extractor', json: true);
 
         ob_start();
         $handler->onException(new RuntimeException('boom'));

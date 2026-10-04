@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Http;
+namespace SatelliteWP\Manager\Http;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;

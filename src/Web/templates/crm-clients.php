@@ -7,7 +7,7 @@
  * @var string|null $lastSyncedAt
  * @var int $orphanCount
  */
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 ?>
 <h1>Clients</h1>
 <p class="muted">From the external CRM/billing database — who owns which subscription and which website.

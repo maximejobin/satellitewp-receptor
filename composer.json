@@ -1,6 +1,6 @@
 {
-    "name": "satellitewp/xtractor",
-    "description": "SatelliteWP server-side receptor and validation pipeline for site extractions",
+    "name": "satellitewp/manager",
+    "description": "SatelliteWP server-side extractor and validation pipeline for site extractions",
     "type": "project",
     "license": "proprietary",
     "require": {
@@ -17,12 +17,12 @@
     },
     "autoload": {
         "psr-4": {
-            "SatelliteWP\\Xtractor\\": "src/"
+            "SatelliteWP\\Manager\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "SatelliteWP\\Xtractor\\Tests\\": "tests/"
+            "SatelliteWP\\Manager\\Tests\\": "tests/"
         }
     },
     "config": {

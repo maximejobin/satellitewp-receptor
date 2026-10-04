@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\Http\Response;
+use SatelliteWP\Manager\Http\Response;
 
 /** Captures what a controller would have sent, instead of emitting it. */
 final class RecordingResponse extends Response

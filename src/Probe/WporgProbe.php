@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use Closure;
 use GuzzleHttp\Client;
@@ -10,9 +10,9 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Pool;
 use GuzzleHttp\Psr7\Request;
 use Psr\Http\Message\ResponseInterface;
-use SatelliteWP\Xtractor\Catalog\SoftwareCatalog;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
+use SatelliteWP\Manager\Catalog\SoftwareCatalog;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
 use Throwable;
 
 /**

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Storage;
+namespace SatelliteWP\Manager\Storage;
 
 /**
  * User input used as a LIKE "contains" search, matched literally: %, _ and \

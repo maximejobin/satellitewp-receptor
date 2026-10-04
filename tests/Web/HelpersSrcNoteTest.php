@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Web;
+namespace SatelliteWP\Manager\Tests\Web;
 
 use PHPUnit\Framework\TestCase;
 
@@ -10,7 +10,7 @@ require_once __DIR__ . '/../../src/Web/helpers.php';
 
 /**
  * src_note() / field()'s $source param — "every datum must be explainable":
- * a data-provenance marker naming the exact dot-path and whether Xtractor
+ * a data-provenance marker naming the exact dot-path and whether Manager
  * verified it live or is just relaying what the WordPress plugin reported.
  */
 final class HelpersSrcNoteTest extends TestCase
@@ -24,7 +24,7 @@ final class HelpersSrcNoteTest extends TestCase
         $this->assertStringContainsString('does not independently re-measure', $note);
     }
 
-    public function testProbePathExplainsXtractorVerifiedItLive(): void
+    public function testProbePathExplainsManagerVerifiedItLive(): void
     {
         $note = \src_note('probe.tls.chain_valid');
 

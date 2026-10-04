@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Reference;
+namespace SatelliteWP\Manager\Tests\Reference;
 
-use SatelliteWP\Xtractor\Reference\EndOfLife;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Reference\EndOfLife;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class EndOfLifeTest extends TestCase
 {

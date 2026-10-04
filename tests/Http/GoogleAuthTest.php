@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
@@ -10,7 +10,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Http\GoogleAuth;
+use SatelliteWP\Manager\Http\GoogleAuth;
 
 /**
  * The live round-trip against Google cannot run here (no client, no public

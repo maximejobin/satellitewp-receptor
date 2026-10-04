@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
-use SatelliteWP\Xtractor\App;
-use SatelliteWP\Xtractor\Config;
-use SatelliteWP\Xtractor\Http\Router;
-use SatelliteWP\Xtractor\Storage\Index;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Config;
+use SatelliteWP\Manager\Http\Router;
+use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class ExtractionRerunRouteTest extends TestCase
 {

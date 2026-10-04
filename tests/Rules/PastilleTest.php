@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Rules\Pastille;
-use SatelliteWP\Xtractor\Rules\Severity;
-use SatelliteWP\Xtractor\Rules\Status;
+use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Rules\Severity;
+use SatelliteWP\Manager\Rules\Status;
 
 final class PastilleTest extends TestCase
 {

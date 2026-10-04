@@ -12,10 +12,10 @@ function e(mixed $value): string
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-/** See SatelliteWP\Xtractor\Support\SiteDisplay — this is just the template-friendly wrapper. */
+/** See SatelliteWP\Manager\Support\SiteDisplay — this is just the template-friendly wrapper. */
 function site_display(mixed $url): string
 {
-    return \SatelliteWP\Xtractor\Support\SiteDisplay::of($url);
+    return \SatelliteWP\Manager\Support\SiteDisplay::of($url);
 }
 
 function dt_search_box(string $tableId): string
@@ -385,23 +385,25 @@ function field_raw(string $label, string $html, ?string $status = null, ?string 
 }
 
 /**
- * "ⓘ" provenance marker: the value's dot-path and whether Xtractor measured
+ * "ⓘ" provenance marker: the value's dot-path and whether Manager measured
  * it or relays what the plugin reported — one sentence per path root.
  */
 function src_note(string $path): string
 {
     $explain = match (true) {
-        str_starts_with($path, 'payload.')            => "Reported by the WordPress plugin's own collector during this extraction — shown as received; Xtractor does not independently re-measure it.",
-        str_starts_with($path, 'probe.dns.')           => "Looked up live by Xtractor's own DNS probe during this extraction.",
-        str_starts_with($path, 'probe.tls.')           => "Verified live by Xtractor's own TLS probe (a direct HTTPS handshake to the site) during this extraction.",
-        str_starts_with($path, 'probe.rdap.')          => 'Fetched live via RDAP or WHOIS by Xtractor during this extraction — from the domain registry, not from the WordPress site.',
-        str_starts_with($path, 'probe.http.')          => "Observed live by Xtractor's own HTTP probe (a direct request to the site) during this extraction.",
-        str_starts_with($path, 'probe.pagespeed.')     => 'Fetched live from Google PageSpeed Insights (Lighthouse) by Xtractor during this extraction.',
-        str_starts_with($path, 'probe.wordfence.')     => 'Cross-referenced by Xtractor against the local Wordfence Intelligence vulnerability cache — not measured on the site directly.',
-        str_starts_with($path, 'probe.blogvault.')     => "Fetched from BlogVault's own account data for this site during this extraction — not measured directly by Xtractor.",
-        str_starts_with($path, 'catalog.')             => "Set by hand by an analyst in Xtractor's own software catalogue (/catalog) — not collected from the site at all.",
+        str_starts_with($path, 'payload.')            => "Reported by the WordPress plugin's own collector during this extraction — shown as received; Manager does not independently re-measure it.",
+        str_starts_with($path, 'probe.dns.')           => "Looked up live by Manager's own DNS probe during this extraction.",
+        str_starts_with($path, 'probe.tls.')           => "Verified live by Manager's own TLS probe (a direct HTTPS handshake to the site) during this extraction.",
+        str_starts_with($path, 'probe.rdap.')          => 'Fetched live via RDAP or WHOIS by Manager during this extraction — from the domain registry, not from the WordPress site.',
+        str_starts_with($path, 'probe.http.')          => "Observed live by Manager's own HTTP probe (a direct request to the site) during this extraction.",
+        str_starts_with($path, 'probe.pagespeed.')     => 'Fetched live from Google PageSpeed Insights (Lighthouse) by Manager during this extraction.',
+        str_starts_with($path, 'probe.wordfence.')     => 'Cross-referenced by Manager against the local Wordfence Intelligence vulnerability cache — not measured on the site directly.',
+        str_starts_with($path, 'probe.blogvault.')     => "Fetched from BlogVault's own account data for this site during this extraction — not measured directly by Manager.",
+        str_starts_with($path, 'probe.mail.')          => "Read by Manager from the test email this site sent to Manager's validation mailbox — the receiving server's own SPF, DKIM and DMARC verdicts.",
+        str_starts_with($path, 'probe.crm.')           => "Snapshot of the CRM taken when the analysis ran (BlogVault site id → website → subscription → client) — not read live.",
+        str_starts_with($path, 'catalog.')             => "Set by hand by an analyst in Manager's own software catalogue (/catalog) — not collected from the site at all.",
         str_starts_with($path, 'reference.eol.')       => 'From endoflife.date, cached locally and refreshed on a schedule — not measured on this site.',
-        str_starts_with($path, 'derived.')             => 'Computed by Xtractor from other fields on this same page — see the linked detail for the exact arithmetic.',
+        str_starts_with($path, 'derived.')             => 'Computed by Manager from other fields on this same page — see the linked detail for the exact arithmetic.',
         default                                        => '',
     };
     if ($explain === '') {
@@ -418,7 +420,7 @@ function src_note(string $path): string
  *
  * @param array{0: bool, 1: string|null}|null $status
  */
-function eol_annotation(?array $status, \SatelliteWP\Xtractor\Rules\Translator $t): string
+function eol_annotation(?array $status, \SatelliteWP\Manager\Rules\Translator $t): string
 {
     if ($status === null || $status[1] === null) {
         return '';
@@ -468,13 +470,13 @@ function fmt_lines(mixed $items, int $max = 30): string
  */
 function merge_vulnerabilities(array $blogvault, array $wordfence, ?string $installedVersion = null, array $ignored = []): array
 {
-    return \SatelliteWP\Xtractor\Rules\VulnerabilityMerge::merge($blogvault, $wordfence, $installedVersion, $ignored);
+    return \SatelliteWP\Manager\Rules\VulnerabilityMerge::merge($blogvault, $wordfence, $installedVersion, $ignored);
 }
 
 /** @param list<mixed> $candidates */
 function nearest_patched_version(array $candidates, ?string $installedVersion): ?string
 {
-    return \SatelliteWP\Xtractor\Rules\VulnerabilityMerge::nearestPatchedVersion($candidates, $installedVersion);
+    return \SatelliteWP\Manager\Rules\VulnerabilityMerge::nearestPatchedVersion($candidates, $installedVersion);
 }
 
 /**

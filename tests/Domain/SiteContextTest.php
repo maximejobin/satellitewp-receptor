@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Domain;
+namespace SatelliteWP\Manager\Tests\Domain;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Domain\SiteContext;
+use SatelliteWP\Manager\Domain\SiteContext;
 
 final class SiteContextTest extends TestCase
 {

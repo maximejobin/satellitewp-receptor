@@ -1,6 +1,9 @@
-# SatelliteWP Xtractor — working context
+# SatelliteWP Manager — working context
 
-Server-side companion to the `satellitewp-plugin-maintenance` WordPress plugin.
+SatelliteWP's management tool (formerly "Xtractor"). Its public ingestion
+endpoint is the **Extractor** (formerly "Receptor"), still served from
+`public/receptor/` because the hosting panel's web root points there. Server-side
+companion to the `satellitewp-plugin-maintenance` WordPress plugin.
 It receives signed extraction payloads, runs external probes, evaluates a rule
 catalogue into **findings**, shows an analyst dashboard and feeds the client
 "Bilan de santé" Google Doc. PHP 8.4, Composer, symfony/console, Guzzle, no
@@ -48,11 +51,11 @@ framework.
 
 ## Flow
 
-Plugin `POST` → `public/receptor/index.php` (**Receptor**: HMAC over
+Plugin `POST` → `public/receptor/index.php` (**Extractor**: HMAC over
 `timestamp . '.' . body`, timestamp window ±300 s, replay cache, store, index as
 `pending`) → analyst presses **Run analysis** (→ `queued`) → cron
 `ingest:process` runs **Pipeline** on queued extractions only: probes `dns`,
-`rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail` write
+`rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail`, `crm` write
 `probes/*.json`, plugin/theme slugs go to the **SoftwareCatalog**, then
 **RuleEngine** evaluates `config/rules.php` → `findings.json`. Any exception
 after `running` sets the extraction to `error`.
@@ -128,10 +131,24 @@ optional calls need `try/catch`.
 - `MailProbe`: reads the newest test email (≤ 24 h) whose subject carries the
   site's reference `sha256(site_id)[:16]` (the plugin appends it to the
   subject) from the validation Gmail over IMAP (`mail.*` config, app password,
-  `INBOX` then `[Gmail]/Spam`; `ImapClient` is read-only, PHP 8.4 has no imap
+  `INBOX` then the server's `\Junk` folder; `ImapClient` is read-only, PHP 8.4 has no imap
   ext). Verdicts come from the first `Authentication-Results` whose authserv-id
   is `mx.google.com` — a header from an earlier hop is never trusted. No
-  message = `found: false`, verdicts `null`, not a failure. No rule reads it yet.
+  message = `found: false`, verdicts `null`, not a failure. `D1` (SPF), `D2` (DKIM),
+  `D3` (DMARC) read only these verdicts (DNS records are display values, never
+  a verdict); a method the receiver did not record is `none` (except SPF), a
+  transient `temperror` is unknown.
+- `CrmProbe`: a snapshot, never read live at display or report time. Chain:
+  BlogVault site id (stored `blogvault` probe, `data.site.id`; the full 32-hex
+  id, matched case-insensitively) → `swp_websites.blogvault_site_id` →
+  `swp_subscriptions_websites` → `swp_subscriptions` → `swp_clients`, and
+  `swp_products` → `swp_maintenance_plans` for the plan. Runs after `blogvault`
+  and gets its id from that run or the stored file. Unlinked reasons
+  (`no_blogvault_id`, `website_not_found`, `website_ambiguous`, `no_client`) are
+  data, not errors; an unconfigured or failing CRM database is an `error` that
+  stores the SQLSTATE only. `maintenance_plan` is set only when exactly one
+  `active` plan exists. Relinking is `probe:run crm <site> [ext]` (overwrites
+  `probes/crm.json`); feeds `{{client}}` and `{{maintenance_plan}}`.
 - `BlogVaultProbe` strips the Basic-auth password `GET /sites/{id}` returns;
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
@@ -170,11 +187,17 @@ of the Google Doc to a `value` (dot path + transform + colour transform), a
 purple → blue → red → orange → green → grey, plus analyst observations filed
 under that field). A test enforces that every rule lands in a topic section.
 `Web\ReportBuilder` resolves it; `HardeningConstants` is shared with the UI.
-The Apps Script (Google Doc side, pasted manually — deliver it as a full
-inline code block, never a file path) only renders: `{{field:colours:mode}}`
+The Apps Script (Google Doc side) only renders: `{{field:colours:mode}}`
 filters colours (`red,orange`; empty = all) and `short` renders titles only,
-11 pt, two borderless columns; purple items render as a ☐ checkbox line. The
-latest script lives in the session scratchpad as `rapport-poc-v<N>.gs`.
+11 pt, two borderless columns; purple items render as a ☐ checkbox line. It is
+two files in `resources/apps-script/`: `loader.gs`, pasted once per Doc
+(deliver it as a full inline code block, never a file path), and `report-engine.gs`,
+the engine, served by `…/report-script.json` behind the same credentials as
+`report.json`. The loader derives the engine URL from the pasted data URL (so
+DEV loads DEV), trusts `satellitewp.com` and its subdomains (any other host asks
+first), stores the engine per origin in document properties and offers an
+update when the served `var VERSION` is higher — bump it on every engine change.
+Both files are English only (identifiers, comments, UI strings).
 
 **Catalogue & reference.** `SoftwareCatalog` (`data/catalog/software.json`):
 cross-site free/premium licence classification; `normalizeSlug()` turns
@@ -192,7 +215,7 @@ Access runbook: `docs/acces-mysql-distant.md`.
 **Web UI.** English chrome, light theme, orange accent `#f26f2b`. The
 extraction page renders nothing but the status until `done`. Every value can
 show its provenance (`src_note()`: payload = as reported by the plugin, probe
-= measured by Xtractor). Datatables: explicit Search/Filter button, never live
+= measured by Manager). Datatables: explicit Search/Filter button, never live
 filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `license_select()` saves via `fetch()` (`requestSubmit()`, since
 `form.submit()` fires no submit event). Assets are vendored, no CDN, no build.
@@ -202,7 +225,7 @@ filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `logs/error-<date>.log` and returns a short `ref`; installed before boot by
 both front controllers; never logs bodies, signatures or cookies.
 
-## CLI (`bin/xtractor`)
+## CLI (`bin/swpmgr`)
 
 `ingest:process` · `pipeline:run <site> [ext] [--probe=a,b]` ·
 `probe:run <probe> <site> [ext]` (re-runs and stores) · `probe:list` ·
@@ -241,5 +264,4 @@ BlogVault scanner/firewall/backup status and care-plan data (operational
 state, not configuration), per-collector `_errors` (an extraction is complete
 or it is not sent).
 
-Open: rules/UI/report for the mail probe's verdicts; linking an extraction's
-site to its CRM website (needed for `{{maintenance_plan}}`), undecided.
+Open: rules/UI for the CRM snapshot beyond the report fields.

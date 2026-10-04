@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Reference;
+namespace SatelliteWP\Manager\Reference;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use RuntimeException;
-use SatelliteWP\Xtractor\Support\AtomicFile;
+use SatelliteWP\Manager\Support\AtomicFile;
 
 /**
  * End-of-life reference data sourced from endoflife.date and cached locally

@@ -4,7 +4,7 @@
 
 # Menu
 - En premier, je veux avoir : Websites, Items, Clients, Products. Retirer le label "CRM"
-- En second, "Monitoring" sera là. On renomme pour "Receptor". "Sites" deviendra "Extractions".
+- En second, "Monitoring" sera là. On renomme pour "Extractor". "Sites" deviendra "Extractions".
 - En troisième, "Data". Tout reste ainsi.
 - En quatrième, "Management" contiendra "Users".
 

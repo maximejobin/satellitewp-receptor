@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Probe\HttpProbe;
+use SatelliteWP\Manager\Probe\HttpProbe;
 
 final class HttpProbeTest extends TestCase
 {
@@ -377,7 +377,7 @@ final class HttpProbeTest extends TestCase
         };
 
         $probe = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
-        $site  = new \SatelliteWP\Xtractor\Domain\SiteContext('site-1', 'https://example.com/wp', 'https://example.com/', 'example.com', 'example.com');
+        $site  = new \SatelliteWP\Manager\Domain\SiteContext('site-1', 'https://example.com/wp', 'https://example.com/', 'example.com', 'example.com');
 
         $data = $probe->run($site)->data;
 
@@ -392,7 +392,7 @@ final class HttpProbeTest extends TestCase
     public function testCollectRefusesAHostThatDoesNotResolveToAPublicAddress(): void
     {
         $probe  = new HttpProbe(5, 10, 'test-agent', null, static fn (string $h): ?string => null);
-        $result = $probe->run(new \SatelliteWP\Xtractor\Domain\SiteContext('s', 'https://internal.example', 'https://internal.example', 'internal.example', 'internal.example'));
+        $result = $probe->run(new \SatelliteWP\Manager\Domain\SiteContext('s', 'https://internal.example', 'https://internal.example', 'internal.example', 'internal.example'));
 
         $this->assertSame('error', $result->status);
         $this->assertStringContainsString('SSRF guard', $result->errors[0]);

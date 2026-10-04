@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Integration;
+namespace SatelliteWP\Manager\Integration;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
@@ -18,7 +18,7 @@ final class WordfenceClient
         private readonly ClientInterface $http,
         private readonly string $baseUrl,
         private readonly ?string $apiKey,
-        private readonly string $userAgent = 'SatelliteWP-Xtractor/1.0',
+        private readonly string $userAgent = 'SatelliteWP-Manager/1.0',
     ) {
         if ($this->baseUrl === '') {
             throw new InvalidArgumentException('Wordfence base_url is required');

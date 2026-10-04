@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Support;
+namespace SatelliteWP\Manager\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Support\Secret;
+use SatelliteWP\Manager\Support\Secret;
 
 final class SecretTest extends TestCase
 {

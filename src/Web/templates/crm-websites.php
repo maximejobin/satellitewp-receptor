@@ -8,7 +8,7 @@
  * @var string $search
  * @var array<string, string|null> $links
  */
-use SatelliteWP\Xtractor\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ClientsRepository;
 
 $tagFilter = static function (string $id, string $label, string $field, array $selected, array $allTags, bool $excludeStyle): string {
     $options = '';

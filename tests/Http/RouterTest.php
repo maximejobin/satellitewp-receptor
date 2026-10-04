@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Http;
+namespace SatelliteWP\Manager\Tests\Http;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Http\Router;
+use SatelliteWP\Manager\Http\Router;
 
 /**
  * Covers the security-relevant routing decisions of the read-only web surface:
@@ -169,6 +169,14 @@ final class RouterTest extends TestCase
         $match = Router::matchRoute('/site/' . self::UUID . '/extraction/' . self::EID . '/report.json');
 
         $this->assertSame('extraction_report_json', $match['route']);
+        $this->assertSame(self::EID, $match['params']['extraction_id']);
+    }
+
+    public function testReportScriptRouteIsItsOwnTokenGatedRoute(): void
+    {
+        $match = Router::matchRoute('/site/' . self::UUID . '/extraction/' . self::EID . '/report-script.json');
+
+        $this->assertSame('extraction_report_script', $match['route']);
         $this->assertSame(self::EID, $match['params']['extraction_id']);
     }
 

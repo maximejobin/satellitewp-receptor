@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Rules;
+namespace SatelliteWP\Manager\Tests\Rules;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Rules\Context;
+use SatelliteWP\Manager\Rules\Context;
 
 final class ContextTest extends TestCase
 {

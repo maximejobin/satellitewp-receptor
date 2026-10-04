@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Probe;
+namespace SatelliteWP\Manager\Probe;
 
 use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
-use SatelliteWP\Xtractor\Domain\ProbeResult;
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Integration\ImapClient;
-use SatelliteWP\Xtractor\Integration\ImapException;
-use SatelliteWP\Xtractor\Support\Secret;
+use SatelliteWP\Manager\Domain\ProbeResult;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Integration\ImapClient;
+use SatelliteWP\Manager\Integration\ImapException;
+use SatelliteWP\Manager\Support\Secret;
 use Throwable;
 
 /**
@@ -31,8 +31,7 @@ final class MailProbe extends AbstractProbe
     private const array HEADERS = ['SUBJECT', 'FROM', 'AUTHENTICATION-RESULTS'];
 
     /**
-     * @param array<string, mixed> $config username, password, host, port, timeout,
-     *        mailboxes, max_age_hours, authserv_id
+     * @param array<string, mixed> $config username, password, host, port, timeout, max_age_hours
      * @param (Closure(): ImapClient)|null $connector test seam; defaults to a TLS connection to host:port
      * @param (Closure(): DateTimeImmutable)|null $clock test seam
      */
@@ -61,8 +60,9 @@ final class MailProbe extends AbstractProbe
 
     protected function collect(SiteContext $site): array
     {
-        $username = (string) ($this->config['username'] ?? '');
-        $password = (string) ($this->config['password'] ?? '');
+        $username = trim((string) ($this->config['username'] ?? ''));
+        // Google shows app passwords in groups of four; the spaces are not part of the secret.
+        $password = str_replace(' ', '', (string) ($this->config['password'] ?? ''));
         if ($this->connector === null && ($username === '' || $password === '')) {
             return [
                 'status' => ProbeResult::STATUS_ERROR,
@@ -109,19 +109,17 @@ final class MailProbe extends AbstractProbe
         try {
             $client->login($username, $password);
 
-            $since     = $now->modify("-{$maxAge} seconds")->modify('-1 day')->format('j-M-Y');
-            $found     = [];
-            $mailboxes = array_values(array_filter((array) ($this->config['mailboxes'] ?? ['INBOX']), 'is_string'));
-            foreach ($mailboxes as $i => $mailbox) {
-                try {
-                    $client->examine($mailbox);
-                } catch (ImapException $e) {
-                    // Only the first mailbox is mandatory; a Spam folder named differently is not fatal.
-                    if ($i === 0) {
-                        throw $e;
-                    }
-                    continue;
-                }
+            // A message failing SPF/DKIM is often filed as spam; Gmail localizes that folder's name.
+            $mailboxes = ['INBOX'];
+            $junk      = $client->junkMailbox();
+            if ($junk !== null) {
+                $mailboxes[] = $junk;
+            }
+
+            $since = $now->modify("-{$maxAge} seconds")->modify('-1 day')->format('j-M-Y');
+            $found = [];
+            foreach ($mailboxes as $mailbox) {
+                $client->examine($mailbox);
                 $uids = $client->uidSearch('SINCE ' . $since . ' SUBJECT "' . $reference . '"');
                 foreach ($client->uidFetchHeaders(array_slice($uids, -10), self::HEADERS) as $message) {
                     $found[] = $message;
@@ -219,6 +217,11 @@ final class MailProbe extends AbstractProbe
                     $out[$method] = $verdict;
                 }
             }
+
+            // The receiver writes one entry per method it evaluated; a message with no
+            // signature or no published policy simply has none, which RFC 8601 calls "none".
+            $out['dkim']  ??= 'none';
+            $out['dmarc'] ??= 'none';
 
             return $out;
         }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Integration;
+namespace SatelliteWP\Manager\Tests\Integration;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
@@ -11,8 +11,8 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Integration\BlogVaultClient;
-use SatelliteWP\Xtractor\Integration\BlogVaultException;
+use SatelliteWP\Manager\Integration\BlogVaultClient;
+use SatelliteWP\Manager\Integration\BlogVaultException;
 
 final class BlogVaultClientTest extends TestCase
 {

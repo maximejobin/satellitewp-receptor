@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Integration;
+namespace SatelliteWP\Manager\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use SatelliteWP\Xtractor\Integration\ImapClient;
-use SatelliteWP\Xtractor\Integration\ImapException;
+use SatelliteWP\Manager\Integration\ImapClient;
+use SatelliteWP\Manager\Integration\ImapException;
 
 final class ImapClientTest extends TestCase
 {

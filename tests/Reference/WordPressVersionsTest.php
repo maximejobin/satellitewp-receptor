@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Reference;
+namespace SatelliteWP\Manager\Tests\Reference;
 
-use SatelliteWP\Xtractor\Reference\WordPressVersions;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class WordPressVersionsTest extends TestCase
 {

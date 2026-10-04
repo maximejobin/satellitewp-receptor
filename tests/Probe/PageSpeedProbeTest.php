@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace SatelliteWP\Xtractor\Tests\Probe;
+namespace SatelliteWP\Manager\Tests\Probe;
 
-use SatelliteWP\Xtractor\Domain\SiteContext;
-use SatelliteWP\Xtractor\Probe\PageSpeedProbe;
-use SatelliteWP\Xtractor\Tests\TestCase;
+use SatelliteWP\Manager\Domain\SiteContext;
+use SatelliteWP\Manager\Probe\PageSpeedProbe;
+use SatelliteWP\Manager\Tests\TestCase;
 
 final class PageSpeedProbeTest extends TestCase
 {
