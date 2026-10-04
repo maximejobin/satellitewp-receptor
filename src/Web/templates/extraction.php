@@ -1034,6 +1034,14 @@ if ($status !== 'done'):
                 <span class="mono">{{…_observations}}</span> spot in the template. An omitted one
                 stays saved, just left out of the report until re-included.
             </p>
+            <?php if ($observationsImport !== null && $observationsImport['errors'] === []): ?>
+                <div class="pending-note" style="border-color:var(--ok);background:var(--bg-ok)"><?= e($observationsImport['imported']) ?> observation<?= $observationsImport['imported'] > 1 ? 's' : '' ?> imported from the CSV.</div>
+            <?php elseif ($observationsImport !== null): ?>
+                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">
+                    Nothing was imported — fix the file and import it again:
+                    <ul style="margin:.4rem 0 0"><?php foreach ($observationsImport['errors'] as $importError): ?><li><?= e($importError) ?></li><?php endforeach; ?></ul>
+                </div>
+            <?php endif; ?>
             <?php if ($observations === []): ?>
                 <p class="empty">No manual observation yet.</p>
             <?php else: ?>
@@ -1124,6 +1132,21 @@ if ($status !== 'done'):
             <p class="muted" style="font-size:.78rem;margin:.4rem 0 0">
                 Description supports <span class="mono">**bold**</span>, <span class="mono">_italic_</span>, and
                 <span class="mono">[link text](https://…)</span> — same formatting in this list and in the Google Docs report.
+            </p>
+
+            <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Import a CSV</h4>
+            <form method="post" enctype="multipart/form-data" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations-import" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                <input type="file" name="csv" accept=".csv,text/csv" required>
+                <button type="submit" class="btn">Import</button>
+                <?php $csvTemplate = "section,color,title,description,include\n" . ($observationSections[0] ?? '') . ",blue,Example title,\"Description, with **bold** if needed\",1\n"; ?>
+                <a href="data:text/csv;charset=utf-8,<?= e(rawurlencode($csvTemplate)) ?>" download="observations.csv" style="font-size:.85rem">Download a template</a>
+            </form>
+            <p class="muted" style="font-size:.78rem;margin:.4rem 0 0">
+                Columns <span class="mono">section</span>, <span class="mono">title</span> (required), <span class="mono">color</span>
+                (<?= e(implode(', ', Pastille::values())) ?>; blue when empty), <span class="mono">description</span>,
+                <span class="mono">include</span> (1/0, empty = 1). Comma or semicolon, UTF-8. Rows are added to the list above;
+                one invalid row and nothing is imported.
             </p>
             <?php endif; ?>
         </div>

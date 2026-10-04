@@ -9,10 +9,12 @@ use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
 use SatelliteWP\Manager\Http\ReportContract;
 use SatelliteWP\Manager\Http\Router;
+use SatelliteWP\Manager\Http\Session;
 use SatelliteWP\Manager\Probe\BlogVaultProbe;
 use SatelliteWP\Manager\Rules\Pastille;
 use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Support\HostGuard;
+use SatelliteWP\Manager\Web\ObservationsCsv;
 
 /** One extraction: its report page, raw files and every action on it. */
 final class ExtractionController extends Controller
@@ -59,6 +61,7 @@ final class ExtractionController extends Controller
             'observations'        => (array) ($store->readObservations($siteId, $extractionId)['items'] ?? []),
             'observationSections' => ReportContract::observationSections(ReportContract::load($this->app)),
             'canEditObservations' => $this->currentUserCan('extraction_observations_edit'),
+            'observationsImport'  => $this->takeImportFlash("{$siteId}/{$extractionId}"),
             'licenseStatuses'     => $store->readLicenses($siteId, $extractionId) ?? [],
             'debuggingTools'      => $debuggingTools,
             'rerunProbes'         => $debuggingTools
@@ -251,6 +254,72 @@ final class ExtractionController extends Controller
         });
 
         $this->redirect("/site/{$siteId}/extraction/{$extractionId}#observations");
+    }
+
+    /**
+     * POST …/observations-import — appends every observation of an uploaded
+     * CSV, or none when a row is invalid. The outcome is flashed to the page.
+     *
+     * @param array<string, string> $params
+     */
+    public function importObservations(array $params): void
+    {
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
+        if (!$this->requireCapability('extraction_observations_edit')
+            || !$this->requireExtractionStatus($siteId, $extractionId, null)
+        ) {
+            return;
+        }
+
+        $file   = $_FILES['csv'] ?? null;
+        $result = match (true) {
+            !is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE
+                => ['items' => [], 'errors' => ['Choose a CSV file to import.']],
+            in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                => ['items' => [], 'errors' => ['The file is larger than 1 MB.']],
+            $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string) $file['tmp_name'])
+                => ['items' => [], 'errors' => ['The upload failed; try again.']],
+            default => ObservationsCsv::parse(
+                (string) file_get_contents((string) $file['tmp_name'], false, null, 0, ObservationsCsv::MAX_BYTES + 1),
+                ReportContract::observationSections(ReportContract::load($this->app))
+            ),
+        };
+
+        if ($result['errors'] === []) {
+            $items = $result['items'];
+            $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $existing) use ($items): array {
+                foreach ($items as $item) {
+                    $existing[] = ['id' => bin2hex(random_bytes(6))] + $item;
+                }
+
+                return $existing;
+            });
+        }
+
+        Session::start();
+        $_SESSION['observations_import'] = [
+            'extraction' => "{$siteId}/{$extractionId}",
+            'imported'   => count($result['items']),
+            'errors'     => $result['errors'],
+        ];
+        $this->redirect("/site/{$siteId}/extraction/{$extractionId}#observations");
+    }
+
+    /**
+     * The last CSV import outcome, shown once and only on its own extraction.
+     *
+     * @return array{imported: int, errors: list<string>}|null
+     */
+    private function takeImportFlash(string $extraction): ?array
+    {
+        Session::start();
+        $flash = $_SESSION['observations_import'] ?? null;
+        if (!is_array($flash) || ($flash['extraction'] ?? null) !== $extraction) {
+            return null;
+        }
+        unset($_SESSION['observations_import']);
+
+        return ['imported' => (int) ($flash['imported'] ?? 0), 'errors' => array_values(array_map('strval', (array) ($flash['errors'] ?? [])))];
     }
 
     /**

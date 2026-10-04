@@ -56,27 +56,29 @@ final class Router
 
     /** @var array<string, array{0: class-string<Controller>, 1: string}> POST route name => handler */
     private const array POST_HANDLERS = [
-        'extraction_run'          => [ExtractionController::class, 'run'],
-        'extraction_abort'        => [ExtractionController::class, 'abort'],
-        'extraction_rerun'        => [ExtractionController::class, 'rerun'],
-        'extraction_report_token' => [ExtractionController::class, 'reportToken'],
-        'extraction_observations' => [ExtractionController::class, 'observations'],
-        'extraction_licenses'     => [ExtractionController::class, 'licenses'],
-        'users'                   => [UserController::class, 'save'],
-        'profile'                 => [UserController::class, 'saveProfile'],
-        'keys'                    => [SiteController::class, 'keys'],
-        'catalog'                 => [CatalogController::class, 'save'],
-        'subscriptions'           => [CrmController::class, 'linkSubscription'],
+        'extraction_run'                 => [ExtractionController::class, 'run'],
+        'extraction_abort'               => [ExtractionController::class, 'abort'],
+        'extraction_rerun'               => [ExtractionController::class, 'rerun'],
+        'extraction_report_token'        => [ExtractionController::class, 'reportToken'],
+        'extraction_observations'        => [ExtractionController::class, 'observations'],
+        'extraction_observations_import' => [ExtractionController::class, 'importObservations'],
+        'extraction_licenses'            => [ExtractionController::class, 'licenses'],
+        'users'                          => [UserController::class, 'save'],
+        'profile'                        => [UserController::class, 'saveProfile'],
+        'keys'                           => [SiteController::class, 'keys'],
+        'catalog'                        => [CatalogController::class, 'save'],
+        'subscriptions'                  => [CrmController::class, 'linkSubscription'],
     ];
 
     /** Actions POSTed to /site/{uuid}/extraction/{id}/<action>. */
     private const array EXTRACTION_ACTIONS = [
-        'run'          => 'extraction_run',
-        'abort'        => 'extraction_abort',
-        'rerun'        => 'extraction_rerun',
-        'report-token' => 'extraction_report_token',
-        'observations' => 'extraction_observations',
-        'licenses'     => 'extraction_licenses',
+        'run'                 => 'extraction_run',
+        'abort'               => 'extraction_abort',
+        'rerun'               => 'extraction_rerun',
+        'report-token'        => 'extraction_report_token',
+        'observations'        => 'extraction_observations',
+        'observations-import' => 'extraction_observations_import',
+        'licenses'            => 'extraction_licenses',
     ];
 
     /** Single-segment POST targets with no GET page of their own (except users/profile). */

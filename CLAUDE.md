@@ -230,6 +230,9 @@ filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `license_select()` saves via `fetch()` (`requestSubmit()`, since
 `form.submit()` fires no submit event). Assets are vendored, no CDN, no build.
 `debugging_tools` (config, dev only) adds a re-run panel on done extractions.
+Observations can also be appended from a CSV (`Web\ObservationsCsv`: header
+`section,color,title,description,include`, comma or semicolon, UTF-8; one
+invalid row and nothing is imported, the errors are flashed per line).
 
 **Errors.** `Support\ErrorLog` writes one JSON line per 500 into
 `logs/error-<date>.log` and returns a short `ref`; installed before boot by

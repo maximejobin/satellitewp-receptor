@@ -297,12 +297,13 @@ final class RouterTest extends TestCase
     {
         $base = '/site/' . self::UUID . '/extraction/' . self::EID . '/';
         foreach ([
-            'run'          => 'extraction_run',
-            'abort'        => 'extraction_abort',
-            'rerun'        => 'extraction_rerun',
-            'report-token' => 'extraction_report_token',
-            'observations' => 'extraction_observations',
-            'licenses'     => 'extraction_licenses',
+            'run'                 => 'extraction_run',
+            'abort'               => 'extraction_abort',
+            'rerun'               => 'extraction_rerun',
+            'report-token'        => 'extraction_report_token',
+            'observations'        => 'extraction_observations',
+            'observations-import' => 'extraction_observations_import',
+            'licenses'            => 'extraction_licenses',
         ] as $action => $route) {
             $match = Router::matchPostRoute($base . $action);
             $this->assertSame($route, $match['route'], $action);
