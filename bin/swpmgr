@@ -17,6 +17,7 @@ $console->addCommands([
     new Console\PipelineRunCommand($app),
     new Console\ProbeRunCommand($app),
     new Console\ProbeListCommand($app),
+    new Console\SeRankingPollCommand($app),
     new Console\RulesEvaluateCommand($app),
     new Console\RulesReevaluateCommand($app),
     new Console\RulesListCommand($app),

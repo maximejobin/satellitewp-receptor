@@ -16,7 +16,7 @@ use Throwable;
 /**
  * The cron worker: runs only extractions an analyst queued, never mere
  * arrivals, so a push spends no probe quota; the slow work stays out of web
- * requests.
+ * requests. Each run also polls the remote audits earlier runs left pending.
  *
  * Crontab: * * * * * php /path/to/bin/swpmgr ingest:process --requeue-stale=30
  */
@@ -54,15 +54,15 @@ final class IngestProcessCommand extends Command
                 }
             }
 
-            $queued = $index->queuedExtractions((int) $input->getOption('limit'));
+            $failures = $this->pollAudits($output);
+            $queued   = $index->queuedExtractions((int) $input->getOption('limit'));
 
             if ($queued === []) {
                 $output->writeln('No queued extractions.');
 
-                return Command::SUCCESS;
+                return $failures === 0 ? Command::SUCCESS : Command::FAILURE;
             }
 
-            $failures = 0;
             foreach ($queued as $row) {
                 $siteId       = (string) $row['site_id'];
                 $extractionId = (string) $row['id'];
@@ -84,5 +84,21 @@ final class IngestProcessCommand extends Command
             flock($lock, LOCK_UN);
             fclose($lock);
         }
+    }
+
+    /** @return int 1 when polling failed, so the run exits non-zero */
+    private function pollAudits(OutputInterface $output): int
+    {
+        try {
+            foreach ($this->app->auditPoller()->pollPending(time()) as $line) {
+                $output->writeln("SE Ranking audit {$line}");
+            }
+        } catch (Throwable $e) {
+            $output->writeln('<error>SE Ranking polling failed: ' . $e->getMessage() . '</error>');
+
+            return 1;
+        }
+
+        return 0;
     }
 }

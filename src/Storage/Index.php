@@ -308,6 +308,22 @@ final class Index
         return $stmt->fetchAll();
     }
 
+    /**
+     * Runs of one probe still in a given status, oldest first (e.g. remote
+     * audits left `pending` for the poller).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function probeRunsWithStatus(string $probe, string $status): array
+    {
+        $stmt = $this->pdo()->prepare(
+            'SELECT * FROM probe_runs WHERE probe = :probe AND status = :status ORDER BY ran_at ASC'
+        );
+        $stmt->execute(['probe' => $probe, 'status' => $status]);
+
+        return $stmt->fetchAll();
+    }
+
     /** @return array<string, mixed>|null */
     public function getExtraction(string $siteId, string $extractionId): ?array
     {

@@ -48,7 +48,7 @@ return [
 
     // Probes executed by the pipeline, in order.
     'probes' => [
-        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'crm', 'wordfence', 'wporg', 'mail'],
+        'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'crm', 'wordfence', 'wporg', 'mail', 'seranking'],
         'connect_timeout' => 5,
         'timeout' => 15,
         'user_agent' => 'SatelliteWP-Manager/1.0',
@@ -83,6 +83,25 @@ return [
         // Params/headers sent on every request (e.g. a partner or account id).
         'default_query'   => [],
         'default_headers' => [],
+    ],
+
+    // SE Ranking Website Audit (Project API). Each analysis creates an audit,
+    // which spends crawl credits (one per page); status/report reads are free.
+    // The cron worker polls pending audits and stores the report when done.
+    'seranking' => [
+        'base_url'      => 'https://api.seranking.com/v1/project-management',
+        'api_key'       => null,     // set in config.local.php
+        'timeout'       => 30,
+        'poll_minutes'  => 5,        // minimum delay between two status checks
+        'give_up_hours' => 24,       // a still-unfinished audit becomes an error
+        // Overrides sent on creation; the API defaults apply to everything else.
+        'settings' => [
+            'max_pages'     => 1000,
+            // Requests per second against the client's server: the API default (500) would flood shared hosting.
+            'max_req'       => 5,
+            'schedule_type' => 'manual',
+            'send_report'   => 0,
+        ],
     ],
 
     // Wordfence Intelligence v3: a rate-limited full dump, never called during

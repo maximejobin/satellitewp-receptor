@@ -855,6 +855,44 @@ if ($status !== 'done'):
                     . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—', null, 'probe.http.robots.sitemap_reachable')
                     . ($sitemapSourceLabel !== null ? field('Sitemap source', $sitemapSourceLabel, null, 'probe.http.robots.sitemap_source') : '')
                 );
+
+                $audit       = $probes['seranking'] ?? null;
+                $auditData   = (array) ($audit['data'] ?? []);
+                $auditStatus = (string) ($audit['status'] ?? '');
+                if ($audit === null) {
+                    $auditNote = '<div class="pending-note">No site audit for this extraction — run the <code>seranking</code> probe to start one.</div>';
+                } elseif ($auditStatus === 'pending') {
+                    $auditNote = '<div class="pending-note">Audit ' . e($auditData['audit_id'] ?? '') . ' in progress on SE Ranking ('
+                        . e($auditData['state'] ?? 'queued') . (isset($auditData['pages_crawled']) ? ', ' . e($auditData['pages_crawled']) . ' pages crawled so far' : '')
+                        . '). The report is fetched automatically once it is finished.</div>';
+                } elseif ($auditStatus === 'error') {
+                    $auditNote = '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">Site audit failed: ' . e(implode(' ', (array) ($audit['errors'] ?? []))) . '</div>';
+                } else {
+                    $totals    = (array) ($auditData['totals'] ?? []);
+                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '—', null, 'probe.seranking.score')
+                        . field('Pages crawled', $totals['pages'] ?? null, null, 'probe.seranking.totals.pages')
+                        . field('Errors', $totals['errors'] ?? null, ($totals['errors'] ?? 0) > 0 ? 'error' : 'ok', 'probe.seranking.totals.errors')
+                        . field('Warnings', $totals['warnings'] ?? null, ($totals['warnings'] ?? 0) > 0 ? 'warn' : 'ok', 'probe.seranking.totals.warnings')
+                        . field('Notices', $totals['notices'] ?? null, null, 'probe.seranking.totals.notices')
+                        . field('Finished', $auditData['finished_at'] ?? null, null, 'probe.seranking.finished_at');
+
+                    // Failing checks only, most severe first, then by pages affected.
+                    $rank   = ['error' => 0, 'warning' => 1, 'notice' => 2];
+                    $issues = array_values(array_filter((array) ($auditData['checks'] ?? []),
+                        static fn ($c) => isset($rank[$c['status'] ?? '']) && (int) ($c['pages'] ?? 0) > 0));
+                    usort($issues, static fn ($a, $b) => [$rank[$a['status']], -$a['pages']] <=> [$rank[$b['status']], -$b['pages']]);
+                    if ($issues !== []) {
+                        $auditTable = '<table><thead><tr><th>Severity</th><th>Check</th><th>Section</th><th class="num">Pages</th></tr></thead><tbody>';
+                        foreach ($issues as $c) {
+                            $auditTable .= '<tr><td>' . '<span class="status-dot ' . ['error' => 'status-dot-error', 'warning' => 'status-dot-warn', 'notice' => 'status-dot-muted'][$c['status']] . '">' . e(ucfirst($c['status'])) . '</span>' . '</td>'
+                                . '<td>' . e($c['name']) . '</td><td>' . e($c['section_name']) . '</td><td class="num">' . e($c['pages']) . '</td></tr>';
+                        }
+                        $auditTable .= '</tbody></table>';
+                    }
+                }
+                echo '<div class="card card-full"><h3>Site audit (SE Ranking)</h3>'
+                    . (isset($auditRows) ? '<table class="kv"><tbody>' . $auditRows . '</tbody></table>' . ($auditTable ?? '') : '<div style="padding:1rem 1.1rem">' . $auditNote . '</div>')
+                    . '</div>';
                 ?>
             </div>
         </div>

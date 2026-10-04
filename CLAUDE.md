@@ -55,7 +55,7 @@ Plugin `POST` → `public/receptor/index.php` (**Extractor**: HMAC over
 `timestamp . '.' . body`, timestamp window ±300 s, replay cache, store, index as
 `pending`) → analyst presses **Run analysis** (→ `queued`) → cron
 `ingest:process` runs **Pipeline** on queued extractions only: probes `dns`,
-`rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail`, `crm` write
+`rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail`, `crm`, `seranking` write
 `probes/*.json`, plugin/theme slugs go to the **SoftwareCatalog**, then
 **RuleEngine** evaluates `config/rules.php` → `findings.json`. Any exception
 after `running` sets the extraction to `error`.
@@ -149,6 +149,16 @@ optional calls need `try/catch`.
   stores the SQLSTATE only. `maintenance_plan` is set only when exactly one
   `active` plan exists. Relinking is `probe:run crm <site> [ext]` (overwrites
   `probes/crm.json`); feeds `{{client}}` and `{{maintenance_plan}}`.
+- `SeRankingProbe`: an SE Ranking website audit is a crawl that finishes
+  minutes to hours later. The pipeline only creates it (crawl credits spent
+  per page; `seranking.settings` caps pages and requests/s) and stores a
+  `pending` envelope; the extraction is still `done`. `ingest:process` (or
+  `seranking:poll [--force]`) runs `Pipeline\AuditPoller`, which finds
+  pending runs through the index and checks each at most every
+  `poll_minutes`: finished = `ok` with score, totals and a flat `checks` list
+  (passed ones included); cancelled/expired/404 or older than `give_up_hours`
+  = `error`; a transient API failure stays pending (`last_error`). No rule
+  reads it yet.
 - `BlogVaultProbe` strips the Basic-auth password `GET /sites/{id}` returns;
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
@@ -234,7 +244,7 @@ both front controllers; never logs bodies, signatures or cookies.
 `reference:refresh [--product]` (hourly) · `wordfence:refresh` (daily) ·
 `catalog:list|set|suggest|reindex` · `keys:add|list|revoke|rebind` ·
 `users:add` · `users:set-role` · `sites:list` · `extractions:list` ·
-`index:rebuild`.
+`seranking:poll [--force]` · `index:rebuild`.
 
 ## Testing & conventions
 
@@ -249,7 +259,7 @@ Regenerate `docs/rules-catalog.md` after any rules or lang change.
 ## Config / secrets
 
 `config/config.php` (committed) + `config/config.local.php` (gitignored):
-API keys (`pagespeed`, `blogvault`, `wordfence`), `crm_db.*`, Google OAuth,
+API keys (`pagespeed`, `blogvault`, `wordfence`, `seranking`), `crm_db.*`, Google OAuth,
 `app.base_url` (absolute URLs for report links, icons and the OAuth
 callback; the request host is used only when empty), `debugging_tools`.
 

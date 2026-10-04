@@ -111,7 +111,7 @@ Either press **Run analysis** on the extraction page (queues it for the next
 ```
 
 - ✅ One line per probe: dns, rdap, tls, http, pagespeed, blogvault, wordfence,
-  mail, crm, wporg.
+  mail, crm, wporg, seranking.
 - ✅ `probes/*.json` and `findings.json` exist; status is `done`.
 - `pagespeed` without a key, `blogvault` for a site absent from the account
   (`"linked": false`) and `wordfence` before its first refresh report
@@ -121,6 +121,12 @@ Either press **Run analysis** on the extraction page (queues it for the next
   `crm` reports `error` when `crm_db` is unset; a site absent from BlogVault or
   from the CRM is `ok` with `"linked": false` and a `reason`. Relink with
   `probe:run crm <site>`.
+- `seranking` reports `error` until `seranking.api_key` is set; with a key it
+  creates an audit (spends SE Ranking crawl credits) and stays `pending` while
+  the extraction is already `done`. Each `ingest:process` run polls it (at most
+  every `poll_minutes`); `./bin/swpmgr seranking:poll --force` checks now. Once
+  finished, `probes/seranking.json` is `ok` with `score`, `totals` and `checks`,
+  and the extraction page shows the "Site audit (SE Ranking)" card.
 
 Re-run one probe (rewrites that probe's file and findings.json) or inspect:
 

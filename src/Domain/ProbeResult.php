@@ -12,6 +12,8 @@ final readonly class ProbeResult
     public const string STATUS_OK    = 'ok';
     public const string STATUS_WARN  = 'warn';
     public const string STATUS_ERROR = 'error';
+    /** Started on a remote service that finishes later; the poller completes it. */
+    public const string STATUS_PENDING = 'pending';
 
     /**
      * @param array<string, mixed> $data

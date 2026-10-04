@@ -14,7 +14,9 @@ use SatelliteWP\Manager\Http\Extractor;
 use SatelliteWP\Manager\Http\ReplayCache;
 use SatelliteWP\Manager\Http\SignatureVerifier;
 use SatelliteWP\Manager\Integration\BlogVaultClient;
+use SatelliteWP\Manager\Integration\SeRankingClient;
 use SatelliteWP\Manager\Integration\WordfenceClient;
+use SatelliteWP\Manager\Pipeline\AuditPoller;
 use SatelliteWP\Manager\Pipeline\Pipeline;
 use SatelliteWP\Manager\Probe\BlogVaultProbe;
 use SatelliteWP\Manager\Probe\CrmProbe;
@@ -24,6 +26,7 @@ use SatelliteWP\Manager\Probe\MailProbe;
 use SatelliteWP\Manager\Probe\PageSpeedProbe;
 use SatelliteWP\Manager\Probe\ProbeRegistry;
 use SatelliteWP\Manager\Probe\RdapProbe;
+use SatelliteWP\Manager\Probe\SeRankingProbe;
 use SatelliteWP\Manager\Probe\TlsProbe;
 use SatelliteWP\Manager\Probe\WordfenceProbe;
 use SatelliteWP\Manager\Probe\WporgProbe;
@@ -176,6 +179,9 @@ final class App
             // Unauthenticated wp.org lookups (F8, abandoned plugins/themes).
             $registry->register(new WporgProbe($connectTimeout, $timeout, $userAgent));
 
+            // Creates the audit only; AuditPoller fetches the report when it is finished.
+            $registry->register($this->seRankingProbe());
+
             $this->services[ProbeRegistry::class] = $registry;
         }
 
@@ -209,6 +215,22 @@ final class App
         return $this->services[BlogVaultClient::class] ??= BlogVaultClient::fromConfig(
             (array) $this->config->get('blogvault', [])
         );
+    }
+
+    /** Null-client probe when unconfigured: it then reports a configuration error. */
+    public function seRankingProbe(): SeRankingProbe
+    {
+        return $this->services[SeRankingProbe::class] ??= new SeRankingProbe(
+            $this->isConfigured('seranking') ? SeRankingClient::fromConfig((array) $this->config->get('seranking', [])) : null,
+            (array) $this->config->get('seranking.settings', []),
+            (int) $this->config->get('seranking.poll_minutes', 5),
+            (int) $this->config->get('seranking.give_up_hours', 24),
+        );
+    }
+
+    public function auditPoller(): AuditPoller
+    {
+        return $this->services[AuditPoller::class] ??= new AuditPoller($this->seRankingProbe(), $this->dataStore(), $this->index());
     }
 
     public function userStore(): UserStore
