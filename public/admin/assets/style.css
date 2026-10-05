@@ -518,6 +518,66 @@ dialog.json-dialog::backdrop { background: rgba(15, 23, 42, .45); }
     color: var(--text);
 }
 
+/* Observation editor: one native <dialog> for add and edit. */
+.obs-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin: -.4rem 0 .8rem; }
+.obs-toolbar .btn { margin: 0; }
+dialog.obs-dialog {
+    border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 24px 60px -20px rgba(15, 23, 42, .45);
+    padding: 0; width: min(600px, calc(100vw - 2rem)); max-height: calc(100vh - 2rem);
+    color: var(--text); background: var(--surface);
+}
+dialog.obs-dialog::backdrop { background: rgba(15, 23, 42, .45); }
+.obs-dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 2rem); margin: 0; }
+.obs-dialog-head, .obs-dialog-foot { display: flex; align-items: center; padding: .85rem 1.25rem; }
+.obs-dialog-head { justify-content: space-between; border-bottom: 1px solid var(--border); }
+.obs-dialog-head h3 { margin: 0; font-size: 1.05rem; }
+.obs-dialog-body { display: flex; flex-direction: column; gap: 1.1rem; padding: 1.15rem 1.25rem; overflow-y: auto; }
+.obs-dialog-foot { justify-content: flex-end; gap: .6rem; border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
+.obs-dialog-foot .btn { margin: 0; }
+.obs-template { margin-right: auto; font-size: .85rem; }
+.obs-label { font-size: .82rem; font-weight: 600; }
+.obs-file {
+    padding: .5rem; font: inherit; font-size: .88rem; color: var(--text);
+    border: 1px dashed var(--border); border-radius: 7px; background: var(--surface-2);
+}
+.obs-file::file-selector-button {
+    margin-right: .7rem; padding: .35rem .75rem; font: inherit; font-weight: 600; cursor: pointer;
+    color: var(--accent-2); background: var(--surface); border: 1px solid var(--accent); border-radius: 6px;
+}
+table.obs-columns { margin: 0; font-size: .82rem; }
+table.obs-columns td { padding: .3rem .5rem; vertical-align: baseline; }
+table.obs-columns td.mono { white-space: nowrap; width: 1%; }
+.obs-field { display: flex; flex-direction: column; gap: .35rem; margin: 0; padding: 0; border: 0; min-width: 0; }
+.obs-field > label, .obs-field > legend { font-size: .82rem; font-weight: 600; padding: 0; margin-bottom: .35rem; }
+.obs-field > label { margin-bottom: 0; }
+.obs-field small, .obs-include small { color: var(--muted); font-size: .76rem; }
+.obs-field input[type="text"], .obs-field select, .obs-field textarea {
+    width: 100%; box-sizing: border-box; padding: .55rem .7rem; font: inherit; font-size: .92rem; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 7px;
+}
+.obs-field textarea { resize: vertical; min-height: 7rem; line-height: 1.45; }
+.obs-field input:focus, .obs-field select:focus, .obs-field textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--bg-accent);
+}
+.obs-colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; }
+@media (max-width: 480px) { .obs-colors { grid-template-columns: repeat(2, 1fr); } }
+#observations .dot { display: inline-block; width: .66rem; height: .66rem; border-radius: 50%; flex: none; }
+.obs-color { position: relative; cursor: pointer; }
+.obs-color input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.obs-color > span {
+    display: flex; align-items: center; gap: .45rem; padding: .45rem .65rem; font-size: .86rem;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+}
+.obs-color:hover > span { background: var(--surface-2); }
+.obs-color input:checked + span { border-color: var(--accent); background: var(--bg-accent); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent); }
+.obs-color input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.obs-include {
+    display: flex; align-items: flex-start; gap: .6rem; padding: .7rem .8rem; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2);
+}
+.obs-include input { margin: .2rem 0 0; accent-color: var(--accent); width: 1rem; height: 1rem; }
+.obs-include > span { display: flex; flex-direction: column; gap: .1rem; font-size: .88rem; }
+
 .kv-cols-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; }
 @media (max-width: 700px) { .kv-cols-2 { grid-template-columns: 1fr; } }
 .kv-cols-2 table.kv th { width: 1%; white-space: nowrap; }

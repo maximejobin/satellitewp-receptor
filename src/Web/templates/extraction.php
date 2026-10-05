@@ -1042,112 +1042,177 @@ if ($status !== 'done'):
                     <ul style="margin:.4rem 0 0"><?php foreach ($observationsImport['errors'] as $importError): ?><li><?= e($importError) ?></li><?php endforeach; ?></ul>
                 </div>
             <?php endif; ?>
+            <?php
+            // "wp_core_observations" → "WordPress core": the field name stays visible as a hint.
+            $sectionLabel = static fn (string $s): string => ucfirst(str_replace(['wp_', '_'], ['WordPress ', ' '], preg_replace('/_observations$/', '', $s) ?? $s));
+            ?>
+            <?php if ($canEditObservations): ?>
+            <div class="obs-toolbar">
+                <button type="button" class="btn btn-secondary obs-import-open">Import a CSV</button>
+                <button type="button" class="btn obs-open" data-obs="">+ Add an observation</button>
+            </div>
+            <?php endif; ?>
             <?php if ($observations === []): ?>
                 <p class="empty">No manual observation yet.</p>
             <?php else: ?>
             <table>
                 <thead><tr><th>Pastille</th><th>Section</th><th>Title</th><th>Description</th><th>In report</th><?php if ($canEditObservations): ?><th></th><?php endif; ?></tr></thead>
                 <tbody>
-                <?php foreach ($observations as $i => $rec): ?>
-                    <?php $rowId = 'rec-' . e($i); ?>
-                    <tr class="row-display" data-row-id="<?= $rowId ?>">
-                        <td><span class="dot dot-<?= e($rec['color'] ?? 'grey') ?>"></span> <?= e($t->pastille((string) ($rec['color'] ?? 'grey'))) ?></td>
-                        <td class="mono"><?= e($rec['section'] ?? '') ?></td>
+                <?php foreach ($observations as $rec): ?>
+                    <tr>
+                        <td style="white-space:nowrap"><span class="dot dot-<?= e($rec['color'] ?? 'grey') ?>"></span> <?= e($t->pastille((string) ($rec['color'] ?? 'grey'))) ?></td>
+                        <td title="<?= e($rec['section'] ?? '') ?>"><?= e($sectionLabel((string) ($rec['section'] ?? ''))) ?></td>
                         <td><?= e($rec['title'] ?? '') ?></td>
                         <td><?= format_observation_text((string) ($rec['description'] ?? '')) ?></td>
                         <td><?= !empty($rec['include']) ? '<span class="badge badge-ok">Included</span>' : '<span class="badge badge-muted">Omitted</span>' ?></td>
                         <?php if ($canEditObservations): ?>
-                        <td>
-                            <button type="button" class="row-edit-btn" data-row-id="<?= $rowId ?>" title="Edit"><?= icon_edit() ?></button>
+                        <td style="white-space:nowrap">
+                            <button type="button" class="row-edit-btn obs-open" title="Edit"
+                                    data-obs="<?= e((string) json_encode([
+                                        'id'          => (string) ($rec['id'] ?? ''),
+                                        'section'     => (string) ($rec['section'] ?? ''),
+                                        'color'       => (string) ($rec['color'] ?? Pastille::Blue->value),
+                                        'title'       => (string) ($rec['title'] ?? ''),
+                                        'description' => (string) ($rec['description'] ?? ''),
+                                        'include'     => !empty($rec['include']),
+                                    ])) ?>"><?= icon_edit() ?></button>
                             <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:inline;margin:0"
                                   onsubmit="return confirm('Remove this observation?')">
                                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                                 <input type="hidden" name="action" value="remove">
                                 <input type="hidden" name="id" value="<?= e($rec['id'] ?? '') ?>">
-                                <button type="submit" class="btn btn-danger" style="padding:.2rem .5rem;font-size:.8rem">Remove</button>
+                                <button type="submit" class="btn btn-danger" style="margin:0;padding:.2rem .5rem;font-size:.8rem">Remove</button>
                             </form>
                         </td>
                         <?php endif; ?>
                     </tr>
-                    <?php if ($canEditObservations): ?>
-                    <tr class="row-edit-form" data-row-id="<?= $rowId ?>" style="display:none">
-                        <td colspan="6">
-                            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:0">
-                                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-                                <input type="hidden" name="action" value="edit">
-                                <input type="hidden" name="id" value="<?= e($rec['id'] ?? '') ?>">
-                                <select name="section" style="padding:.35rem .5rem;font:inherit">
-                                    <?php foreach ($observationSections as $s): ?>
-                                        <option value="<?= e($s) ?>" <?= $s === ($rec['section'] ?? null) ? 'selected' : '' ?>><?= e($s) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <select name="color" style="padding:.35rem .5rem;font:inherit">
-                                    <?php foreach (Pastille::values() as $c): ?>
-                                        <option value="<?= e($c) ?>" <?= $c === ($rec['color'] ?? null) ? 'selected' : '' ?>><?= e($t->pastille($c)) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <input type="text" name="title" value="<?= e($rec['title'] ?? '') ?>" placeholder="Title" required style="padding:.35rem .5rem;font:inherit;min-width:12rem">
-                                <textarea name="description" placeholder="Description" rows="2"
-                                          title="Supports **bold**, _italic_, [link text](https://…) — resolved into real formatting both here and in the Google Docs report."
-                                          style="padding:.35rem .5rem;font:inherit;min-width:20rem;flex:1;resize:vertical"><?= e($rec['description'] ?? '') ?></textarea>
-                                <label style="display:flex;align-items:center;gap:.3rem;font-size:.85rem">
-                                    <input type="checkbox" name="include" <?= !empty($rec['include']) ? 'checked' : '' ?>> In report
-                                </label>
-                                <button type="submit" class="btn" style="padding:.35rem .7rem">Save</button>
-                                <button type="button" class="btn btn-muted row-cancel-btn" style="padding:.35rem .7rem">Cancel</button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endif; ?>
                 <?php endforeach; ?>
                 </tbody>
             </table>
             <?php endif; ?>
 
             <?php if ($canEditObservations): ?>
-            <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Add an observation</h4>
-            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-                <input type="hidden" name="action" value="add">
-                <select name="section" required style="padding:.35rem .5rem;font:inherit">
-                    <option value="">Section…</option>
-                    <?php foreach ($observationSections as $s): ?>
-                        <option value="<?= e($s) ?>"><?= e($s) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="color" style="padding:.35rem .5rem;font:inherit">
-                    <?php foreach (Pastille::values() as $c): ?>
-                        <option value="<?= e($c) ?>" <?= $c === Pastille::Blue->value ? 'selected' : '' ?>><?= e($t->pastille($c)) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <input type="text" name="title" placeholder="Title" required style="padding:.35rem .5rem;font:inherit;min-width:12rem">
-                <textarea name="description" placeholder="Description" rows="2"
-                          title="Supports **bold**, _italic_, [link text](https://…) — resolved into real formatting both here and in the Google Docs report."
-                          style="padding:.35rem .5rem;font:inherit;min-width:20rem;flex:1;resize:vertical"></textarea>
-                <label style="display:flex;align-items:center;gap:.3rem;font-size:.85rem">
-                    <input type="checkbox" name="include" checked> In report
-                </label>
-                <button type="submit" class="btn">Add</button>
-            </form>
-            <p class="muted" style="font-size:.78rem;margin:.4rem 0 0">
-                Description supports <span class="mono">**bold**</span>, <span class="mono">_italic_</span>, and
-                <span class="mono">[link text](https://…)</span> — same formatting in this list and in the Google Docs report.
-            </p>
+            <dialog id="obs-dialog" class="obs-dialog" aria-labelledby="obs-dialog-title">
+                <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations">
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="id" value="">
+                    <header class="obs-dialog-head">
+                        <h3 id="obs-dialog-title">New observation</h3>
+                        <button type="button" class="json-dialog-close obs-close" aria-label="Close">&times;</button>
+                    </header>
+                    <div class="obs-dialog-body">
+                        <div class="obs-field">
+                            <label for="obs-section">Report section</label>
+                            <select id="obs-section" name="section" required>
+                                <option value="">Choose a section…</option>
+                                <?php foreach ($observationSections as $s): ?>
+                                    <option value="<?= e($s) ?>"><?= e($sectionLabel($s)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small>Where the line appears in the Google Docs report.</small>
+                        </div>
+                        <fieldset class="obs-field">
+                            <legend>Pastille</legend>
+                            <div class="obs-colors">
+                                <?php foreach (Pastille::values() as $c): ?>
+                                    <label class="obs-color">
+                                        <input type="radio" name="color" value="<?= e($c) ?>" required <?= $c === Pastille::Blue->value ? 'checked' : '' ?>>
+                                        <span><span class="dot dot-<?= e($c) ?>"></span><?= e($t->pastille($c)) ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </fieldset>
+                        <div class="obs-field">
+                            <label for="obs-title">Title</label>
+                            <input id="obs-title" type="text" name="title" required maxlength="300" placeholder="e.g. Three administrators share one account">
+                        </div>
+                        <div class="obs-field">
+                            <label for="obs-description">Description <span class="muted">(optional)</span></label>
+                            <textarea id="obs-description" name="description" rows="5" placeholder="What was observed, its impact for the client and what to do."></textarea>
+                            <small>Formatting: <span class="mono">**bold**</span>, <span class="mono">_italic_</span>, <span class="mono">[link text](https://…)</span> — rendered here and in the report.</small>
+                        </div>
+                        <label class="obs-include">
+                            <input type="checkbox" name="include" checked>
+                            <span><b>Include in the report</b><small>Unchecked, it stays saved here but is left out of the Google Doc.</small></span>
+                        </label>
+                    </div>
+                    <footer class="obs-dialog-foot">
+                        <button type="button" class="btn btn-muted obs-close">Cancel</button>
+                        <button type="submit" class="btn obs-submit">Add observation</button>
+                    </footer>
+                </form>
+            </dialog>
+            <script>
+            (function () {
+              var dialog = document.getElementById('obs-dialog');
+              if (!dialog || typeof dialog.showModal !== 'function') { return; }
+              var form = dialog.querySelector('form');
+              document.addEventListener('click', function (e) {
+                var opener = e.target.closest('.obs-open');
+                if (opener) {
+                  var rec = opener.dataset.obs ? JSON.parse(opener.dataset.obs) : null;
+                  form.reset();
+                  form.elements.action.value = rec ? 'edit' : 'add';
+                  form.elements.id.value = rec ? rec.id : '';
+                  if (rec) {
+                    form.elements.section.value = rec.section;
+                    form.elements.color.value = rec.color;
+                    form.elements.title.value = rec.title;
+                    form.elements.description.value = rec.description;
+                    form.elements.include.checked = rec.include;
+                  }
+                  document.getElementById('obs-dialog-title').textContent = rec ? 'Edit observation' : 'New observation';
+                  dialog.querySelector('.obs-submit').textContent = rec ? 'Save changes' : 'Add observation';
+                  dialog.showModal();
+                  (rec ? form.elements.title : form.elements.section).focus();
+                  return;
+                }
+                if (e.target.closest('.obs-import-open')) { document.getElementById('obs-import-dialog').showModal(); return; }
+                var close = e.target.closest('.obs-close');
+                if (close) { close.closest('dialog').close(); return; }
+                if (e.target.matches('dialog.obs-dialog')) { e.target.close(); }
+              });
+              // Ctrl/Cmd+Enter saves from the description field.
+              form.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { form.requestSubmit(); }
+              });
+            })();
+            </script>
 
-            <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Import a CSV</h4>
-            <form method="post" enctype="multipart/form-data" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations-import" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-                <input type="file" name="csv" accept=".csv,text/csv" required>
-                <button type="submit" class="btn">Import</button>
-                <?php $csvTemplate = "section,color,title,description,include\n" . ($observationSections[0] ?? '') . ",blue,Example title,\"Description, with **bold** if needed\",1\n"; ?>
-                <a href="data:text/csv;charset=utf-8,<?= e(rawurlencode($csvTemplate)) ?>" download="observations.csv" style="font-size:.85rem">Download a template</a>
-            </form>
-            <p class="muted" style="font-size:.78rem;margin:.4rem 0 0">
-                Columns <span class="mono">section</span>, <span class="mono">title</span> (required), <span class="mono">color</span>
-                (<?= e(implode(', ', Pastille::values())) ?>; blue when empty), <span class="mono">description</span>,
-                <span class="mono">include</span> (1/0, empty = 1). Comma or semicolon, UTF-8. Rows are added to the list above;
-                one invalid row and nothing is imported.
-            </p>
+            <dialog id="obs-import-dialog" class="obs-dialog" aria-labelledby="obs-import-title">
+                <form method="post" enctype="multipart/form-data" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations-import">
+                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                    <header class="obs-dialog-head">
+                        <h3 id="obs-import-title">Import observations from a CSV</h3>
+                        <button type="button" class="json-dialog-close obs-close" aria-label="Close">&times;</button>
+                    </header>
+                    <div class="obs-dialog-body">
+                        <div class="obs-field">
+                            <label for="obs-csv">CSV file</label>
+                            <input id="obs-csv" class="obs-file" type="file" name="csv" accept=".csv,text/csv" required>
+                            <small>Rows are added to the existing observations. One invalid row and nothing is imported.</small>
+                        </div>
+                        <div class="obs-field">
+                            <span class="obs-label">Columns</span>
+                            <table class="obs-columns">
+                                <tr><td class="mono">section</td><td>Required. <?= e(implode(', ', $observationSections)) ?></td></tr>
+                                <tr><td class="mono">title</td><td>Required.</td></tr>
+                                <tr><td class="mono">color</td><td><?= e(implode(', ', Pastille::values())) ?> — blue when empty</td></tr>
+                                <tr><td class="mono">description</td><td>Optional, same formatting as the form.</td></tr>
+                                <tr><td class="mono">include</td><td>1 or 0 — 1 when empty</td></tr>
+                            </table>
+                            <small>Comma or semicolon separated, saved as UTF-8 (Excel: “CSV UTF-8”).</small>
+                        </div>
+                    </div>
+                    <footer class="obs-dialog-foot">
+                        <?php $csvTemplate = "section,color,title,description,include\n" . ($observationSections[0] ?? '') . ",blue,Example title,\"Description, with **bold** if needed\",1\n"; ?>
+                        <a class="obs-template" href="data:text/csv;charset=utf-8,<?= e(rawurlencode($csvTemplate)) ?>" download="observations.csv">Download a template</a>
+                        <button type="button" class="btn btn-muted obs-close">Cancel</button>
+                        <button type="submit" class="btn">Import</button>
+                    </footer>
+                </form>
+            </dialog>
             <?php endif; ?>
         </div>
     </section>
