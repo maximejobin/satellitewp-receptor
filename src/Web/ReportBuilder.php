@@ -535,7 +535,8 @@ final class ReportBuilder
     }
 
     /**
-     * get_dropins() map: filename => [description, …] — drop-ins carry no version.
+     * get_dropins() map: filename => plugin headers. The role comes from the
+     * catalogue (fixed by WordPress per filename); the file's own header is a fallback.
      *
      * @param array<string, mixed> $context
      * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
@@ -544,7 +545,8 @@ final class ReportBuilder
     {
         $rows = [];
         foreach ((array) ($context['payload']['dropin_plugins'] ?? []) as $file => $dropin) {
-            $rows[] = [self::cell((string) $file), self::cell(is_array($dropin) ? (string) ($dropin[0] ?? '?') : (string) $dropin)];
+            $header = is_array($dropin) ? trim((string) ($dropin['Description'] ?? '')) : '';
+            $rows[] = [self::cell((string) $file), self::cell($this->t->dropin((string) $file) ?? ($header !== '' ? $header : '—'))];
         }
 
         return ['headers' => $this->headers('col_file', 'col_description'), 'rows' => $rows];

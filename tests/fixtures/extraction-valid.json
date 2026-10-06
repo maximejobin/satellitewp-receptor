@@ -142,7 +142,23 @@
         }
     },
     "dropin_plugins": {
-        "advanced-cache.php": ["Advanced caching plugin.", "advanced-cache.php"]
+        "advanced-cache.php": {
+            "Name": "advanced-cache.php",
+            "PluginURI": "",
+            "Version": "",
+            "Description": "",
+            "Author": "",
+            "AuthorURI": "",
+            "TextDomain": "",
+            "DomainPath": "",
+            "Network": false,
+            "RequiresWP": "",
+            "RequiresPHP": "",
+            "UpdateURI": "",
+            "RequiresPlugins": "",
+            "Title": "",
+            "AuthorName": ""
+        }
     },
     "plugin_updates": ["woocommerce/woocommerce.php"],
     "theme_updates": [],

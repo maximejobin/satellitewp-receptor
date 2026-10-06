@@ -59,6 +59,14 @@ final class Translator
         return (string) ($this->catalog['pastille'][$color] ?? $color);
     }
 
+    /** The role WordPress gives a drop-in file, or null for a file it does not know. */
+    public function dropin(string $file): ?string
+    {
+        $role = $this->catalog['dropins'][$file] ?? null;
+
+        return is_string($role) ? $role : null;
+    }
+
     public function category(string $code): string
     {
         return (string) ($this->catalog['categories'][$code] ?? $code);

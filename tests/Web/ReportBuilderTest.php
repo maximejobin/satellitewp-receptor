@@ -46,7 +46,10 @@ final class ReportBuilderTest extends TestCase
                     'parent' => ['name' => 'Parent Theme', 'slug' => 'parent', 'version' => '2.0', 'new_version' => '2.1', 'active' => false],
                 ],
                 'mu_plugins'     => ['loader.php' => ['Name' => 'Loader', 'Version' => '1.0.0']],
-                'dropin_plugins' => ['advanced-cache.php' => ['Advanced caching plugin.', 'advanced-cache.php']],
+                'dropin_plugins' => [
+                    'advanced-cache.php'  => ['Name' => 'advanced-cache.php', 'Description' => ''],
+                    'future-dropin.php'   => ['Name' => 'future-dropin.php', 'Description' => 'Vendor drop-in.'],
+                ],
                 'administrators' => [
                     ['id' => 1, 'login' => 'admin', 'email' => 'admin@example.com'],
                 ],
@@ -669,10 +672,12 @@ final class ReportBuilderTest extends TestCase
         $report = $this->builder()->build($contract, $this->context(), []);
 
         self::assertSame([['text' => 'Loader', 'color' => null], ['text' => '1.0.0', 'color' => null]], $report['fields']['mu']['rows'][0]);
+        // The role comes from the catalogue; a file it does not know falls back to its own header.
         self::assertSame(
-            [['text' => 'advanced-cache.php', 'color' => null], ['text' => 'Advanced caching plugin.', 'color' => null]],
+            [['text' => 'advanced-cache.php', 'color' => null], ['text' => 'Page cache: serves stored pages before WordPress loads (needs WP_CACHE).', 'color' => null]],
             $report['fields']['dropins']['rows'][0]
         );
+        self::assertSame('Vendor drop-in.', $report['fields']['dropins']['rows'][1][1]['text']);
     }
 
     public function testContentTypesTableSumsCountsAcrossStatuses(): void

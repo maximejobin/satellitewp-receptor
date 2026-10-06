@@ -3,7 +3,6 @@
  * @var \SatelliteWP\Manager\Rules\Translator $t
  */
 use SatelliteWP\Manager\Catalog\SoftwareCatalog;
-use SatelliteWP\Manager\Rules\Category;
 use SatelliteWP\Manager\Rules\Pastille;
 use SatelliteWP\Manager\Web\HardeningConstants;
 
@@ -64,6 +63,13 @@ $nameCell = static function (string $type, string $name, string $rawSlug, string
         : e($name);
 
     return $label . '<div class="muted mono" style="font-size:.82em">' . e($rawSlug) . '</div>';
+};
+
+/** Installed version, then "→ new version" in the update colour when one is available. */
+$versionCell = static function (?string $version, bool $hasUpdate, ?string $newVersion): string {
+    $html = '<span class="mono">' . e($version ?: '?') . '</span>';
+
+    return $hasUpdate ? $html . ' <span class="b-upd">→ ' . e($newVersion ?: 'update available') . '</span>' : $html;
 };
 
 /**
@@ -137,44 +143,6 @@ foreach (Pastille::cases() as $pastille) {
 }
 $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 
-// Categories per page group, for each group header's pass-rate bar — grouped
-// by where the topic renders on this page (HTTP sits under Performance).
-$groupCategories = [
-    'infrastructure' => [Category::DOMAIN, Category::EMAIL, Category::DNS, Category::SSL, Category::PHP, Category::DATABASE, Category::HOSTING, Category::CRON],
-    'content'        => [Category::UPDATES, Category::USERS, Category::CONTENT],
-    'quality'        => [Category::HTTP, Category::SECURITY, Category::PERFORMANCE, Category::SEO, Category::CACHE],
-];
-/** @return array{pass: int, fail: int, rate: int}|null null when nothing in this group applies to this site */
-$groupRate = static function (string $group) use ($all, $groupCategories): ?array {
-    $pass = 0;
-    $fail = 0;
-    foreach ($all as $f) {
-        if (!in_array($f['category'], $groupCategories[$group], true)) {
-            continue;
-        }
-        if ($f['pastille'] === Pastille::Green->value) {
-            $pass++;
-        } elseif (in_array($f['pastille'], [Pastille::Red->value, Pastille::Orange->value], true)) {
-            $fail++;
-        }
-    }
-    $applicable = $pass + $fail;
-
-    return $applicable > 0 ? ['pass' => $pass, 'fail' => $fail, 'rate' => (int) round($pass / $applicable * 100)] : null;
-};
-/** Pass-rate bar for a group header; nothing before findings exist. */
-$groupBadge = static function (string $group) use ($groupRate, $findings): string {
-    if ($findings === null) {
-        return '';
-    }
-    $r = $groupRate($group);
-    if ($r === null) {
-        return '';
-    }
-
-    return '<div class="xt-group-rate"><div class="xt-group-rate-bar"><div style="width:' . $r['rate'] . '%"></div></div>'
-        . '<span>' . $r['rate'] . '% passing' . ($r['fail'] > 0 ? ' · ' . $r['fail'] . ' need attention' : '') . '</span></div>';
-};
 ?>
 
 <?php
@@ -365,9 +333,11 @@ if ($status !== 'done'):
     <!-- Sticky section nav -->
     <nav class="xt-nav">
         <a href="#overview" style="--group-color:var(--group-overview)"><?= report_icon('overview') ?> Overview</a>
+        <a href="#domain-email" style="--group-color:var(--group-domain)"><?= report_icon('domain') ?> Domain / Email</a>
         <a href="#infrastructure" style="--group-color:var(--group-infra)"><?= report_icon('hosting') ?> Infrastructure</a>
-        <a href="#content-access" style="--group-color:var(--group-content)"><?= report_icon('plugins') ?> Content &amp; Access</a>
-        <a href="#quality-security" style="--group-color:var(--group-quality)"><?= report_icon('performance') ?> Quality &amp; Security</a>
+        <a href="#wordpress" style="--group-color:var(--group-wordpress)"><?= report_icon('wordpress') ?> WordPress</a>
+        <a href="#security" style="--group-color:var(--group-security)"><?= report_icon('security') ?> Security</a>
+        <a href="#visibility" style="--group-color:var(--group-visibility)"><?= report_icon('seo') ?> Visibility</a>
         <a href="#observations" style="--group-color:var(--accent)"><?= report_icon('raw') ?> Observations</a>
         <a href="#raw-data" style="--group-color:var(--muted)"><?= report_icon('raw') ?> Raw data</a>
     </nav>
@@ -394,6 +364,34 @@ if ($status !== 'done'):
                 <div><div class="xt-stat-k">HTTP</div><div class="xt-stat-v">HTTP/<?= e($http['http_version'] ?? '?') ?></div>
                     <div class="xt-stat-s"><?= isset($http['content_encoding']) ? e($http['content_encoding']) : '' ?></div></div></div>
         </section>
+
+        <div class="xt-subsection">
+            <div class="xt-subsection-head"><?= report_icon('account') ?><h3>Account &amp; plan</h3></div>
+            <?php
+            $crmReasons = [
+                'no_blogvault_id'   => 'This site is not linked in BlogVault, so it cannot be matched to the CRM.',
+                'website_not_found' => 'No CRM website carries this BlogVault site id.',
+                'website_ambiguous' => 'Several CRM websites carry this BlogVault site id — not guessed.',
+                'no_client'         => 'The CRM website has no subscription, hence no client.',
+            ];
+            $crmPlan = $crm['maintenance_plan'] ?? null;
+            $crmNote = ($crm['linked'] ?? false) ? (is_array($crmPlan) ? null : 'No single active maintenance plan') : ($crmReasons[$crm['reason'] ?? ''] ?? null);
+            if ($crm === []) : ?>
+                <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
+            <?php elseif (($probes['crm']['status'] ?? '') === 'error') : ?>
+                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">CRM snapshot failed: <?= e(implode(' ', (array) ($probes['crm']['errors'] ?? []))) ?></div>
+            <?php else : ?>
+                <div class="cards">
+                    <?php echo section('Client & plan',
+                        field('Client', implode(', ', array_column((array) ($crm['clients'] ?? []), 'label')), null, 'probe.crm.clients')
+                        . field('Maintenance plan', is_array($crmPlan) ? $crmPlan['name'] : null, null, 'probe.crm.maintenance_plan')
+                        . field('Next renewal', is_array($crmPlan) ? $crmPlan['next_renewal'] : null, null, 'probe.crm.maintenance_plan')
+                        . field('CRM website', $crm['website']['url'] ?? null, null, 'probe.crm.website')
+                        . ($crmNote !== null ? field('Note', $crmNote, 'warn', 'probe.crm.reason') : '')
+                    ); ?>
+                </div>
+            <?php endif; ?>
+        </div>
 
         <?php if ($findings !== null): ?>
             <!-- Findings — full, filterable by type -->
@@ -428,45 +426,13 @@ if ($status !== 'done'):
         <?php endif; ?>
     </section>
 
-    <!-- ============================== INFRASTRUCTURE ============================== -->
-    <!-- Account & plan · Domain & email · Hosting · WordPress -->
-    <section class="xt-group" id="infrastructure" data-nav-target="infrastructure" style="--group-color:var(--group-infra)">
+    <!-- ============================== DOMAIN / EMAIL ============================== -->
+    <section class="xt-group" id="domain-email" data-nav-target="domain-email" style="--group-color:var(--group-domain)">
         <header class="xt-group-head">
-            <span class="xt-icon-badge"><?= report_icon('hosting') ?></span>
-            <div><h2>Infrastructure</h2><p class="muted">Account, domain, hosting environment and WordPress core settings — in the order an analyst checks them.</p></div>
-            <?= $groupBadge('infrastructure') ?>
+            <span class="xt-icon-badge"><?= report_icon('domain') ?></span>
+            <div><h2>Domain / Email</h2><p class="muted">Registration, DNS and how email from this domain is authenticated.</p></div>
         </header>
-
         <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('account') ?><h3>Account &amp; plan</h3></div>
-            <?php
-            $crmReasons = [
-                'no_blogvault_id'   => 'This site is not linked in BlogVault, so it cannot be matched to the CRM.',
-                'website_not_found' => 'No CRM website carries this BlogVault site id.',
-                'website_ambiguous' => 'Several CRM websites carry this BlogVault site id — not guessed.',
-                'no_client'         => 'The CRM website has no subscription, hence no client.',
-            ];
-            $crmPlan = $crm['maintenance_plan'] ?? null;
-            $crmNote = ($crm['linked'] ?? false) ? (is_array($crmPlan) ? null : 'No single active maintenance plan') : ($crmReasons[$crm['reason'] ?? ''] ?? null);
-            if ($crm === []) : ?>
-                <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
-            <?php elseif (($probes['crm']['status'] ?? '') === 'error') : ?>
-                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">CRM snapshot failed: <?= e(implode(' ', (array) ($probes['crm']['errors'] ?? []))) ?></div>
-            <?php else : ?>
-                <div class="cards">
-                    <?php echo section('Client & plan',
-                        field('Client', implode(', ', array_column((array) ($crm['clients'] ?? []), 'label')), null, 'probe.crm.clients')
-                        . field('Maintenance plan', is_array($crmPlan) ? $crmPlan['name'] : null, null, 'probe.crm.maintenance_plan')
-                        . field('Next renewal', is_array($crmPlan) ? $crmPlan['next_renewal'] : null, null, 'probe.crm.maintenance_plan')
-                        . field('CRM website', $crm['website']['url'] ?? null, null, 'probe.crm.website')
-                        . ($crmNote !== null ? field('Note', $crmNote, 'warn', 'probe.crm.reason') : '')
-                    ); ?>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('domain') ?><h3>Domain &amp; email</h3></div>
             <div class="cards">
                 <?php echo section('Domain',
                     field('Registrar', $rdap['registrar'] ?? null, null, 'probe.rdap.registrar')
@@ -497,7 +463,14 @@ if ($status !== 'done'):
                 ); ?>
             </div>
         </div>
+    </section>
 
+    <!-- ============================== INFRASTRUCTURE ============================== -->
+    <section class="xt-group" id="infrastructure" data-nav-target="infrastructure" style="--group-color:var(--group-infra)">
+        <header class="xt-group-head">
+            <span class="xt-icon-badge"><?= report_icon('hosting') ?></span>
+            <div><h2>Infrastructure</h2><p class="muted">The server, its HTTP behaviour, PHP, the database and backups.</p></div>
+        </header>
         <div class="xt-subsection">
             <div class="xt-subsection-head"><?= report_icon('hosting') ?><h3>Hosting</h3></div>
             <div class="cards cards-full">
@@ -505,36 +478,27 @@ if ($status !== 'done'):
                     field('Web server', $p['web_server'] ?? null, null, 'payload.web_server')
                     . field('Operating system', $p['os_name'] ?? ($p['os_family'] ?? null), null, 'payload.os_name')
                     . field_raw('IP address (A / AAAA)', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'), null, 'probe.dns.a')
-                    . field('Hosting provider', 'from ASN lookup — coming soon', 'muted')
                     . field('Document root', $p['document_root'] ?? null, null, 'payload.document_root')
                     . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null, null, 'payload.php.max_execution_time')
                     . field('Post / upload max', ($p['php']['post_max_size'] ?? '?') . ' / ' . ($p['php']['upload_max_filesize'] ?? '?'), null, 'payload.php.post_max_size')
                     . field('Max input vars', $p['php']['max_input_vars'] ?? null, null, 'payload.php.max_input_vars')
                 ); ?>
                 <?php
-                // Each TLS version tested independently, next to the certificate facts.
-                $proto = $tls['protocols'] ?? [];
-                $protoRow = static function (string $label, ?bool $on, bool $legacy, string $source) {
-                    if ($on === null) { return field($label, null, null, $source); }
-                    return field($label, $on ? 'accepted' : 'no', $on && $legacy ? 'warn' : ($on ? 'ok' : 'muted'), $source);
-                };
-                echo section('SSL / TLS',
-                    field('Issuer', $tls['issuer'] ?? null, null, 'probe.tls.issuer')
-                    . field('Subject (CN)', $tls['subject_cn'] ?? null, null, 'probe.tls.subject_cn')
-                    . field_raw('Expires', e($tls['not_after'] ?? '—') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
-                    . field_raw('SAN', fmt_list($tls['san'] ?? []), null, 'probe.tls.san')
-                    // CAA restricts which CAs may issue for the domain: a certificate fact.
-                    . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])), null, 'probe.dns.caa')
-                    . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? 'ok' : 'error', 'probe.tls.chain_valid')
-                    . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? 'ok' : 'error', 'probe.tls.hostname_covered')
-                    . field('Self-signed', $tls['self_signed'] ?? null, ($tls['self_signed'] ?? false) ? 'error' : 'ok', 'probe.tls.self_signed')
-                    . field('Backend (admin) SSL', $p['is_backend_ssl'] ?? null, ($p['is_backend_ssl'] ?? true) ? 'ok' : 'error', 'payload.is_backend_ssl')
-                    . $protoRow('TLS 1.0', $proto['tls1_0'] ?? null, true, 'probe.tls.protocols.tls1_0')
-                    . $protoRow('TLS 1.1', $proto['tls1_1'] ?? null, true, 'probe.tls.protocols.tls1_1')
-                    . $protoRow('TLS 1.2', $proto['tls1_2'] ?? null, false, 'probe.tls.protocols.tls1_2')
-                    . $protoRow('TLS 1.3', $proto['tls1_3'] ?? null, false, 'probe.tls.protocols.tls1_3')
-                );
-                ?>
+                echo section('HTTP',
+                    field('Status code', $http['status_code'] ?? null, null, 'probe.http.status_code')
+                    . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null, null, 'probe.http.http_version')
+                    . field('Compression (HTML)', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) ? 'ok' : 'warn', 'probe.http.content_encoding')
+                    . field('Compression (asset)', ($http['asset']['content_encoding'] ?? null) ?? (($http['asset']['checked'] ?? false) ? 'none' : 'n/a'), null, 'probe.http.asset.content_encoding')
+                    // One encoding offered at a time (B1/B2), unlike the preference shown above.
+                    . field('Gzip capability', $http['compression']['gzip'] ?? null, ($http['compression']['gzip'] ?? null) === false ? 'warn' : (($http['compression']['gzip'] ?? null) === true ? 'ok' : null), 'probe.http.compression.gzip')
+                    . field('Brotli capability', $http['compression']['brotli'] ?? null, ($http['compression']['brotli'] ?? null) === false ? 'warn' : (($http['compression']['brotli'] ?? null) === true ? 'ok' : null), 'probe.http.compression.brotli')
+                    . field('HTTP/2 supported', $http['protocols']['http2'] ?? null, ($http['protocols']['http2'] ?? null) === false ? 'warn' : (($http['protocols']['http2'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http2')
+                    . field('HTTP/1.1 supported', $http['protocols']['http1_1'] ?? null, ($http['protocols']['http1_1'] ?? null) === false ? 'warn' : (($http['protocols']['http1_1'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http1_1')
+                    . field('HTTP/3 advertised', $http['protocols']['http3_advertised'] ?? null, null, 'probe.http.protocols.http3_advertised')
+                    . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn', 'probe.http.redirects.forces_https')
+                    . field('Redirects', $http['redirects']['hops'] ?? null, null, 'probe.http.redirects.hops')
+                    . field('CDN', $http['cdn'] ?? '—', null, 'probe.http.cdn')
+                ); ?>
                 <?php echo section('PHP',
                     field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t), null, 'payload.php.version')
                     . field('Memory limit', $p['php']['memory_limit'] ?? null, null, 'payload.php.memory_limit')
@@ -549,6 +513,19 @@ if ($status !== 'done'):
                     . field_raw('Size', fmt_bytes($p['database']['total_bytes'] ?? null), null, 'payload.database.total_bytes')
                     . field_raw('Transients', e($p['database']['transients']['total'] ?? '?') . ' (' . e($p['database']['transients']['expired'] ?? '?') . ' expired)', null, 'payload.database.transients')
                 ); ?>
+                <?php
+                $bvFiles = $bv['backups']['files'] ?? [];
+                $bvDb    = $bv['backups']['database'] ?? [];
+                if ($bvFiles !== [] || $bvDb !== []) {
+                    echo section('Backup size (BlogVault)',
+                        field_raw('Database size', fmt_bytes($bvDb['size']['total'] ?? null), null, 'probe.blogvault.backups.database')
+                        . field_raw('Files size', fmt_bytes($bvFiles['size']['total'] ?? null), null, 'probe.blogvault.backups.files')
+                        . field('Files — total', $bvFiles['count']['total'] ?? null, null, 'probe.blogvault.backups.files')
+                        . field('Files — synced', $bvFiles['count']['synced'] ?? null, null, 'probe.blogvault.backups.files')
+                        . field('Files — ignored', $bvFiles['count']['ignored'] ?? null, null, 'probe.blogvault.backups.files')
+                    , class: 'card-full');
+                }
+                ?>
             </div>
             <?php
             $tables = $p['database']['tables'] ?? [];
@@ -563,9 +540,16 @@ if ($status !== 'done'):
                 </tbody></table>
             <?php endif; ?>
         </div>
+    </section>
 
+    <!-- ============================== WORDPRESS ============================== -->
+    <section class="xt-group" id="wordpress" data-nav-target="wordpress" style="--group-color:var(--group-wordpress)">
+        <header class="xt-group-head">
+            <span class="xt-icon-badge"><?= report_icon('wordpress') ?></span>
+            <div><h2>WordPress</h2><p class="muted">Core settings, cache, what is installed, what is published and who can sign in.</p></div>
+        </header>
         <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('wordpress') ?><h3>WordPress</h3></div>
+            <div class="xt-subsection-head"><?= report_icon('wordpress') ?><h3>Core, cron &amp; cache</h3></div>
             <div class="cards">
                 <?php
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
@@ -574,7 +558,6 @@ if ($status !== 'done'):
                     . field_raw('Known vulnerabilities', $coreVulns !== []
                         ? '<span class="badge badge-error">' . count($coreVulns) . ' CVE</span> — see §Plugins &amp; themes'
                         : '<span class="badge badge-ok">—</span>', null, 'derived.core_vulnerabilities')
-                    . field('Core update', $p['core_update']['available_version'] ?? ($p['core_update']['status'] ?? null), !empty($p['core_update']['available_version']) ? 'warn' : 'ok', 'payload.core_update')
                     . field('Auto-update core', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
                     . field('Multisite', $p['is_multisite'] ?? null, null, 'payload.is_multisite')
                     . ($isMultisite ? field('Multisite type', $p['multisite_type'] ?? null, null, 'payload.multisite_type')
@@ -591,18 +574,13 @@ if ($status !== 'done'):
                     . field('Overdue events', $p['cron']['overdue_events'] ?? null, ($p['cron']['overdue_events'] ?? 0) > 0 ? 'warn' : 'ok', 'payload.cron.overdue_events')
                     . field('Scheduled events', $p['cron']['scheduled_events'] ?? null, null, 'payload.cron.scheduled_events')
                 ); ?>
+                <?php echo section('Cache',
+                    field_raw('Autoload', fmt_bytes($p['autoload']['total_bytes'] ?? null) . ' <span class="val-muted">(' . e($p['autoload']['count'] ?? '?') . ' options)</span>', null, 'payload.autoload.total_bytes')
+                    . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn', 'payload.object_cache.external')
+                    . field('Page cache drop-in', ($p['object_cache']['page_cache'] ?? false) ? 'present' : 'absent', null, 'payload.object_cache.page_cache')
+                ); ?>
             </div>
         </div>
-    </section>
-
-    <!-- ============================== CONTENT & ACCESS ============================== -->
-    <!-- Plugins & themes · Content & languages · Users -->
-    <section class="xt-group" id="content-access" data-nav-target="content-access" style="--group-color:var(--group-content)">
-        <header class="xt-group-head">
-            <span class="xt-icon-badge"><?= report_icon('plugins') ?></span>
-            <div><h2>Content &amp; Access</h2><p class="muted">What is installed, what is published, and who can sign in.</p></div>
-            <?= $groupBadge('content') ?>
-        </header>
 
         <div class="xt-subsection">
             <div class="xt-subsection-head"><?= report_icon('plugins') ?><h3>Plugins &amp; themes</h3></div>
@@ -622,7 +600,7 @@ if ($status !== 'done'):
                 <h4 style="font-size:.9rem;margin:0 0 .3rem" class="muted">Plugins — <?= count($plugins) ?> installed,
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['active']))) ?> active,
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h4>
-                <table><thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Requires</th><th>State</th><th>Licence</th></tr></thead><tbody>
+                <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($plugins as $file => $pl):
                     $slug   = SoftwareCatalog::normalizeSlug('plugin', (string) ($pl['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
@@ -636,8 +614,7 @@ if ($status !== 'done'):
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $pl['name'] ?? $slug, 'slug' => $slug]; } ?>
                     <tr<?= $inactive ? ' class="row-inactive"' : '' ?>>
                         <td><?= $nameCell('plugin', (string) ($pl['name'] ?? '?'), (string) ($pl['slug'] ?? ''), $slug, $wporg['plugins'][$slug] ?? null) ?></td>
-                        <td class="mono"><?= e($pl['version'] ?? '?') ?></td>
-                        <td><?= $hasUpdate ? '<span class="b-upd">' . e($pl['new_version'] ?: 'available') . '</span>' : '—' ?></td>
+                        <td style="white-space:nowrap"><?= $versionCell($pl['version'] ?? null, $hasUpdate, $pl['new_version'] ?? null) ?></td>
                         <td><?= requirement_cell($pl['requires_wp'] ?? null, $pl['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
                         <?php $pluginLicense = $licenseStatuses['plugin:' . $slug] ?? 'n_a'; ?>
                         <td><?= $stateCell($inactive, $merged, $wporg['plugins'][$slug] ?? null, in_array($file, $autoUpdatePlugins, true)) ?></td>
@@ -649,7 +626,7 @@ if ($status !== 'done'):
             <?php endif; ?>
             <?php if ($themes !== []): ?>
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
-                <table><thead><tr><th>Name</th><th>Version</th><th>Update</th><th>Requires</th><th>Template</th><th>State</th><th>Licence</th></tr></thead><tbody>
+                <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>Template</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($orderThemes($themes) as $file => $th):
                     $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
                     $merged = merge_vulnerabilities(
@@ -662,8 +639,7 @@ if ($status !== 'done'):
                     $inactive  = empty($th['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $th['name'] ?? $slug, 'slug' => $slug]; } ?>
                     <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= $nameCell('theme', (string) ($th['name'] ?? '?'), (string) ($th['slug'] ?? ''), $slug, $wporg['themes'][$slug] ?? null) ?></td>
-                        <td class="mono"><?= e($th['version'] ?? '?') ?></td>
-                        <td><?= $hasUpdate ? '<span class="b-upd">' . e($th['new_version'] ?: 'available') . '</span>' : '—' ?></td>
+                        <td style="white-space:nowrap"><?= $versionCell($th['version'] ?? null, $hasUpdate, $th['new_version'] ?? null) ?></td>
                         <td><?= requirement_cell($th['requires_wp'] ?? null, $th['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
                         <td class="mono"><?= e($th['template'] ?? '') ?></td>
                         <?php $themeLicense = $licenseStatuses['theme:' . $slug] ?? 'n_a'; ?>
@@ -678,15 +654,29 @@ if ($status !== 'done'):
             $dropinPlugins = is_array($p['dropin_plugins'] ?? null) ? $p['dropin_plugins'] : [];
             if ($muPlugins !== [] || $dropinPlugins !== []): ?>
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Must-use &amp; drop-in plugins</h4>
-                <table><thead><tr><th>File</th><th>Type</th><th>Name / description</th><th>Version</th></tr></thead><tbody>
+                <?php
+                // Name and description from a file's own header, when it carries more than its file name.
+                $headerNote = static function (mixed $headers, string $file): string {
+                    $headers = is_array($headers) ? $headers : [];
+                    $parts   = array_filter([
+                        trim((string) ($headers['Name'] ?? '')) !== $file ? trim((string) ($headers['Name'] ?? '')) : '',
+                        trim((string) ($headers['Description'] ?? '')),
+                    ], static fn (string $x): bool => $x !== '');
+
+                    return $parts === [] ? '' : '<div class="muted" style="font-size:.82em">' . e(implode(' — ', $parts)) . '</div>';
+                };
+                ?>
+                <table><thead><tr><th>File</th><th>Type</th><th>Role</th><th>Version</th></tr></thead><tbody>
                 <?php foreach ($muPlugins as $file => $mu): ?>
                     <tr><td class="mono"><?= e($file) ?></td><td><span class="badge badge-muted">Must-use</span></td>
-                        <td><?= e($mu['Name'] ?? '?') ?></td><td class="mono"><?= e($mu['Version'] ?? '—') ?></td></tr>
+                        <td><?= e($mu['Name'] ?? '?') ?><?= trim((string) ($mu['Description'] ?? '')) !== '' ? '<div class="muted" style="font-size:.82em">' . e($mu['Description']) . '</div>' : '' ?></td>
+                        <td class="mono"><?= e(($mu['Version'] ?? '') ?: '—') ?></td></tr>
                 <?php endforeach; ?>
                 <?php foreach ($dropinPlugins as $file => $dropin):
-                    $desc = is_array($dropin) ? ($dropin[0] ?? '?') : $dropin; ?>
+                    $role = $t->dropin((string) $file); ?>
                     <tr><td class="mono"><?= e($file) ?></td><td><span class="badge badge-muted">Drop-in</span></td>
-                        <td><?= e($desc) ?></td><td>—</td></tr>
+                        <td><?= $role !== null ? e($role) : '<span class="val-muted">Unknown drop-in</span>' ?><?= $headerNote($dropin, (string) $file) ?></td>
+                        <td class="mono"><?= e((is_array($dropin) ? ($dropin['Version'] ?? '') : '') ?: '—') ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
@@ -787,119 +777,14 @@ if ($status !== 'done'):
         </div>
     </section>
 
-    <!-- ============================== QUALITY & SECURITY ============================== -->
-    <!-- Performance · SEO & analytics · Security -->
-    <section class="xt-group" id="quality-security" data-nav-target="quality-security" style="--group-color:var(--group-quality)">
+    <!-- ============================== SECURITY ============================== -->
+    <section class="xt-group" id="security" data-nav-target="security" style="--group-color:var(--group-security)">
         <header class="xt-group-head">
-            <span class="xt-icon-badge"><?= report_icon('performance') ?></span>
-            <div><h2>Quality &amp; Security</h2><p class="muted">Speed, discoverability, and the site's exposure to attack.</p></div>
-            <?= $groupBadge('quality') ?>
+            <span class="xt-icon-badge"><?= report_icon('security') ?></span>
+            <div><h2>Security</h2><p class="muted">Hardening, response headers, what an anonymous visitor can reach, TLS and file permissions.</p></div>
         </header>
-
         <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('performance') ?><h3>Performance</h3></div>
-            <?php if ($ps !== []): ?>
-                <table><thead><tr><th>Strategy</th>
-                    <?php foreach (array_keys(($mobilePs['scores'] ?? [])) as $c): ?><th><?= e(ucfirst(str_replace('-', ' ', $c))) ?></th><?php endforeach; ?>
-                    <th>LCP</th><th>CLS</th><th title="Real-world Chrome usage data (CrUX) for this page, not the simulated Lighthouse run in the columns to the left">Field data (CrUX)</th></tr></thead><tbody>
-                <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
-                    <tr><td><strong><?= e($strat) ?></strong></td>
-                        <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
-                            <td><?= $sc === null ? '—' : badge_score((int) $sc) ?></td>
-                        <?php endforeach; ?>
-                        <td class="num"><?= isset($r['lab']['lcp']['value']) ? e(round((float) $r['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
-                        <td class="num"><?= e($r['lab']['cls']['display'] ?? '—') ?></td>
-                        <td><?php $fc = $r['field']['overall_category'] ?? null; ?><?= $fc ? e(ucfirst(strtolower((string) $fc))) : '<span class="val-muted">no field data</span>' ?></td></tr>
-                <?php endforeach; ?>
-                </tbody></table>
-            <?php endif; ?>
-            <div class="cards" style="margin-top:1.1rem">
-                <?php
-                echo section('HTTP',
-                    field('Status code', $http['status_code'] ?? null, null, 'probe.http.status_code')
-                    . field('HTTP version', isset($http['http_version']) ? 'HTTP/' . $http['http_version'] : null, null, 'probe.http.http_version')
-                    . field('Compression (HTML)', $http['content_encoding'] ?? 'none', ($http['content_encoding'] ?? null) ? 'ok' : 'warn', 'probe.http.content_encoding')
-                    . field('Compression (asset)', ($http['asset']['content_encoding'] ?? null) ?? (($http['asset']['checked'] ?? false) ? 'none' : 'n/a'), null, 'probe.http.asset.content_encoding')
-                    // One encoding offered at a time (B1/B2), unlike the preference shown above.
-                    . field('Gzip capability', $http['compression']['gzip'] ?? null, ($http['compression']['gzip'] ?? null) === false ? 'warn' : (($http['compression']['gzip'] ?? null) === true ? 'ok' : null), 'probe.http.compression.gzip')
-                    . field('Brotli capability', $http['compression']['brotli'] ?? null, ($http['compression']['brotli'] ?? null) === false ? 'warn' : (($http['compression']['brotli'] ?? null) === true ? 'ok' : null), 'probe.http.compression.brotli')
-                    . field('HTTP/2 supported', $http['protocols']['http2'] ?? null, ($http['protocols']['http2'] ?? null) === false ? 'warn' : (($http['protocols']['http2'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http2')
-                    . field('HTTP/1.1 supported', $http['protocols']['http1_1'] ?? null, ($http['protocols']['http1_1'] ?? null) === false ? 'warn' : (($http['protocols']['http1_1'] ?? null) === true ? 'ok' : null), 'probe.http.protocols.http1_1')
-                    . field('HTTP/3 advertised', $http['protocols']['http3_advertised'] ?? null, null, 'probe.http.protocols.http3_advertised')
-                    . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn', 'probe.http.redirects.forces_https')
-                    . field('Redirects', $http['redirects']['hops'] ?? null, null, 'probe.http.redirects.hops')
-                    . field('CDN', $http['cdn'] ?? '—', null, 'probe.http.cdn')
-                ); ?>
-                <?php echo section('Cache',
-                    field_raw('Autoload', fmt_bytes($p['autoload']['total_bytes'] ?? null) . ' <span class="val-muted">(' . e($p['autoload']['count'] ?? '?') . ' options)</span>', null, 'payload.autoload.total_bytes')
-                    . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn', 'payload.object_cache.external')
-                    . field('Page cache drop-in', ($p['object_cache']['page_cache'] ?? false) ? 'present' : 'absent', null, 'payload.object_cache.page_cache')
-                ); ?>
-            </div>
-        </div>
-
-        <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('seo') ?><h3>SEO &amp; analytics</h3></div>
-            <div class="cards">
-                <?php
-                $robots = $http['robots'] ?? [];
-                $sitemapSourceLabel = match ($robots['sitemap_source'] ?? null) {
-                    'robots.txt' => 'Declared in robots.txt',
-                    'convention' => 'Found at its default URL — not declared in robots.txt',
-                    default      => null,
-                };
-                echo section('SEO',
-                    field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? 'ok' : 'warn', 'probe.http.robots.present')
-                    . field('Blocks whole site', ($robots['disallow_all'] ?? false) ? 'yes' : 'no', ($robots['disallow_all'] ?? false) ? 'error' : 'ok', 'probe.http.robots.disallow_all')
-                    . field_raw('Sitemaps', fmt_list($robots['sitemaps'] ?? []), null, 'probe.http.robots.sitemaps')
-                    . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—', null, 'probe.http.robots.sitemap_reachable')
-                    . ($sitemapSourceLabel !== null ? field('Sitemap source', $sitemapSourceLabel, null, 'probe.http.robots.sitemap_source') : '')
-                );
-
-                $audit       = $probes['seranking'] ?? null;
-                $auditData   = (array) ($audit['data'] ?? []);
-                $auditStatus = (string) ($audit['status'] ?? '');
-                if ($audit === null) {
-                    $auditNote = '<div class="pending-note">No site audit for this extraction — run the <code>seranking</code> probe to start one.</div>';
-                } elseif ($auditStatus === 'pending') {
-                    $auditNote = '<div class="pending-note">Audit ' . e($auditData['audit_id'] ?? '') . ' in progress on SE Ranking ('
-                        . e($auditData['state'] ?? 'queued') . (isset($auditData['pages_crawled']) ? ', ' . e($auditData['pages_crawled']) . ' pages crawled so far' : '')
-                        . '). The report is fetched automatically once it is finished.</div>';
-                } elseif ($auditStatus === 'error') {
-                    $auditNote = '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">Site audit failed: ' . e(implode(' ', (array) ($audit['errors'] ?? []))) . '</div>';
-                } else {
-                    $totals    = (array) ($auditData['totals'] ?? []);
-                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '—', null, 'probe.seranking.score')
-                        . field('Pages crawled', $totals['pages'] ?? null, null, 'probe.seranking.totals.pages')
-                        . field('Errors', $totals['errors'] ?? null, ($totals['errors'] ?? 0) > 0 ? 'error' : 'ok', 'probe.seranking.totals.errors')
-                        . field('Warnings', $totals['warnings'] ?? null, ($totals['warnings'] ?? 0) > 0 ? 'warn' : 'ok', 'probe.seranking.totals.warnings')
-                        . field('Notices', $totals['notices'] ?? null, null, 'probe.seranking.totals.notices')
-                        . field('Finished', $auditData['finished_at'] ?? null, null, 'probe.seranking.finished_at');
-
-                    // Failing checks only, most severe first, then by pages affected.
-                    $rank   = ['error' => 0, 'warning' => 1, 'notice' => 2];
-                    $issues = array_values(array_filter((array) ($auditData['checks'] ?? []),
-                        static fn ($c) => isset($rank[$c['status'] ?? '']) && (int) ($c['pages'] ?? 0) > 0));
-                    usort($issues, static fn ($a, $b) => [$rank[$a['status']], -$a['pages']] <=> [$rank[$b['status']], -$b['pages']]);
-                    if ($issues !== []) {
-                        $auditTable = '<table><thead><tr><th>Severity</th><th>Check</th><th>Section</th><th class="num">Pages</th></tr></thead><tbody>';
-                        foreach ($issues as $c) {
-                            $auditTable .= '<tr><td>' . '<span class="status-dot ' . ['error' => 'status-dot-error', 'warning' => 'status-dot-warn', 'notice' => 'status-dot-muted'][$c['status']] . '">' . e(ucfirst($c['status'])) . '</span>' . '</td>'
-                                . '<td>' . e($c['name']) . '</td><td>' . e($c['section_name']) . '</td><td class="num">' . e($c['pages']) . '</td></tr>';
-                        }
-                        $auditTable .= '</tbody></table>';
-                    }
-                }
-                echo '<div class="card card-full"><h3>Site audit (SE Ranking)</h3>'
-                    . (isset($auditRows) ? '<table class="kv"><tbody>' . $auditRows . '</tbody></table>' . ($auditTable ?? '') : '<div style="padding:1rem 1.1rem">' . $auditNote . '</div>')
-                    . '</div>';
-                ?>
-            </div>
-        </div>
-
-        <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('security') ?><h3>Security</h3></div>
-            <div class="cards">
+            <div class="cards cards-2">
                 <?php
                 $constRows = '';
                 foreach (HardeningConstants::rows(is_array($p['constants'] ?? null) ? $p['constants'] : []) as $row) {
@@ -917,26 +802,6 @@ if ($status !== 'done'):
                     . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', ($sec['permissions-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.permissions-policy')
                     . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.strict-transport-security')
                 ); ?>
-                <?php
-                $fs = $p['filesystem'] ?? [];
-                echo section('Filesystem',
-                    field_raw('Free disk', fmt_bytes($fs['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($fs['disk_total_bytes'] ?? null), null, 'payload.filesystem.disk_free_bytes')
-                    . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : 'ok', 'payload.filesystem.core_writable')
-                    . field('Uploads writable', $fs['uploads_writable'] ?? null, null, 'payload.filesystem.uploads_writable')
-                ); ?>
-                <?php
-                $bvFiles = $bv['backups']['files'] ?? [];
-                $bvDb    = $bv['backups']['database'] ?? [];
-                if ($bvFiles !== [] || $bvDb !== []) {
-                    echo section('Backup size (BlogVault)',
-                        field_raw('Database size', fmt_bytes($bvDb['size']['total'] ?? null), null, 'probe.blogvault.backups.database')
-                        . field_raw('Files size', fmt_bytes($bvFiles['size']['total'] ?? null), null, 'probe.blogvault.backups.files')
-                        . field('Files — total', $bvFiles['count']['total'] ?? null, null, 'probe.blogvault.backups.files')
-                        . field('Files — synced', $bvFiles['count']['synced'] ?? null, null, 'probe.blogvault.backups.files')
-                        . field('Files — ignored', $bvFiles['count']['ignored'] ?? null, null, 'probe.blogvault.backups.files')
-                    );
-                }
-                ?>
                 <?php
                 // Passive checks an anonymous visitor could run; each row shows its evidence (URL + status).
                 $exp      = $http['exposure'] ?? [];
@@ -985,6 +850,37 @@ if ($status !== 'done'):
                 );
                 }
                 ?>
+                <?php
+                // Each TLS version tested independently, next to the certificate facts.
+                $proto = $tls['protocols'] ?? [];
+                $protoRow = static function (string $label, ?bool $on, bool $legacy, string $source) {
+                    if ($on === null) { return field($label, null, null, $source); }
+                    return field($label, $on ? 'accepted' : 'no', $on && $legacy ? 'error' : ($on ? 'ok' : 'muted'), $source);
+                };
+                echo section('SSL / TLS',
+                    field('Issuer', $tls['issuer'] ?? null, null, 'probe.tls.issuer')
+                    . field('Subject (CN)', $tls['subject_cn'] ?? null, null, 'probe.tls.subject_cn')
+                    . field_raw('Expires', e($tls['not_after'] ?? '—') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
+                    . field_raw('SAN', fmt_list($tls['san'] ?? []), null, 'probe.tls.san')
+                    // CAA restricts which CAs may issue for the domain: a certificate fact.
+                    . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])), null, 'probe.dns.caa')
+                    . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? 'ok' : 'error', 'probe.tls.chain_valid')
+                    . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? 'ok' : 'error', 'probe.tls.hostname_covered')
+                    . field('Self-signed', $tls['self_signed'] ?? null, ($tls['self_signed'] ?? false) ? 'error' : 'ok', 'probe.tls.self_signed')
+                    . field('Backend (admin) SSL', $p['is_backend_ssl'] ?? null, ($p['is_backend_ssl'] ?? true) ? 'ok' : 'error', 'payload.is_backend_ssl')
+                    . $protoRow('TLS 1.0', $proto['tls1_0'] ?? null, true, 'probe.tls.protocols.tls1_0')
+                    . $protoRow('TLS 1.1', $proto['tls1_1'] ?? null, true, 'probe.tls.protocols.tls1_1')
+                    . $protoRow('TLS 1.2', $proto['tls1_2'] ?? null, false, 'probe.tls.protocols.tls1_2')
+                    . $protoRow('TLS 1.3', $proto['tls1_3'] ?? null, false, 'probe.tls.protocols.tls1_3')
+                );
+                ?>
+                <?php
+                $fs = $p['filesystem'] ?? [];
+                echo section('Filesystem',
+                    field_raw('Free disk', fmt_bytes($fs['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($fs['disk_total_bytes'] ?? null), null, 'payload.filesystem.disk_free_bytes')
+                    . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : 'ok', 'payload.filesystem.core_writable')
+                    . field('Uploads writable', $fs['uploads_writable'] ?? null, null, 'payload.filesystem.uploads_writable')
+                ); ?>
             </div>
             <?= json_details('Raw request & response headers — same request this probe made', [
                 'request'  => $http['request'] ?? null,
@@ -1018,6 +914,91 @@ if ($status !== 'done'):
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
+        </div>
+    </section>
+
+    <!-- ============================== VISIBILITY ============================== -->
+    <section class="xt-group" id="visibility" data-nav-target="visibility" style="--group-color:var(--group-visibility)">
+        <header class="xt-group-head">
+            <span class="xt-icon-badge"><?= report_icon('seo') ?></span>
+            <div><h2>Visibility</h2><p class="muted">Speed as Google measures it, and how search engines discover the site.</p></div>
+        </header>
+        <div class="xt-subsection">
+            <div class="xt-subsection-head"><?= report_icon('performance') ?><h3>Performance</h3></div>
+            <?php if ($ps !== []): ?>
+                <table><thead><tr><th>Strategy</th>
+                    <?php foreach (array_keys(($mobilePs['scores'] ?? [])) as $c): ?><th><?= e(ucfirst(str_replace('-', ' ', $c))) ?></th><?php endforeach; ?>
+                    <th>LCP</th><th>CLS</th><th title="Real-world Chrome usage data (CrUX) for this page, not the simulated Lighthouse run in the columns to the left">Field data (CrUX)</th></tr></thead><tbody>
+                <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
+                    <tr><td><strong><?= e($strat) ?></strong></td>
+                        <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
+                            <td><?= $sc === null ? '—' : badge_score((int) $sc) ?></td>
+                        <?php endforeach; ?>
+                        <td class="num"><?= isset($r['lab']['lcp']['value']) ? e(round((float) $r['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
+                        <td class="num"><?= e($r['lab']['cls']['display'] ?? '—') ?></td>
+                        <td><?php $fc = $r['field']['overall_category'] ?? null; ?><?= $fc ? e(ucfirst(strtolower((string) $fc))) : '<span class="val-muted">no field data</span>' ?></td></tr>
+                <?php endforeach; ?>
+                </tbody></table>
+            <?php endif; ?>
+        </div>
+        <div class="xt-subsection">
+            <div class="xt-subsection-head"><?= report_icon('seo') ?><h3>SEO</h3></div>
+            <div class="cards">
+                <?php
+                $robots = $http['robots'] ?? [];
+                $sitemapSourceLabel = match ($robots['sitemap_source'] ?? null) {
+                    'robots.txt' => 'Declared in robots.txt',
+                    'convention' => 'Found at its default URL — not declared in robots.txt',
+                    default      => null,
+                };
+                echo section('SEO',
+                    field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? 'ok' : 'warn', 'probe.http.robots.present')
+                    . field('Blocks whole site', ($robots['disallow_all'] ?? false) ? 'yes' : 'no', ($robots['disallow_all'] ?? false) ? 'error' : 'ok', 'probe.http.robots.disallow_all')
+                    . field_raw('Sitemaps', fmt_list($robots['sitemaps'] ?? []), null, 'probe.http.robots.sitemaps')
+                    . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—', null, 'probe.http.robots.sitemap_reachable')
+                    . ($sitemapSourceLabel !== null ? field('Sitemap source', $sitemapSourceLabel, null, 'probe.http.robots.sitemap_source') : ''),
+                    class: 'card-full'
+                );
+
+                $audit       = $probes['seranking'] ?? null;
+                $auditData   = (array) ($audit['data'] ?? []);
+                $auditStatus = (string) ($audit['status'] ?? '');
+                if ($audit === null) {
+                    $auditNote = '<div class="pending-note">No site audit for this extraction — run the <code>seranking</code> probe to start one.</div>';
+                } elseif ($auditStatus === 'pending') {
+                    $auditNote = '<div class="pending-note">Audit ' . e($auditData['audit_id'] ?? '') . ' in progress on SE Ranking ('
+                        . e($auditData['state'] ?? 'queued') . (isset($auditData['pages_crawled']) ? ', ' . e($auditData['pages_crawled']) . ' pages crawled so far' : '')
+                        . '). The report is fetched automatically once it is finished.</div>';
+                } elseif ($auditStatus === 'error') {
+                    $auditNote = '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">Site audit failed: ' . e(implode(' ', (array) ($audit['errors'] ?? []))) . '</div>';
+                } else {
+                    $totals    = (array) ($auditData['totals'] ?? []);
+                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '—', null, 'probe.seranking.score')
+                        . field('Pages crawled', $totals['pages'] ?? null, null, 'probe.seranking.totals.pages')
+                        . field('Errors', $totals['errors'] ?? null, ($totals['errors'] ?? 0) > 0 ? 'error' : 'ok', 'probe.seranking.totals.errors')
+                        . field('Warnings', $totals['warnings'] ?? null, ($totals['warnings'] ?? 0) > 0 ? 'warn' : 'ok', 'probe.seranking.totals.warnings')
+                        . field('Notices', $totals['notices'] ?? null, null, 'probe.seranking.totals.notices')
+                        . field('Finished', $auditData['finished_at'] ?? null, null, 'probe.seranking.finished_at');
+
+                    // Failing checks only, most severe first, then by pages affected.
+                    $rank   = ['error' => 0, 'warning' => 1, 'notice' => 2];
+                    $issues = array_values(array_filter((array) ($auditData['checks'] ?? []),
+                        static fn ($c) => isset($rank[$c['status'] ?? '']) && (int) ($c['pages'] ?? 0) > 0));
+                    usort($issues, static fn ($a, $b) => [$rank[$a['status']], -$a['pages']] <=> [$rank[$b['status']], -$b['pages']]);
+                    if ($issues !== []) {
+                        $auditTable = '<table><thead><tr><th>Severity</th><th>Check</th><th>Section</th><th class="num">Pages</th></tr></thead><tbody>';
+                        foreach ($issues as $c) {
+                            $auditTable .= '<tr><td>' . '<span class="status-dot ' . ['error' => 'status-dot-error', 'warning' => 'status-dot-warn', 'notice' => 'status-dot-muted'][$c['status']] . '">' . e(ucfirst($c['status'])) . '</span>' . '</td>'
+                                . '<td>' . e($c['name']) . '</td><td>' . e($c['section_name']) . '</td><td class="num">' . e($c['pages']) . '</td></tr>';
+                        }
+                        $auditTable .= '</tbody></table>';
+                    }
+                }
+                echo '<div class="card card-full"><h3>Site audit (SE Ranking)</h3>'
+                    . (isset($auditRows) ? '<table class="kv"><tbody>' . $auditRows . '</tbody></table>' . ($auditTable ?? '') : '<div style="padding:1rem 1.1rem">' . $auditNote . '</div>')
+                    . '</div>';
+                ?>
+            </div>
         </div>
     </section>
 

@@ -1,9 +1,11 @@
 
 .xt-report {
     --group-overview: var(--accent);
-    --group-infra:    #4f9bff;
-    --group-content:  #2dd4bf;
-    --group-quality:  #a78bfa;
+    --group-domain:     #0ea5a4;
+    --group-infra:      #4f9bff;
+    --group-wordpress:  #3858e9;
+    --group-security:   #e0457b;
+    --group-visibility: #a78bfa;
     display: flex;
     flex-direction: column;
     gap: 1.7rem;
@@ -110,12 +112,8 @@
 .xt-group-head .xt-icon-badge .xt-icon { width: 23px; height: 23px; }
 .xt-group-head h2 { margin: 0; font-size: 1.25rem; letter-spacing: -.01em; }
 .xt-group-head p { margin: .1rem 0 0; }
-.xt-group-head > div:not(.xt-group-rate) { flex: 1; min-width: 220px; }
+.xt-group-head > div { flex: 1; min-width: 220px; }
 
-.xt-group-rate { display: flex; flex-direction: column; gap: .3rem; min-width: 160px; align-items: flex-end; }
-.xt-group-rate-bar { width: 140px; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.xt-group-rate-bar div { height: 100%; background: var(--group-color, var(--accent)); border-radius: 999px; }
-.xt-group-rate span { font-size: .76rem; color: var(--muted); white-space: nowrap; }
 
 /* Data-provenance marker (src_note() in helpers.php) — every field's "where
    did this come from, and did Manager verify it or just relay it" note.
@@ -165,6 +163,5 @@
 @media (max-width: 720px) {
     .xt-hero-top { flex-direction: column; align-items: stretch; }
     .xt-hero-actions { align-items: stretch; flex-direction: row; }
-    .xt-group-head > div:not(.xt-group-rate) { min-width: 100%; }
-    .xt-group-rate { align-items: flex-start; }
+    .xt-group-head > div { min-width: 100%; }
 }
