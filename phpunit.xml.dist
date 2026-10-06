@@ -13,6 +13,7 @@
     <groups>
         <exclude>
             <group>network</group>
+            <group>mysql</group>
         </exclude>
     </groups>
     <source>

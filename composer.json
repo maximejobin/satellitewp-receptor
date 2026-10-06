@@ -34,6 +34,7 @@
     },
     "scripts": {
         "test": "phpunit",
+        "test:mysql": "phpunit --group mysql",
         "analyse": "phpstan analyse",
         "check": [
             "@test",

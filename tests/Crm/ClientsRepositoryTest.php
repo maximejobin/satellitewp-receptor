@@ -9,66 +9,69 @@ use PHPUnit\Framework\TestCase;
 use SatelliteWP\Manager\Crm\ClientsRepository;
 
 /**
- * ClientsRepository sticks to portable SQL so it runs here on SQLite. The
+ * ClientsRepository sticks to portable SQL: it runs here on SQLite through
+ * PortableSqlPdo, and on a real MySQL in ClientsRepositoryMysqlTest. The
  * schema is a portable translation of the CRM's MySQL DDL.
  */
-final class ClientsRepositoryTest extends TestCase
+class ClientsRepositoryTest extends TestCase
 {
-    private PDO $pdo;
+    protected PDO $pdo;
     private ClientsRepository $repo;
+
+    protected function connect(): PDO
+    {
+        return new PortableSqlPdo();
+    }
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:', options: [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
+        $this->pdo = $this->connect();
         $this->pdo->exec(<<<'SQL'
             CREATE TABLE swp_clients (
-                id INTEGER PRIMARY KEY, email TEXT NOT NULL, first_name TEXT, last_name TEXT,
-                company TEXT, teamwork_id TEXT, hubspot_id TEXT, blogvault_client_id TEXT,
-                date_sync TEXT NOT NULL
+                id INTEGER PRIMARY KEY, email VARCHAR(255) NOT NULL, first_name VARCHAR(255), last_name VARCHAR(255),
+                company VARCHAR(255), teamwork_id VARCHAR(255), hubspot_id VARCHAR(255), blogvault_client_id VARCHAR(255),
+                date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_products (
                 auto_id INTEGER PRIMARY KEY, id INTEGER, parent_id INTEGER, internal_id INTEGER,
-                name TEXT NOT NULL, category TEXT, permalink TEXT, date_sync TEXT NOT NULL
+                name VARCHAR(255) NOT NULL, category VARCHAR(255), permalink VARCHAR(255), date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_licenses (
                 auto_id INTEGER PRIMARY KEY, id INTEGER, parent_id INTEGER, internal_id INTEGER,
-                type TEXT NOT NULL, slug TEXT, is_manual_update INTEGER NOT NULL, date_sync TEXT NOT NULL
+                type VARCHAR(255) NOT NULL, slug VARCHAR(255), is_manual_update INTEGER NOT NULL, date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_maintenance_plans (
                 auto_id INTEGER PRIMARY KEY, id INTEGER NOT NULL, parent_id INTEGER,
-                is_licenses_included INTEGER NOT NULL, date_sync TEXT NOT NULL
+                is_licenses_included INTEGER NOT NULL, date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_subscriptions (
                 id INTEGER PRIMARY KEY, client_id INTEGER NOT NULL, product_id INTEGER NOT NULL,
-                subscription_status TEXT NOT NULL DEFAULT 'unknown', creation_date TEXT NOT NULL,
-                last_payment_date TEXT NOT NULL, next_renewal_date TEXT, blogvault_site_id TEXT,
-                date_sync TEXT NOT NULL
+                subscription_status VARCHAR(255) NOT NULL DEFAULT 'unknown', creation_date VARCHAR(255) NOT NULL,
+                last_payment_date VARCHAR(255) NOT NULL, next_renewal_date VARCHAR(255), blogvault_site_id VARCHAR(255),
+                date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_subscriptions_websites (
                 subscription_id INTEGER NOT NULL, website_id INTEGER NOT NULL,
-                date_added TEXT NOT NULL, date_updated TEXT NOT NULL,
+                date_added VARCHAR(255) NOT NULL, date_updated VARCHAR(255) NOT NULL,
                 PRIMARY KEY (subscription_id, website_id)
             );
             CREATE TABLE swp_websites (
-                id INTEGER PRIMARY KEY, url TEXT NOT NULL, url_standard TEXT NOT NULL,
-                blogvault_site_id TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL,
-                connection_status TEXT, host TEXT, php_version TEXT, mysql_version TEXT,
-                wp_core_version TEXT, wp_core_is_vulnerable INTEGER, date_sync TEXT NOT NULL
+                id INTEGER PRIMARY KEY, url VARCHAR(255) NOT NULL, url_standard VARCHAR(255) NOT NULL,
+                blogvault_site_id VARCHAR(255) NOT NULL, created VARCHAR(255) NOT NULL, updated VARCHAR(255) NOT NULL,
+                connection_status VARCHAR(255), host VARCHAR(255), php_version VARCHAR(255), mysql_version VARCHAR(255),
+                wp_core_version VARCHAR(255), wp_core_is_vulnerable INTEGER, date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_website_items (
-                id INTEGER PRIMARY KEY, website_id INTEGER NOT NULL, type TEXT NOT NULL,
-                name TEXT NOT NULL, slug TEXT NOT NULL, version TEXT NOT NULL, new_version TEXT,
+                id INTEGER PRIMARY KEY, website_id INTEGER NOT NULL, type VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL, slug VARCHAR(255) NOT NULL, version VARCHAR(255) NOT NULL, new_version VARCHAR(255),
                 is_active INTEGER NOT NULL, network_active INTEGER,
                 is_vulnerable INTEGER NOT NULL DEFAULT 0, is_update_available INTEGER NOT NULL DEFAULT 0,
-                file_path TEXT, vulnerability_count INTEGER,
-                bv_date_sync TEXT NOT NULL, date_sync TEXT NOT NULL
+                file_path VARCHAR(255), vulnerability_count INTEGER,
+                bv_date_sync VARCHAR(255) NOT NULL, date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_website_tags (
-                website_id INTEGER NOT NULL, tag TEXT NOT NULL,
-                date_added TEXT NOT NULL, date_sync TEXT NOT NULL,
+                website_id INTEGER NOT NULL, tag VARCHAR(255) NOT NULL,
+                date_added VARCHAR(255) NOT NULL, date_sync VARCHAR(255) NOT NULL,
                 PRIMARY KEY (website_id, tag)
             );
             SQL);
@@ -179,9 +182,12 @@ final class ClientsRepositoryTest extends TestCase
     {
         $this->seedBasicPortfolio();
         $this->pdo->exec("INSERT INTO swp_clients (id, email, first_name, last_name, company, date_sync) VALUES
-            (3, 'c@example.com', 'Cy', 'Percent', '100% Web', '2026-01-01 00:00:00')");
+            (3, 'c@example.com', 'Cy', 'Percent', '100% Web', '2026-01-01 00:00:00'),
+            (4, 'd@example.com', 'Di', 'Bang', 'Yahoo!', '2026-01-01 00:00:00')");
 
         $this->assertSame([3], array_column($this->repo->listClients(search: '100%'), 'id'));
+        $this->assertSame([4], array_column($this->repo->listClients(search: 'Yahoo!'), 'id'), 'the escape character itself is matched literally');
+        $this->assertSame([], array_column($this->repo->listClients(search: '!%'), 'id'));
         $this->assertSame([3], array_column($this->repo->listClients(search: '%'), 'id'), 'a bare % matches only a literal percent sign, not everyone');
         $this->assertSame([], $this->repo->searchClients('_'), 'a bare _ is not a single-character wildcard');
         $this->assertSame([], $this->repo->searchTags('_'));

@@ -217,8 +217,11 @@ releases) refresh hourly. Cache writes go through `Support\AtomicFile`.
 
 **CRM (`src/Crm`).** External MySQL, read-only except
 `ClientsRepository::setSubscriptionWebsite()` (delete + insert, DEV-tagged
-websites refused server-side). Portable SQL only (tested on SQLite); LIKE
-input escaped via `Storage\SqlLike`. Entities are flat siblings (`/websites`,
+websites refused server-side). Portable SQL only: the suite runs on SQLite through
+`tests/Crm/PortableSqlPdo` (rejects `\` and `"`, which MySQL parses differently)
+and on a real MySQL with `composer test:mysql` (`SWPMGR_TEST_MYSQL_DSN`/`_USER`/
+`_PASSWORD`, a disposable database) — run it after any change to CRM SQL. LIKE
+input escaped via `Storage\SqlLike` (`ESCAPE '!'`, never `'\'`). Entities are flat siblings (`/websites`,
 `/items`, `/clients`, `/products`) — the business works by website first.
 Access runbook: `docs/acces-mysql-distant.md`.
 
@@ -251,7 +254,7 @@ both front controllers; never logs bodies, signatures or cookies.
 
 ## Testing & conventions
 
-`composer check` = PHPUnit (offline; `network` group reserved) + PHPStan
+`composer check` = PHPUnit (offline; `network` and `mysql` groups excluded) + PHPStan
 level 6 on `src/` and `bin/` with an empty baseline — fix causes, never add
 baseline entries. Templates are excluded from PHPStan (`extract()` in render).
 Manual end-to-end: `docs/TESTING.md`; pairing/ops: `docs/PAIRING.md`.
