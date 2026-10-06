@@ -497,7 +497,6 @@ if ($status !== 'done'):
                     . field('HTTP/3 advertised', $http['protocols']['http3_advertised'] ?? null, null, 'probe.http.protocols.http3_advertised')
                     . field('HTTPS forced', $http['redirects']['forces_https'] ?? null, ($http['redirects']['forces_https'] ?? true) ? 'ok' : 'warn', 'probe.http.redirects.forces_https')
                     . field('Redirects', $http['redirects']['hops'] ?? null, null, 'probe.http.redirects.hops')
-                    . field('CDN', $http['cdn'] ?? '—', null, 'probe.http.cdn')
                 ); ?>
                 <?php echo section('PHP',
                     field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t), null, 'payload.php.version')

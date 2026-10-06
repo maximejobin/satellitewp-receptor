@@ -36,7 +36,7 @@ final class HttpProbeTest extends TestCase
         $this->assertSame('max-age=3600, public', $data['cache_headers']['cache-control']);
         $this->assertSame('max-age=31536000', $data['security_headers']['strict-transport-security']);
         $this->assertSame('nosniff', $data['security_headers']['x-content-type-options']);
-        $this->assertSame('cloudflare', $data['cdn']);
+        $this->assertArrayNotHasKey('cdn', $data);
         $this->assertTrue($data['cookies']['secure']);
         $this->assertTrue($data['cookies']['httponly']);
         $this->assertTrue($data['cookies']['samesite']);
@@ -54,7 +54,6 @@ final class HttpProbeTest extends TestCase
 
         $this->assertNull($data['http_version']);
         $this->assertFalse($data['gzip']);
-        $this->assertNull($data['cdn']);
         $this->assertNull($data['cookies']);
         $this->assertNull($data['alt_svc']);
         $this->assertNull($data['security_headers']['content-security-policy']);

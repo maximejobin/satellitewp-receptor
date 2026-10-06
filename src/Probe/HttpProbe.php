@@ -20,7 +20,7 @@ use SatelliteWP\Manager\Support\HostGuard;
 /**
  * HTTP behaviour of the site: redirect chain (http→https, www canonical),
  * negotiated HTTP version, compression, cache/security headers, server
- * fingerprint, CDN hints, soft-404 behaviour and passive exposure checks.
+ * fingerprint, soft-404 behaviour and passive exposure checks.
  *
  * Every request connects to the address the SSRF guard vetted (pinned via
  * CURLOPT_RESOLVE), never to a second independent lookup.
@@ -34,14 +34,6 @@ final class HttpProbe extends AbstractProbe
         'x-frame-options',
         'referrer-policy',
         'permissions-policy',
-    ];
-
-    private const array CDN_HEADER_HINTS = [
-        'cf-ray'          => 'cloudflare',
-        'x-sucuri-id'     => 'sucuri',
-        'x-amz-cf-id'     => 'cloudfront',
-        'x-fastly-request-id' => 'fastly',
-        'x-akamai-transformed' => 'akamai',
     ];
 
     /**
@@ -327,17 +319,6 @@ final class HttpProbe extends AbstractProbe
             $security[$header] = $headers[$header] ?? null;
         }
 
-        $cdn = null;
-        foreach (self::CDN_HEADER_HINTS as $header => $vendor) {
-            if (isset($headers[$header])) {
-                $cdn = $vendor;
-                break;
-            }
-        }
-        if ($cdn === null && str_contains(strtolower($headers['server'] ?? ''), 'cloudflare')) {
-            $cdn = 'cloudflare';
-        }
-
         if ($setCookies === [] && isset($headers['set-cookie'])) {
             $setCookies = [$headers['set-cookie']];
         }
@@ -365,7 +346,6 @@ final class HttpProbe extends AbstractProbe
                 'server'       => $headers['server'] ?? null,
                 'x-powered-by' => $headers['x-powered-by'] ?? null,
             ],
-            'cdn'              => $cdn,
             'cookies'          => self::cookieFlags($setCookies),
         ];
     }
