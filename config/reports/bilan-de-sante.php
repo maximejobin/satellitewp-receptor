@@ -82,7 +82,8 @@ return [
         // Manager's own wordpress.org cache — the site's self-report can be stale.
         'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version', 'default' => '—'],
         'wp_install_type'      => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type'],
-        'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.core_update.auto_update_core', 'transform' => 'auto_update_core'],
+        // The same constants as rule F12: undefined WP_AUTO_UPDATE_CORE is WordPress's minor-only default.
+        'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.constants', 'transform' => 'auto_update_core'],
         'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F12']],
 
         // Thèmes.

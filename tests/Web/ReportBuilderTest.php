@@ -158,7 +158,7 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('red', $report['fields']['x']['color']);
     }
 
-    public function testPluginsTableIsAlphabeticalWithMergedVersionAndStatusShortcodes(): void
+    public function testPluginsTableIsAlphabeticalWithMergedVersionAndStatusIcons(): void
     {
         $contract = ['fields' => ['wp_plugins_list' => ['type' => 'table', 'source' => 'plugins']]];
 
@@ -174,19 +174,21 @@ final class ReportBuilderTest extends TestCase
 
         // Akismet: active, no update, one Wordfence-only vulnerability.
         self::assertSame(['text' => '5.3', 'color' => null], $table['rows'][0][1]);
-        self::assertSame(
-            '[img url="https://manager.test/assets/report-icons/dot-green.png"]'
-            . ' [img url="https://manager.test/assets/report-icons/vulnerable.png"]',
-            $table['rows'][0][2]['text']
-        );
+        self::assertSame([
+            'text'  => '',
+            'color' => null,
+            'icons' => [
+                'https://manager.test/assets/report-icons/dot-green.png',
+                'https://manager.test/assets/report-icons/vulnerable.png',
+            ],
+        ], $table['rows'][0][2]);
 
         // Old Plugin: inactive, update 1.0 → 2.0, no known vulnerability.
         self::assertSame(['text' => '1.0 → 2.0', 'color' => 'orange'], $table['rows'][1][1]);
-        self::assertSame(
-            '[img url="https://manager.test/assets/report-icons/dot-red.png"]'
-            . ' [img url="https://manager.test/assets/report-icons/upgrade.png"]',
-            $table['rows'][1][2]['text']
-        );
+        self::assertSame([
+            'https://manager.test/assets/report-icons/dot-red.png',
+            'https://manager.test/assets/report-icons/upgrade.png',
+        ], $table['rows'][1][2]['icons']);
     }
 
     public function testPluginsTableAddsALicenseIconOnlyWhenOneApplies(): void
@@ -203,9 +205,9 @@ final class ReportBuilderTest extends TestCase
         $rows   = $report['fields']['x']['rows'];
         // rows are alphabetical: Akismet, Old Plugin, Zzz Plugin (see the order test above).
 
-        self::assertStringContainsString('license-active.png', $rows[0][2]['text']);
-        self::assertStringContainsString('license-missing.png', $rows[1][2]['text']);
-        self::assertStringNotContainsString('license-', $rows[2][2]['text']); // no status recorded — no icon at all
+        self::assertStringContainsString('license-active.png', implode(' ', $rows[0][2]['icons']));
+        self::assertStringContainsString('license-missing.png', implode(' ', $rows[1][2]['icons']));
+        self::assertStringNotContainsString('license-', implode(' ', $rows[2][2]['icons'])); // no status recorded — no icon at all
     }
 
     public function testPluginsTableHeadersFollowTheRequestedLocale(): void
@@ -234,8 +236,11 @@ final class ReportBuilderTest extends TestCase
 
         self::assertSame(['text' => '1.0', 'color' => null], $table['rows'][0][1]); // active, no update offered
         self::assertSame(['text' => '2.0 → 2.1', 'color' => 'orange'], $table['rows'][1][1]); // parent, update offered
-        self::assertStringContainsString('dot-green.png', $table['rows'][0][2]['text']);
-        self::assertStringContainsString('dot-red.png', $table['rows'][1][2]['text']);
+        self::assertSame(['https://manager.test/assets/report-icons/dot-green.png'], $table['rows'][0][2]['icons']);
+        self::assertSame(
+            ['https://manager.test/assets/report-icons/dot-red.png', 'https://manager.test/assets/report-icons/upgrade.png'],
+            $table['rows'][1][2]['icons']
+        );
     }
 
     public function testClientAndMaintenancePlanComeFromTheCrmSnapshot(): void
@@ -423,6 +428,119 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['text' => 'max-age=63072000', 'color' => 'green'], $rows[0][1]);
         self::assertSame('Content-Security-Policy', $rows[1][0]['text']);
         self::assertSame(['text' => 'Missing', 'color' => 'orange'], $rows[1][1]);
+    }
+
+    public function testSecurityHeaderSentEmptyCountsAsMissing(): void
+    {
+        $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'security_headers']]];
+        $context  = $this->context();
+        $context['probe']['http']['security_headers']['x-content-type-options'] = '  ';
+
+        $rows = $this->builder()->build($contract, $context, [])['fields']['x']['rows'];
+
+        self::assertSame(['text' => 'Missing', 'color' => 'orange'], $rows[2][1]);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>|null}> */
+    public static function unreadableHomepages(): iterable
+    {
+        yield 'probe did not run'      => [null];
+        yield 'main request failed'    => [['auth' => ['required' => false]]];
+        yield 'behind Basic auth'      => [['status_code' => 401, 'auth' => ['required' => true], 'security_headers' => ['strict-transport-security' => null]]];
+    }
+
+    /** @param array<string, mixed>|null $http */
+    #[DataProvider('unreadableHomepages')]
+    public function testSecurityHeadersAreUndeterminedWhenTheHomepageWasNotRead(?array $http): void
+    {
+        $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'security_headers']]];
+        $context  = $this->context();
+        if ($http === null) {
+            unset($context['probe']['http']);
+        } else {
+            $context['probe']['http'] = $http;
+        }
+
+        $rows = $this->builder('fr')->build($contract, $context, [])['fields']['x']['rows'];
+
+        self::assertCount(6, $rows);
+        foreach ($rows as $row) {
+            self::assertSame(['text' => 'Indéterminé', 'color' => null], $row[1]);
+        }
+    }
+
+    public function testIgnoredVulnerabilityShowsNoVulnerableIconInTheComponentTable(): void
+    {
+        $t       = new Translator('en', dirname(__DIR__, 2) . '/config/lang', 'en');
+        $builder = new ReportBuilder($t, 'https://manager.test/assets/report-icons', ['wf-0001']);
+        $context = $this->context();
+        $context['probe']['wordfence']['plugins']['items'][0]['vulnerabilities'][0]['id'] = 'WF-0001';
+
+        $rows = $builder->build(['fields' => ['x' => ['type' => 'table', 'source' => 'plugins']]], $context, [])['fields']['x']['rows'];
+
+        self::assertSame(['https://manager.test/assets/report-icons/dot-green.png'], $rows[0][2]['icons']); // Akismet
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function hostileNames(): iterable
+    {
+        yield 'image shortcode' => ['X [img url="https://attacker.example/p.png"]'];
+        yield 'link'            => ['[Mettre à jour](https://phish.example)'];
+        yield 'bold'            => ['**x**'];
+        yield 'italic'          => ['_x_'];
+    }
+
+    #[DataProvider('hostileNames')]
+    public function testSiteControlledNamesNeverReachTheDocAsMarkup(string $name): void
+    {
+        $context = $this->context();
+        $context['payload']['plugins'][0]['name'] = $name;
+        $findings = [[
+            'id' => 'F13', 'category_code' => 'X', 'pastille' => 'orange', 'severity' => 'Medium',
+            'title' => 'Inactive', 'message' => "Unused: {$name}.",
+        ]];
+        $contract = ['fields' => [
+            'list' => ['type' => 'table', 'source' => 'plugins'],
+            'obs'  => ['type' => 'observations', 'categories' => ['X']],
+        ]];
+
+        $report = $this->builder()->build($contract, $context, $findings);
+
+        // The message's markup characters are backslash-escaped for the script to render literally.
+        $message = $report['fields']['obs']['items'][0]['message'];
+        self::assertSame('Unused: ' . ReportBuilder::escapeMarkup($name) . '.', $message);
+        self::assertDoesNotMatchRegularExpression('/(?<!\\\\)[\[\]*_]/', $message);
+
+        // A table cell is plain text: the icons travel apart, so a name can't summon an image.
+        $cells = array_merge(...$report['fields']['list']['rows']);
+        self::assertContains($name, array_column($cells, 'text'));
+        foreach ($cells as $cell) {
+            foreach ($cell['icons'] ?? [] as $url) {
+                self::assertStringStartsWith('https://manager.test/assets/report-icons/', $url);
+            }
+        }
+    }
+
+    public function testEscapeMarkupCoversEveryMarkupCharacterAndTheBackslash(): void
+    {
+        self::assertSame('a\\*\\*b\\*\\* \\_c\\_ \\[d\\](https://e) f\\\\g', ReportBuilder::escapeMarkup('a**b** _c_ [d](https://e) f\\g'));
+    }
+
+    public function testAnalystObservationKeepsItsFormattingWhileFindingsAreEscaped(): void
+    {
+        $contract = ['fields' => ['x' => ['type' => 'observations', 'categories' => ['X']]]];
+        $findings = [['id' => 'A', 'category_code' => 'X', 'pastille' => 'red', 'title' => 'WP_DEBUG', 'message' => '**x**']];
+        $manual   = [[
+            'section' => 'x', 'color' => 'red', 'include' => true,
+            'title'   => 'Voir _ceci_', 'description' => '**Important** : [le guide](https://example.com/guide)',
+        ]];
+
+        $items = $this->builder()->build($contract, $this->context(), $findings, $manual)['fields']['x']['items'];
+
+        self::assertSame('WP\\_DEBUG', $items[0]['title']);
+        self::assertSame('\\*\\*x\\*\\*', $items[0]['message']);
+        self::assertSame('Voir _ceci_', $items[1]['title']);
+        self::assertSame('**Important** : [le guide](https://example.com/guide)', $items[1]['message']);
     }
 
     public function testVulnerabilitiesTableAggregatesCoreAndComponents(): void
@@ -810,12 +928,30 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('8.4.7', $this->value(['transform' => 'database_version'], '8.4.7')['value']);
     }
 
-    public function testCoreAutoUpdateIsTranslated(): void
+    public function testCoreAutoUpdateFollowsTheConstantsLikeRuleF12(): void
     {
-        self::assertSame('Désactivée', $this->value(['transform' => 'auto_update_core'], false)['value']);
-        self::assertSame('Mineures seulement', $this->value(['transform' => 'auto_update_core'], 'minor')['value']);
-        self::assertSame('Toutes', $this->value(['transform' => 'auto_update_core'], true)['value']);
+        $policy = fn (array $constants): string => $this->value(['transform' => 'auto_update_core'], $constants + [
+            'WP_AUTO_UPDATE_CORE' => 'N/A', 'AUTOMATIC_UPDATER_DISABLED' => 'N/A', 'DISALLOW_FILE_MODS' => 'N/A',
+        ])['value'];
+
+        self::assertSame('Désactivée', $policy(['WP_AUTO_UPDATE_CORE' => false]));
+        self::assertSame('Mineures seulement', $policy(['WP_AUTO_UPDATE_CORE' => 'minor']));
+        self::assertSame('Toutes', $policy(['WP_AUTO_UPDATE_CORE' => true]));
+        // Not defined: WordPress's default policy, minor releases only — never "unknown".
+        self::assertSame('Mineures seulement', $policy([]));
+        self::assertSame('Désactivée', $policy(['WP_AUTO_UPDATE_CORE' => true, 'AUTOMATIC_UPDATER_DISABLED' => true]));
+        self::assertSame('Désactivée', $policy(['DISALLOW_FILE_MODS' => true]));
         self::assertSame('Indéterminé', $this->value(['transform' => 'auto_update_core'], null)['value']);
+    }
+
+    public function testShippedContractReadsCoreAutoUpdateFromTheConstants(): void
+    {
+        $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
+        $context  = ['payload' => ['constants' => ['WP_AUTO_UPDATE_CORE' => 'N/A'], 'core_update' => ['auto_update_core' => null]]];
+
+        $field = $this->builder('fr')->build(['fields' => ['x' => $contract['fields']['wp_core_auto_update']]], $context, [])['fields']['x'];
+
+        self::assertSame('Mineures seulement', $field['value']);
     }
 
     public function testLighthouseScoreIsOutOfAHundredAndBanded(): void

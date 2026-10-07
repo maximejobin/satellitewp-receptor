@@ -119,7 +119,7 @@ final class ReportBuilder
     /**
      * @param array<string, mixed> $context
      * @param array<string, mixed> $spec
-     * @return ?array{type: string, headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
+     * @return ?array{type: string, headers: list<string>, rows: list<list<array{text: string, color: ?string, icons?: list<string>}>>}
      */
     private function buildTableField(array $context, array $spec): ?array
     {
@@ -147,6 +147,10 @@ final class ReportBuilder
      * placed in a section outside its own category), plus analyst-authored
      * observations filed under this field, optionally narrowed by colour.
      *
+     * The script reads every item's title and message as markup. A finding's
+     * text embeds site-controlled values (plugin names…) and its templates
+     * carry no markup, so it is escaped whole; an analyst's text keeps its marks.
+     *
      * @param list<array<string, mixed>>  $findings
      * @param array<string, mixed>        $spec
      * @param list<mixed>                 $observations
@@ -168,8 +172,8 @@ final class ReportBuilder
         $items = [];
         foreach ($matched as $f) {
             $items[] = [
-                'title'    => (string) ($f['title'] ?? ''),
-                'message'  => (string) ($f['message'] ?? ''),
+                'title'    => self::escapeMarkup((string) ($f['title'] ?? '')),
+                'message'  => self::escapeMarkup((string) ($f['message'] ?? '')),
                 'color'    => (string) ($f['pastille'] ?? Pastille::Grey->value),
                 'severity' => (string) ($f['severity'] ?? ''),
             ];
@@ -327,15 +331,27 @@ final class ReportBuilder
         });
     }
 
-    /** payload.core_update.auto_update_core: false / 'minor' / true|'major' (WP_AUTO_UPDATE_CORE semantics). */
-    private function autoUpdateCore(mixed $v): string
+    /**
+     * Core auto-update policy from payload.constants, read exactly as rule F12
+     * does: an undefined WP_AUTO_UPDATE_CORE ("N/A") is WordPress's default,
+     * minor releases only; DISALLOW_FILE_MODS / AUTOMATIC_UPDATER_DISABLED stop all.
+     */
+    private function autoUpdateCore(mixed $constants): string
     {
-        return match (true) {
-            $v === null || $v === ''                             => $this->unknown(),
-            $v === false || in_array($v, ['false', '0'], true)   => $this->t->report('auto_update_off'),
-            $v === 'minor'                                       => $this->t->report('auto_update_minor'),
-            default                                              => $this->t->report('auto_update_all'),
-        };
+        if (!is_array($constants)) {
+            return $this->unknown();
+        }
+        $on = static fn (string $name): bool => !in_array($constants[$name] ?? null, [null, 'N/A'], true) && (bool) $constants[$name];
+        if ($on('DISALLOW_FILE_MODS') || $on('AUTOMATIC_UPDATER_DISABLED')) {
+            return $this->t->report('auto_update_off');
+        }
+        $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
+
+        return $this->t->report(match (true) {
+            $core === false || $core === 'false' => 'auto_update_off',
+            $core === true || $core === 'true'   => 'auto_update_all',
+            default                              => 'auto_update_minor',
+        });
     }
 
     /** An ISO date or timestamp as a long, localized date ("5 septembre 2008"); '' when unparseable. */
@@ -444,7 +460,7 @@ final class ReportBuilder
 
     /**
      * @param array<string, mixed> $context
-     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
+     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string, icons?: list<string>}>>}
      */
     private function pluginsTable(array $context): array
     {
@@ -459,7 +475,7 @@ final class ReportBuilder
      * child theme reads best next to what it's built on.
      *
      * @param array<string, mixed> $context
-     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
+     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string, icons?: list<string>}>>}
      */
     private function themesTable(array $context): array
     {
@@ -484,11 +500,11 @@ final class ReportBuilder
 
     /**
      * Name, Version ("current → available" when an update exists) and a
-     * Status cell of icon shortcodes the script turns into images.
+     * Status cell carrying its icons as URLs the script inserts as images.
      *
      * @param list<array<array-key, mixed>> $components
      * @param array<string, mixed>          $context
-     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
+     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string, icons?: list<string>}>>}
      */
     private function componentTable(string $type, array $components, array $context): array
     {
@@ -504,14 +520,15 @@ final class ReportBuilder
             $vulns   = merge_vulnerabilities(
                 (array) ($bvBySlug[$slug]['vulnerabilities'] ?? []),
                 (array) ($wfBySlug[$slug]['vulnerabilities'] ?? []),
-                $version !== '' ? $version : null
+                $version !== '' ? $version : null,
+                $this->ignoredVulnerabilities
             );
             $license = $licenses[$type . ':' . $slug] ?? null;
 
             $rows[] = [
                 self::cell((string) ($c['name'] ?? $c['slug'] ?? '?')),
                 self::cell($update !== '' ? "{$version} → {$update}" : $version, $update !== '' ? 'orange' : null),
-                self::cell($this->statusShortcodes(!empty($c['active']), $update !== '', $vulns !== [], is_string($license) ? $license : null)),
+                self::iconCell($this->statusIcons(!empty($c['active']), $update !== '', $vulns !== [], is_string($license) ? $license : null)),
             ];
         }
 
@@ -735,6 +752,10 @@ final class ReportBuilder
     }
 
     /**
+     * Undetermined, uncoloured, when the homepage could not be read (no http
+     * probe, failed main request, 401), where A8/B7* are unknown too.
+     * A header sent with an empty value protects nothing and reads as absent.
+     *
      * @param array<string, mixed> $context
      * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
      */
@@ -748,13 +769,21 @@ final class ReportBuilder
             'referrer-policy'           => 'Referrer-Policy',
             'permissions-policy'        => 'Permissions-Policy',
         ];
-        $headers = (array) ($context['probe']['http']['security_headers'] ?? []);
+        $http     = (array) ($context['probe']['http'] ?? []);
+        $headers  = $http['security_headers'] ?? null;
+        $readable = is_array($headers)
+            && ($http['auth']['required'] ?? null) !== true
+            && ($http['status_code'] ?? null) !== 401;
 
         $rows = [];
         foreach ($labels as $key => $label) {
+            if (!$readable) {
+                $rows[] = [self::cell($label), self::cell($this->unknown())];
+                continue;
+            }
             $value   = $headers[$key] ?? null;
-            $present = $value !== null && $value !== '';
-            $rows[]  = [self::cell($label), self::cell($present ? (string) $value : $this->t->report('missing'), $present ? 'green' : 'orange')];
+            $present = is_scalar($value) && trim((string) $value) !== '';
+            $rows[]  = [self::cell($label), self::cell($present ? trim((string) $value) : $this->t->report('missing'), $present ? 'green' : 'orange')];
         }
 
         return ['headers' => $this->headers('col_header', 'col_value'), 'rows' => $rows];
@@ -862,8 +891,33 @@ final class ReportBuilder
         return ['text' => $text, 'color' => $color];
     }
 
-    /** "[img url=…]" tokens, space-separated — the only place that decides which icon a status means. */
-    private function statusShortcodes(bool $active, bool $hasUpdate, bool $hasVulnerability, ?string $licenseStatus): string
+    /**
+     * A cell of icons only. Icons travel as their own field, never as text the
+     * script parses, so a cell's site-controlled text can't summon an image.
+     *
+     * @param list<string> $icons
+     * @return array{text: string, color: null, icons: list<string>}
+     */
+    private static function iconCell(array $icons): array
+    {
+        return ['text' => '', 'color' => null, 'icons' => $icons];
+    }
+
+    /**
+     * Backslash-escapes the characters of the report's markup (**bold**,
+     * _italic_, [text](url)) so the script renders them literally.
+     */
+    public static function escapeMarkup(string $text): string
+    {
+        return preg_replace('/[\\\\*_\[\]]/', '\\\\$0', $text) ?? $text;
+    }
+
+    /**
+     * Icon URLs, in display order — the only place that decides which icon a status means.
+     *
+     * @return list<string>
+     */
+    private function statusIcons(bool $active, bool $hasUpdate, bool $hasVulnerability, ?string $licenseStatus): array
     {
         $icons = [$active ? 'dot-green' : 'dot-red'];
         if ($hasUpdate) {
@@ -876,10 +930,10 @@ final class ReportBuilder
             $icons[] = self::LICENSE_STATUS_ICONS[$licenseStatus];
         }
 
-        return implode(' ', array_map(
-            fn (string $name): string => sprintf('[img url="%s/%s.png"]', rtrim($this->iconBaseUrl, '/'), $name),
+        return array_map(
+            fn (string $name): string => sprintf('%s/%s.png', rtrim($this->iconBaseUrl, '/'), $name),
             $icons
-        ));
+        );
     }
 
     /**
