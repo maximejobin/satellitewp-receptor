@@ -140,7 +140,7 @@ final class ExtractorTest extends TestCase
         $payload['collector_errors'] = ['connector:woocommerce' => 'class not found'];
         $body                        = (string) json_encode($payload);
 
-        $result = $this->receptor->handle($this->headers('extraction', $body), $body);
+        $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
         $this->assertSame(422, $result['status']);
         $this->assertDirectoryDoesNotExist($this->tmpDir . '/sites/' . self::SITE_ID . '/extractions');
