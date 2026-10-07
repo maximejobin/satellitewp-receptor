@@ -106,7 +106,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.strict-transport-security') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'strict-transport-security') ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
@@ -117,7 +117,22 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Les visites en HTTP ne sont pas redirigées vers HTTPS : une partie de votre trafic circule sans chiffrement. Faites ajouter une redirection permanente (301) vers HTTPS.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.redirects.forces_https')),
+        'check' => static function (Context $c) {
+            if (!$c->probeRan('http') || $c->string('probe.http.redirects.error') !== null) {
+                return Check::unknown();
+            }
+            $forces = $c->bool('probe.http.redirects.forces_https');
+            if ($forces !== false) {
+                return Check::isTrue($forces);
+            }
+            $chain = $c->list('probe.http.redirects.chain');
+            $last  = end($chain);
+            $code  = is_array($last) && is_numeric($last['status'] ?? null) ? (int) $last['status'] : null;
+
+            return $code !== null && $code >= 400
+                ? Check::fail($code, ['variant' => 'http_error'])
+                : Check::fail(false);
+        },
 ```
 
 ## B. En-têtes HTTP & réseau
@@ -179,10 +194,20 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Les navigateurs ne conservent vos images, styles et scripts que {cache_days} jours (recommandé : au moins {threshold_days} jours) : les visiteurs réguliers les téléchargent à nouveau inutilement. Faites allonger la durée de cache sur le serveur.
 
 ```php
-        'check' => static function (Context $c, Rule $rule) {
+        'check' => static function (Context $c, Rule $rule) use ($homepageReadable) {
             $asset = $c->get('probe.http.asset');
-            if (!is_array($asset) || ($asset['checked'] ?? false) !== true) {
-                return Check::na();
+            if (!$homepageReadable($c) || !is_array($asset)) {
+                return Check::unknown();
+            }
+            if (($asset['checked'] ?? false) !== true) {
+                // Not applicable only when the page links no first-party asset; a failed fetch is unknown.
+                return isset($asset['url']) || isset($asset['error']) ? Check::unknown() : Check::na();
+            }
+            // Only a served asset tells its cache policy; an undecoded HTML entity in the URL means another file was asked for.
+            $status = $asset['status'] ?? null;
+            if (($status !== null && !(($status >= 200 && $status < 300) || $status === 304))
+                || preg_match('/&(?:#\d+|#x[0-9a-f]+|amp);/i', (string) ($asset['url'] ?? '')) === 1) {
+                return Check::unknown();
             }
             $maxAge = (int) ($asset['max_age'] ?? 0);
             $data   = [
@@ -204,7 +229,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'x-content-type-options') ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
@@ -215,14 +240,15 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Votre site peut être affiché à l'intérieur d'un autre site à l'insu du visiteur, pour lui faire cliquer sur autre chose (détournement de clics). Faites ajouter l'en-tête X-Frame-Options ou une politique de sécurité du contenu.
 
 ```php
-        'check' => static function (Context $c) use ($homepageReadable) {
+        'check' => static function (Context $c) use ($homepageReadable, $headerPresent) {
             if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
-            $xfo = $c->get('probe.http.security_headers.x-frame-options');
-            $csp = $c->get('probe.http.security_headers.content-security-policy');
+            $csp = (string) $c->string('probe.http.security_headers.content-security-policy');
 
-            return ($xfo ?? $csp) !== null ? Check::pass() : Check::fail();
+            return $headerPresent($c, 'x-frame-options') || preg_match('/(?:^|;)\s*frame-ancestors\s/i', $csp) === 1
+                ? Check::pass()
+                : Check::fail();
         },
 ```
 
@@ -234,7 +260,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'content-security-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
@@ -246,7 +272,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'referrer-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
@@ -258,7 +284,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'permissions-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
 ```
 
@@ -445,11 +471,25 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### D2 — Signature des courriels (DKIM)
 
 - **Catégorie :** EMAIL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le courriel envoyé par votre site porte une signature valide.
+- **Réussite (FR) :** Le courriel envoyé par votre site porte une signature valide au nom de votre domaine.
 - **Échec (FR) :** La signature du courriel envoyé par votre site est invalide : les fournisseurs peuvent le classer en indésirables. Faites corriger la configuration DKIM du service d'envoi.
 
 ```php
-        'check' => static fn (Context $c) => $mailAuth($c, 'dkim'),
+        'check' => static function (Context $c) use ($mailAuth) {
+            $result = $mailAuth($c, 'dkim');
+            if ($result->status !== Status::Pass) {
+                return $result;
+            }
+
+            return match ($c->bool('probe.mail.dkim_aligned')) {
+                true    => $result,
+                false   => Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => implode(', ', array_filter(
+                    array_map('strval', $c->list('probe.mail.dkim_domains')),
+                    static fn (string $d): bool => $d !== ''
+                ))]),
+                default => Check::unknown(),
+            };
+        },
 ```
 
 ### D3 — Protection contre l'usurpation du domaine (DMARC)
@@ -944,7 +984,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
             $data = ['effective_mb' => (int) round($effective / 1048576)];
 
-            if ($post !== INF && $post != $upload) {
+            if ($post < $upload) {
                 return Check::fail($observed, $data + ['variant' => 'mismatch']);
             }
 
@@ -1158,7 +1198,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Le mode débogage de WordPress (WP_DEBUG) est actif sur le site en ligne, sans journal privé confirmé : des informations techniques peuvent fuiter. Désactivez-le en production.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($debugLogExposed) {
             $debug = $c->constant('WP_DEBUG');
             if ($debug === null) {
                 return Check::unknown();
@@ -1167,11 +1207,15 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::pass(false);
             }
             // Debug on is acceptable only when it logs to a file confirmed private.
-            $sensitiveFiles = $c->get('probe.http.exposure.sensitive_files');
-            $logsToFile     = $c->get('payload.constants.WP_DEBUG_LOG') === true;
-            $logIsPrivate   = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
+            if ($c->get('payload.constants.WP_DEBUG_LOG') !== true) {
+                return Check::fail(true);
+            }
 
-            return ($logsToFile && $logIsPrivate) ? Check::pass(true, ['variant' => 'private_log']) : Check::fail(true);
+            return match ($debugLogExposed($c)) {
+                false   => Check::pass(true, ['variant' => 'private_log']),
+                true    => Check::fail(true),
+                default => Check::unknown(),
+            };
         },
 ```
 
@@ -1199,7 +1243,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Le journal de débogage est enregistré à son emplacement par défaut (wp-content/debug.log), où il est téléchargeable publiquement.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($debugLogExposed) {
             $debug = $c->constant('WP_DEBUG');
             if ($debug === null) {
                 return Check::unknown();
@@ -1211,12 +1255,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if ($debugLog !== true) {
                 return Check::pass('custom');
             }
-            $found = $c->get('probe.http.exposure.sensitive_files');
-            if (!is_array($found)) {
-                return Check::unknown();
-            }
-
-            return in_array('wp-content/debug.log', $found, true) ? Check::fail('default') : Check::pass('default');
+            return match ($debugLogExposed($c)) {
+                true    => Check::fail('default'),
+                false   => Check::pass('default'),
+                default => Check::unknown(),
+            };
         },
 ```
 
@@ -1227,7 +1270,9 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** L'éditeur de code intégré à l'administration est actif : un seul compte administrateur compromis suffit pour injecter du code malveillant. Désactivez-le (DISALLOW_FILE_EDIT).
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
+        'check' => static fn (Context $c) => $c->constant('DISALLOW_FILE_MODS') === true
+            ? Check::pass(true, ['variant' => 'file_mods'])
+            : Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
 ```
 
 ### K6 — Administration protégée par HTTPS
@@ -1395,7 +1440,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** L'ancienne interface xmlrpc.php répond : elle permet aux robots de tester des milliers de mots de passe d'un coup. Bloquez-la si aucune application ne l'utilise (Jetpack, applications mobiles).
 
 ```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.xmlrpc_enabled')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'xmlrpc_enabled')),
 ```
 
 ### X2 — Identifiants protégés (API de WordPress)
@@ -1405,7 +1450,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** L'API de WordPress publie la liste des identifiants de connexion de vos utilisateurs : un attaquant n'a plus qu'à deviner les mots de passe. Restreignez l'accès à cette liste.
 
 ```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.rest_user_enumeration')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'rest_user_enumeration')),
 ```
 
 ### X3 — Identifiants protégés (archives d'auteur)
@@ -1415,7 +1460,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** L'adresse « ?author=1 » révèle l'identifiant de connexion d'un administrateur. Bloquez cette redirection.
 
 ```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.author_enumeration')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'author_enumeration')),
 ```
 
 ### X4 — Fichiers sensibles protégés
@@ -1425,14 +1470,13 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Des fichiers sensibles sont téléchargeables publiquement ({observed}) : ils peuvent révéler les accès à la base de données. Supprimez-les ou bloquez-les sans délai.
 
 ```php
-        'check' => static function (Context $c) {
-            // null = not checked (soft-404 catch-all or auth gate): never a clean pass.
-            $found = $c->get('probe.http.exposure.sensitive_files');
-            if (!is_array($found)) {
+        'check' => static function (Context $c) use ($sensitiveFiles) {
+            $found = $sensitiveFiles($c);
+            if ($found === null) {
                 return Check::unknown();
             }
 
-            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', $found));
+            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', array_map('strval', $found)));
         },
 ```
 
@@ -1443,6 +1487,6 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** N'importe qui peut parcourir la liste complète des fichiers de votre dossier de médias (wp-content/uploads/), y compris des documents non publiés. Faites désactiver l'affichage des répertoires.
 
 ```php
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.directory_listing')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'directory_listing')),
 ```
 

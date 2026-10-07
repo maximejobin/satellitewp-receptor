@@ -238,7 +238,8 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame(Status::Pass->value, $g3('64M', '67108864'), 'same size, different notation');
         $this->assertSame(Status::Pass->value, $g3('0', '64M'), 'post_max_size 0 = unlimited, not a mismatch');
         $this->assertSame(Status::Fail->value, $g3('0', '32M'), 'unlimited POST, but uploads still capped under 50 MB');
-        $this->assertSame(Status::Fail->value, $g3('128M', '64M'), 'mismatch');
+        $this->assertSame(Status::Pass->value, $g3('128M', '64M'), 'POST above the file limit is the recommended setting');
+        $this->assertSame(Status::Fail->value, $g3('64M', '128M'), 'POST below the file limit');
         $this->assertSame(Status::Fail->value, $g3('32M', '32M'), 'identical but under 50 MB');
         $this->assertSame(Status::Unknown->value, $g3('garbage', '64M'), 'unparseable value');
     }
