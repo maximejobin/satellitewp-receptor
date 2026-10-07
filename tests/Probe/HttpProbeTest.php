@@ -388,6 +388,59 @@ final class HttpProbeTest extends TestCase
         $this->assertSame([], $data['exposure']['sensitive_files'], 'HTML 404 pages are never exposures');
     }
 
+    /** A dead plain-HTTP vhost answers A10 alone: it never turns the whole probe into an error. */
+    public function testAFailingHttpChainIsKeptInRedirectsNotAProbeError(): void
+    {
+        $handler = static function (\Psr\Http\Message\RequestInterface $request): \GuzzleHttp\Promise\PromiseInterface {
+            if ($request->getUri()->getScheme() === 'http') {
+                return \GuzzleHttp\Promise\Create::rejectionFor(new \GuzzleHttp\Exception\ConnectException('Connection timed out', $request));
+            }
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(200, ['Content-Type' => 'text/html'], '<html></html>'));
+        };
+
+        $probe  = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+        $result = $probe->run(new \SatelliteWP\Manager\Domain\SiteContext('site-1', 'https://example.com/', 'https://example.com/', 'example.com', 'example.com'));
+
+        $this->assertNotSame('error', $result->status);
+        $this->assertSame([], $result->errors);
+        $this->assertNull($result->data['redirects']['forces_https']);
+        $this->assertStringContainsString('Connection timed out', $result->data['redirects']['error']);
+        $this->assertSame(200, $result->data['status_code']);
+    }
+
+    public function testAFailedMainRequestIsAProbeError(): void
+    {
+        $handler = static fn (\Psr\Http\Message\RequestInterface $request): \GuzzleHttp\Promise\PromiseInterface
+            => \GuzzleHttp\Promise\Create::rejectionFor(new \GuzzleHttp\Exception\ConnectException('Connection refused', $request));
+
+        $probe = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+
+        $this->assertSame('error', $probe->run(new \SatelliteWP\Manager\Domain\SiteContext('site-1', 'https://example.com/', 'https://example.com/', 'example.com', 'example.com'))->status);
+    }
+
+    public function testSensitiveFilesAreUnknownWhenARequestFailedAndNothingWasFound(): void
+    {
+        $this->assertNull(HttpProbe::sensitiveFilesVerdict([], ['.env']));
+        $this->assertSame(['.env'], HttpProbe::sensitiveFilesVerdict(['.env'], ['backup.sql']));
+        $this->assertSame([], HttpProbe::sensitiveFilesVerdict([], []));
+    }
+
+    public function testOnlyAServedAssetCountsForTheCacheCheck(): void
+    {
+        $this->assertTrue(HttpProbe::isServedAssetStatus(200));
+        $this->assertTrue(HttpProbe::isServedAssetStatus(304));
+        $this->assertFalse(HttpProbe::isServedAssetStatus(404));
+        $this->assertFalse(HttpProbe::isServedAssetStatus(301));
+    }
+
+    public function testExtractFirstAssetDecodesHtmlEntities(): void
+    {
+        $html = '<link rel="stylesheet" href="https://example.com/wp-includes/css/a.css?ver=6.8&#038;b=1&amp;c=2">';
+
+        $this->assertSame('https://example.com/wp-includes/css/a.css?ver=6.8&b=1&c=2', HttpProbe::extractFirstAsset($html, 'https://example.com/'));
+    }
+
     public function testCollectRefusesAHostThatDoesNotResolveToAPublicAddress(): void
     {
         $probe  = new HttpProbe(5, 10, 'test-agent', null, static fn (string $h): ?string => null);

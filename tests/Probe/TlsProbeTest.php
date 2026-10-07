@@ -61,6 +61,19 @@ final class TlsProbeTest extends TestCase
         $this->assertFalse(TlsProbe::hostnameCovered('example.com', ['*.example.com'], null));
     }
 
+    public function testOnlyACertificateVerificationFailureMeansABrokenChain(): void
+    {
+        $this->assertFalse(TlsProbe::chainVerdictFromHandshakeError('stream_socket_client(): SSL operations failed with code 1. OpenSSL Error messages: error:0A000086:SSL routines::certificate verify failed | Unknown error'));
+        $this->assertNull(TlsProbe::chainVerdictFromHandshakeError('Connection timed out'));
+        $this->assertNull(TlsProbe::chainVerdictFromHandshakeError('stream_socket_client(): Unable to connect to ssl://203.0.113.5:443 (Connection reset by peer)'));
+        $this->assertNull(TlsProbe::chainVerdictFromHandshakeError(null));
+    }
+
+    public function testAnUntestedChainIsNotABrokenOne(): void
+    {
+        $this->assertNull(TlsProbe::parseCertificate([], 'example.com', null)['chain_valid']);
+    }
+
     public function testSocketTargetBracketsIpv6(): void
     {
         $this->assertSame('ssl://93.184.216.34:443', TlsProbe::socketTarget('93.184.216.34'));

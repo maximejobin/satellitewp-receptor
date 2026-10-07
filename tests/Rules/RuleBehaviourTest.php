@@ -56,7 +56,7 @@ final class RuleBehaviourTest extends TestCase
         foreach ($en as $id => $strings) {
             $this->assertSame(array_keys($strings), array_keys($fr[$id]), "{$id}: same keys (incl. variants) in FR and EN");
             foreach (array_keys($strings) as $key) {
-                $this->assertMatchesRegularExpression('/^(title|title_success|title_failure|fail(_\w+)?|pass(_\w+)?)$/', $key, "{$id}.{$key}");
+                $this->assertMatchesRegularExpression('/^(title|title_success(_\w+)?|title_failure(_\w+)?|fail(_\w+)?|pass(_\w+)?)$/', $key, "{$id}.{$key}");
             }
             foreach (['title', 'title_success', 'title_failure', 'fail', 'pass'] as $required) {
                 $this->assertNotSame('', (string) ($strings[$required] ?? ''), "{$id} EN {$required}");
@@ -181,7 +181,7 @@ final class RuleBehaviourTest extends TestCase
     {
         $evaluate = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail]);
 
-        $pass = $evaluate(['found' => true, 'spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass']);
+        $pass = $evaluate(['found' => true, 'spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass', 'dkim_aligned' => true]);
         foreach (['D1', 'D2', 'D3'] as $id) {
             $this->assertSame(Status::Pass->value, $pass[$id]['status'], $id);
         }
@@ -196,6 +196,129 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $transient['D1']['status']);
         $this->assertSame(Status::Unknown->value, $transient['D2']['status']);
         $this->assertSame(Status::Pass->value, $transient['D3']['status']);
+    }
+
+    public function testD2CountsOnlyASignatureMadeForTheSendersDomain(): void
+    {
+        $d2 = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail + ['found' => true, 'spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass']])['D2'];
+
+        $unaligned = $d2(['dkim_domains' => ['sender.example.net'], 'dkim_aligned' => false]);
+        $this->assertSame(Status::Fail->value, $unaligned['status']);
+        $this->assertSame('unaligned', $unaligned['data']['variant']);
+        $this->assertStringContainsString('sender.example.net', (string) (new Translator('fr', self::LANG))->message($unaligned));
+        $this->assertSame('Emails signed for another domain (DKIM)', (new Translator('en', self::LANG))->title('D2', 'fail', 'unaligned'));
+
+        $this->assertSame(Status::Unknown->value, $d2(['dkim_domains' => [null], 'dkim_aligned' => null])['status'], 'signing domain unreadable');
+        $this->assertSame(Status::Unknown->value, $d2([])['status'], 'stored data without the signing domain');
+        $this->assertSame(Status::Fail->value, $d2(['dkim' => 'none'])['status'], 'no signature stays a failure');
+    }
+
+    public function testExposureRulesAreUnknownBehindAnAuthGate(): void
+    {
+        $exposure = ['xmlrpc_enabled' => false, 'rest_user_enumeration' => false, 'author_enumeration' => false, 'directory_listing' => false, 'sensitive_files' => []];
+        $gated    = $this->evaluate($this->payload(), ['http' => ['status_code' => 401, 'exposure' => $exposure]]);
+        $open     = $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'exposure' => $exposure]]);
+
+        foreach (['X1', 'X2', 'X3', 'X4', 'X5'] as $id) {
+            $this->assertSame(Status::Unknown->value, $gated[$id]['status'], "{$id} behind 401");
+            $this->assertSame(Status::Pass->value, $open[$id]['status'], "{$id} public");
+        }
+    }
+
+    public function testX4IsUnknownWhenASensitivePathCouldNotBeRequested(): void
+    {
+        $x4 = fn (?array $found, array $unverified): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'exposure' => [
+            'sensitive_files' => $found,
+            'evidence'        => ['sensitive_files' => ['checked' => ['.env', 'wp-content/debug.log'], 'found' => $found ?? [], 'unverified' => $unverified]],
+        ]]])['X4']['status'];
+
+        $this->assertSame(Status::Unknown->value, $x4([], ['.env']));
+        $this->assertSame(Status::Unknown->value, $x4(null, ['.env']));
+        $this->assertSame(Status::Fail->value, $x4(['wp-content/debug.log'], ['.env']), 'a found file is proof on its own');
+        $this->assertSame(Status::Pass->value, $x4([], []));
+    }
+
+    public function testDebugLogRulesAreUnknownWhenTheLogPathWasNotVerified(): void
+    {
+        $payload = $this->payload();
+        $payload['constants']['WP_DEBUG']     = true;
+        $payload['constants']['WP_DEBUG_LOG'] = true;
+        $eval = fn (array $http): array => $this->evaluate($payload, ['http' => $http]);
+        $evidence = static fn (?array $found, array $unverified): array => ['status_code' => 200, 'exposure' => [
+            'sensitive_files' => $found,
+            'evidence'        => ['sensitive_files' => ['checked' => ['.env', 'wp-content/debug.log'], 'found' => $found ?? [], 'unverified' => $unverified]],
+        ]];
+
+        $logFailed = $eval($evidence(null, ['wp-content/debug.log']));
+        $this->assertSame(Status::Unknown->value, $logFailed['K1']['status']);
+        $this->assertSame(Status::Unknown->value, $logFailed['K3']['status']);
+
+        $otherFailed = $eval($evidence(null, ['.env']));
+        $this->assertSame(Status::Pass->value, $otherFailed['K1']['status'], 'debug.log itself answered');
+        $this->assertSame('private_log', $otherFailed['K1']['data']['variant']);
+        $this->assertSame(Status::Pass->value, $otherFailed['K3']['status']);
+
+        $gated = $eval(['status_code' => 401, 'exposure' => ['sensitive_files' => []]]);
+        $this->assertSame(Status::Unknown->value, $gated['K1']['status']);
+        $this->assertSame(Status::Unknown->value, $gated['K3']['status']);
+
+        $this->assertSame(Status::Fail->value, $eval($evidence(['wp-content/debug.log'], []))['K1']['status']);
+    }
+
+    public function testSecurityHeadersWithAnEmptyValueCountAsMissing(): void
+    {
+        $headers = ['strict-transport-security' => ' ', 'x-content-type-options' => '', 'x-frame-options' => '', 'content-security-policy' => '', 'referrer-policy' => '', 'permissions-policy' => "\t"];
+        $empty   = $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $headers]]);
+        foreach (['A8', 'B7a', 'B7b', 'B7c', 'B7d', 'B7e'] as $id) {
+            $this->assertSame(Status::Fail->value, $empty[$id]['status'], $id);
+        }
+
+        $b7b = fn (array $h): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $h]])['B7b']['status'];
+        $this->assertSame(Status::Fail->value, $b7b(['content-security-policy' => "default-src 'self'"]), 'a CSP without frame-ancestors does not stop framing');
+        $this->assertSame(Status::Pass->value, $b7b(['content-security-policy' => "default-src 'self'; frame-ancestors 'self'"]));
+        $this->assertSame(Status::Pass->value, $b7b(['x-frame-options' => 'SAMEORIGIN']));
+    }
+
+    public function testB6IsUnknownWhenTheAssetWasNotActuallyServed(): void
+    {
+        $b6 = fn (array $asset): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'asset' => $asset]])['B6']['status'];
+
+        $this->assertSame(Status::Unknown->value, $b6(['checked' => false, 'url' => 'https://example.com/a.css', 'status' => 404, 'error' => 'HTTP 404']));
+        $this->assertSame(Status::Unknown->value, $b6(['checked' => true, 'url' => 'https://example.com/a.css', 'status' => 404, 'max_age' => 0]));
+        $this->assertSame(Status::Unknown->value, $b6(['checked' => true, 'url' => 'https://example.com/a.css?ver=1&#038;b=2', 'max_age' => 0]), 'undecoded entity in stored data');
+        $this->assertSame(Status::NotApplicable->value, $b6(['checked' => false, 'reason' => 'no first-party CSS/JS asset found']));
+        $this->assertSame(Status::Pass->value, $b6(['checked' => true, 'url' => 'https://example.com/a.css', 'status' => 200, 'max_age' => 31536000]));
+        $this->assertSame(Status::Fail->value, $b6(['checked' => true, 'url' => 'https://example.com/a.css', 'status' => 200, 'max_age' => 0]));
+    }
+
+    public function testA10TellsAnErrorPageFromPlainHttpTraffic(): void
+    {
+        $a10 = fn (array $redirects): array => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'redirects' => $redirects]])['A10'];
+
+        $error = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 500]], 'forces_https' => false]);
+        $this->assertSame(Status::Fail->value, $error['status']);
+        $this->assertSame('http_error', $error['data']['variant']);
+        $this->assertStringNotContainsString('chiffrement', (string) (new Translator('fr', self::LANG))->message($error));
+        $this->assertSame('Adresse en HTTP en erreur', (new Translator('fr', self::LANG))->title('A10', 'fail', 'http_error'));
+
+        $plain = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 200]], 'forces_https' => false]);
+        $this->assertSame(Status::Fail->value, $plain['status']);
+        $this->assertArrayNotHasKey('variant', $plain['data'] ?? []);
+
+        $this->assertSame(Status::Unknown->value, $a10(['chain' => [], 'forces_https' => null, 'error' => 'Redirect chain: timeout'])['status']);
+        $this->assertSame(Status::Pass->value, $a10(['chain' => [['url' => 'http://example.com/', 'status' => 301], ['url' => 'https://example.com/', 'status' => 200]], 'forces_https' => true])['status']);
+    }
+
+    public function testK4PassesWhenFileModsAreDisallowed(): void
+    {
+        $payload = $this->payload();
+        $payload['constants']['DISALLOW_FILE_EDIT'] = 'N/A';
+        $this->assertSame(Status::Fail->value, $this->evaluate($payload)['K4']['status']);
+
+        $payload['constants']['DISALLOW_FILE_MODS'] = true;
+        $k4 = $this->evaluate($payload)['K4'];
+        $this->assertSame(Status::Pass->value, $k4['status']);
+        $this->assertSame('file_mods', $k4['data']['variant']);
     }
 
     public function testMailAuthRulesAreUnknownWithoutATestEmail(): void

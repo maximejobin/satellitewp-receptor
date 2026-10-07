@@ -74,9 +74,10 @@ final class Translator
 
     /**
      * A rule's title — the verdict-specific 'title_success'/'title_failure'
-     * for a pass/fail status, else the neutral 'title'.
+     * for a pass/fail status (or its "_<variant>" form when the finding's
+     * variant has one), else the neutral 'title'.
      */
-    public function title(string $ruleId, ?string $status = null): string
+    public function title(string $ruleId, ?string $status = null, ?string $variant = null): string
     {
         $rule = (array) ($this->catalog['rules'][$ruleId] ?? []);
         $key  = match ($status) {
@@ -84,8 +85,14 @@ final class Translator
             'fail'  => 'title_failure',
             default => null,
         };
-        if ($key !== null && is_string($rule[$key] ?? null) && $rule[$key] !== '') {
-            return $rule[$key];
+        $keys = $key === null ? [] : [$key];
+        if ($key !== null && $variant !== null && $variant !== '') {
+            array_unshift($keys, "{$key}_{$variant}");
+        }
+        foreach ($keys as $candidate) {
+            if (is_string($rule[$candidate] ?? null) && $rule[$candidate] !== '') {
+                return $rule[$candidate];
+            }
         }
 
         return (string) ($rule['title'] ?? $ruleId);

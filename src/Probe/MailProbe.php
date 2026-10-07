@@ -49,7 +49,7 @@ final class MailProbe extends AbstractProbe
 
     public function version(): string
     {
-        return '1.0';
+        return '1.1';
     }
 
     /** The reference the plugin puts in its test email's subject and body. */
@@ -167,19 +167,48 @@ final class MailProbe extends AbstractProbe
      */
     private static function describe(array $message): array
     {
-        $received = self::parseInternalDate($message['internal_date']);
-        $from     = self::headerValues($message['headers'], 'from')[0] ?? '';
+        $received   = self::parseInternalDate($message['internal_date']);
+        $from       = self::headerValues($message['headers'], 'from')[0] ?? '';
+        $fromDomain = preg_match('/@([A-Za-z0-9.-]+)>?\s*$/', trim($from), $m) === 1 ? strtolower($m[1]) : null;
+        $results    = self::authResults(self::headerValues($message['headers'], 'authentication-results'), 'mx.google.com');
 
         return [
-            'received_at' => $received?->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
-            'from_domain' => preg_match('/@([A-Za-z0-9.-]+)>?\s*$/', trim($from), $m) === 1 ? strtolower($m[1]) : null,
-        ] + self::authResults(self::headerValues($message['headers'], 'authentication-results'), 'mx.google.com');
+            'received_at'  => $received?->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
+            'from_domain'  => $fromDomain,
+            'spf'          => $results['spf'],
+            'dkim'         => $results['dkim'],
+            'dmarc'        => $results['dmarc'],
+            'dkim_domains' => $results['dkim_domains'],
+            'dkim_aligned' => $results['dkim'] === 'pass' ? self::dkimAligned($results['dkim_domains'], $fromDomain) : null,
+        ];
     }
 
-    /** @return array{received_at: null, from_domain: null, spf: null, dkim: null, dmarc: null} */
+    /** @return array{received_at: null, from_domain: null, spf: null, dkim: null, dmarc: null, dkim_domains: list<?string>, dkim_aligned: null} */
     private static function emptyVerdicts(): array
     {
-        return ['received_at' => null, 'from_domain' => null, 'spf' => null, 'dkim' => null, 'dmarc' => null];
+        return ['received_at' => null, 'from_domain' => null, 'spf' => null, 'dkim' => null, 'dmarc' => null, 'dkim_domains' => [], 'dkim_aligned' => null];
+    }
+
+    /**
+     * Pure. DMARC relaxed alignment: a passing signature counts for the From
+     * domain when both share the organisational domain. null when the From
+     * domain or a passing signature's domain could not be read.
+     *
+     * @param list<?string> $passingDomains signing domain of each passing DKIM signature (null = unreadable)
+     */
+    public static function dkimAligned(array $passingDomains, ?string $fromDomain): ?bool
+    {
+        if ($fromDomain === null || $fromDomain === '' || $passingDomains === []) {
+            return null;
+        }
+        $org = SiteContext::registrableDomain($fromDomain);
+        foreach ($passingDomains as $domain) {
+            if ($domain !== null && SiteContext::registrableDomain($domain) === $org) {
+                return true;
+            }
+        }
+
+        return in_array(null, $passingDomains, true) ? null : false;
     }
 
     /**
@@ -188,12 +217,16 @@ final class MailProbe extends AbstractProbe
      * only the first one whose authserv-id is the receiver's counts; without it
      * every verdict stays null (unknown).
      *
+     * dkim_domains lists the signing domain of each passing DKIM signature:
+     * header.d, else the domain of header.i (always d= or a subdomain of it),
+     * null when neither is recorded.
+     *
      * @param list<string> $headers every Authentication-Results value, top of the message first
-     * @return array{spf: ?string, dkim: ?string, dmarc: ?string}
+     * @return array{spf: ?string, dkim: ?string, dmarc: ?string, dkim_domains: list<?string>}
      */
     public static function authResults(array $headers, string $authservId): array
     {
-        $out = ['spf' => null, 'dkim' => null, 'dmarc' => null];
+        $out = ['spf' => null, 'dkim' => null, 'dmarc' => null, 'dkim_domains' => []];
         foreach ($headers as $value) {
             // Comments carry free text ("(google.com: domain of … designates …)"); drop them, innermost first.
             do {
@@ -212,6 +245,9 @@ final class MailProbe extends AbstractProbe
                 }
                 $method  = strtolower($m[1]);
                 $verdict = strtolower($m[2]);
+                if ($method === 'dkim' && $verdict === 'pass') {
+                    $out['dkim_domains'][] = self::signingDomain($part);
+                }
                 // A message can carry several DKIM signatures: one passing is enough.
                 if ($out[$method] === null || ($method === 'dkim' && $verdict === 'pass')) {
                     $out[$method] = $verdict;
@@ -227,6 +263,19 @@ final class MailProbe extends AbstractProbe
         }
 
         return $out;
+    }
+
+    /** The d= domain of one "dkim=…" result, or the domain part of its i= identity. */
+    private static function signingDomain(string $result): ?string
+    {
+        if (preg_match('/\bheader\.d\s*=\s*"?([A-Za-z0-9.-]+)/i', $result, $m) === 1) {
+            return strtolower(rtrim($m[1], '.'));
+        }
+        if (preg_match('/\bheader\.i\s*=\s*"?[^@\s;"]*@([A-Za-z0-9.-]+)/i', $result, $m) === 1) {
+            return strtolower(rtrim($m[1], '.'));
+        }
+
+        return null;
     }
 
     /**

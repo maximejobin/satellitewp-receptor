@@ -77,7 +77,7 @@ final class HttpProbe extends AbstractProbe
 
     public function version(): string
     {
-        return '1.0';
+        return '1.1';
     }
 
     protected function collect(SiteContext $site): array
@@ -118,8 +118,10 @@ final class HttpProbe extends AbstractProbe
 
         // 1. The http:// chain answers only "does the site force HTTPS" (A10).
         // Its landing URL is never reused: a plain-HTTP vhost can be broken
-        // independently of the site visitors actually reach.
-        $redirects = $this->followRedirects($client, 'http://' . $site->host . '/', $errors);
+        // independently of the site visitors actually reach, so its failure
+        // stays in redirects.error and never fails the whole probe.
+        $chainErrors = [];
+        $redirects   = $this->followRedirects($client, 'http://' . $site->host . '/', $chainErrors);
 
         // 2. Everything else targets the public homepage (home_url), followed
         // through its own redirects.
@@ -157,9 +159,10 @@ final class HttpProbe extends AbstractProbe
             ],
         ] + $main;
 
+        // Every homepage-based field depends on the main request alone.
         return [
             'data'   => $data,
-            'status' => $errors !== []
+            'status' => $main === []
                 ? ProbeResult::STATUS_ERROR
                 : $this->assess($data),
             'errors' => $errors,
@@ -205,7 +208,7 @@ final class HttpProbe extends AbstractProbe
             } catch (GuzzleException $e) {
                 $errors[] = "Redirect chain: {$e->getMessage()}";
 
-                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
+                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false, 'error' => end($errors)];
             }
 
             $status  = $response->getStatusCode();
@@ -231,7 +234,7 @@ final class HttpProbe extends AbstractProbe
             if (!$this->isSafeUrl($next)) {
                 $errors[] = "Redirect chain: {$next} does not resolve to a public address — refusing to follow it (SSRF guard)";
 
-                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false];
+                return ['chain' => $chain, 'forces_https' => null, 'loop_detected' => false, 'error' => end($errors)];
             }
             $url = $next;
         }
@@ -505,12 +508,19 @@ final class HttpProbe extends AbstractProbe
             return ['checked' => false, 'url' => $assetUrl, 'error' => $e->getMessage()];
         }
 
+        // An error page's headers say nothing about how the asset is cached.
+        $status = $response->getStatusCode();
+        if (!self::isServedAssetStatus($status)) {
+            return ['checked' => false, 'url' => $assetUrl, 'status' => $status, 'error' => "HTTP {$status}"];
+        }
+
         $encoding     = strtolower($response->getHeaderLine('Content-Encoding'));
         $cacheControl = $response->getHeaderLine('Cache-Control');
 
         return [
             'checked'          => true,
             'url'              => $assetUrl,
+            'status'           => $status,
             'content_encoding' => $encoding !== '' ? $encoding : null,
             'gzip'             => $encoding === 'gzip',
             'brotli'           => $encoding === 'br',
@@ -519,8 +529,15 @@ final class HttpProbe extends AbstractProbe
         ];
     }
 
+    /** Pure: the asset itself was served (2xx, or 304 Not Modified). */
+    public static function isServedAssetStatus(int $status): bool
+    {
+        return ($status >= 200 && $status < 300) || $status === 304;
+    }
+
     /**
      * First same-origin stylesheet or script URL in the HTML — pure, testable.
+     * Attribute values are HTML-decoded (WordPress writes "&" as "&#038;").
      */
     public static function extractFirstAsset(string $html, string $pageUrl): ?string
     {
@@ -544,7 +561,7 @@ final class HttpProbe extends AbstractProbe
         }
 
         foreach ($candidates as $candidate) {
-            $resolved = self::resolveUrl($pageUrl, $candidate);
+            $resolved = self::resolveUrl($pageUrl, html_entity_decode($candidate, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
             if (parse_url($resolved, PHP_URL_HOST) === $host) {
                 return strtok($resolved, '#'); // drop any fragment
             }
@@ -699,8 +716,9 @@ final class HttpProbe extends AbstractProbe
         $directoryListing  = null;
         $sensitiveFiles    = null;
         $uploadsEvidence   = null;
-        $sensitiveEvidence = ['checked' => array_keys(self::SENSITIVE_PATHS), 'found' => [], 'unverified' => []];
+        $sensitiveEvidence = null;
         if (!$isSoft404) {
+            $sensitiveEvidence = ['checked' => array_keys(self::SENSITIVE_PATHS), 'found' => [], 'unverified' => []];
             $uploadsUrl = $origin . '/wp-content/uploads/';
             $uploads    = $this->probeExposure($client, $uploadsUrl);
             $directoryListing = $uploads === null ? null : self::isDirectoryListing($uploads['status'], $uploads['body']);
@@ -718,6 +736,7 @@ final class HttpProbe extends AbstractProbe
                 }
             }
             $sensitiveEvidence['found'] = $sensitiveFiles;
+            $sensitiveFiles             = self::sensitiveFilesVerdict($sensitiveFiles, $sensitiveEvidence['unverified']);
         }
 
         $traceUrl = $finalUrl;
@@ -829,6 +848,19 @@ final class HttpProbe extends AbstractProbe
             'content_type' => strtolower($response->getHeaderLine('Content-Type')),
             'head'         => substr((string) $response->getBody(), 0, self::SENSITIVE_HEAD_BYTES),
         ];
+    }
+
+    /**
+     * Pure. A found file is proof on its own; "none found" holds only when
+     * every path answered — a request that failed proves nothing (null).
+     *
+     * @param list<string> $found
+     * @param list<string> $unverified
+     * @return list<string>|null
+     */
+    public static function sensitiveFilesVerdict(array $found, array $unverified): ?array
+    {
+        return $found === [] && $unverified !== [] ? null : $found;
     }
 
     /**

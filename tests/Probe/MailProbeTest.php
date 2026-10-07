@@ -32,7 +32,7 @@ final class MailProbeTest extends TestCase
     public function testAuthResultsReadsAllThreeVerdictsAndIgnoresComments(): void
     {
         self::assertSame(
-            ['spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass'],
+            ['spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass', 'dkim_domains' => ['example.com']],
             MailProbe::authResults([self::RESULTS], 'mx.google.com')
         );
     }
@@ -42,7 +42,7 @@ final class MailProbeTest extends TestCase
         $header = 'mx.google.com; dkim=none; spf=softfail (google.com: domain of transitioning x@example.com does not designate 1.2.3.4) smtp.mailfrom=x@example.com; dmarc=fail (p=REJECT) header.from=example.com';
 
         self::assertSame(
-            ['spf' => 'softfail', 'dkim' => 'none', 'dmarc' => 'fail'],
+            ['spf' => 'softfail', 'dkim' => 'none', 'dmarc' => 'fail', 'dkim_domains' => []],
             MailProbe::authResults([$header], 'mx.google.com')
         );
     }
@@ -51,9 +51,9 @@ final class MailProbeTest extends TestCase
     {
         $forged = 'relay.example.net; spf=pass; dkim=pass; dmarc=pass';
 
-        self::assertSame(['spf' => null, 'dkim' => null, 'dmarc' => null], MailProbe::authResults([$forged], 'mx.google.com'));
+        self::assertSame(['spf' => null, 'dkim' => null, 'dmarc' => null, 'dkim_domains' => []], MailProbe::authResults([$forged], 'mx.google.com'));
         self::assertSame(
-            ['spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass'],
+            ['spf' => 'pass', 'dkim' => 'pass', 'dmarc' => 'pass', 'dkim_domains' => ['example.com']],
             MailProbe::authResults([$forged, self::RESULTS], 'mx.google.com')
         );
     }
@@ -68,13 +68,34 @@ final class MailProbeTest extends TestCase
     public function testMethodsTheReceiverDidNotRecordAreNoneExceptSpf(): void
     {
         self::assertSame(
-            ['spf' => 'pass', 'dkim' => 'none', 'dmarc' => 'none'],
+            ['spf' => 'pass', 'dkim' => 'none', 'dmarc' => 'none', 'dkim_domains' => []],
             MailProbe::authResults(['mx.google.com; spf=pass'], 'mx.google.com')
         );
         self::assertSame(
-            ['spf' => null, 'dkim' => 'pass', 'dmarc' => 'none'],
+            ['spf' => null, 'dkim' => 'pass', 'dmarc' => 'none', 'dkim_domains' => [null]],
             MailProbe::authResults(['mx.google.com; dkim=pass'], 'mx.google.com')
         );
+    }
+
+    public function testDkimDomainsComeFromHeaderDElseTheIdentitysDomain(): void
+    {
+        $header = 'mx.google.com; dkim=pass header.d=Mail.Example.com header.s=s1; dkim=pass header.i=@sender.example.net; dkim=fail header.i=@example.org; spf=pass';
+
+        self::assertSame(['mail.example.com', 'sender.example.net'], MailProbe::authResults([$header], 'mx.google.com')['dkim_domains']);
+    }
+
+    public function testDkimAlignmentIsRelaxedLikeDmarc(): void
+    {
+        self::assertTrue(MailProbe::dkimAligned(['example.com'], 'example.com'));
+        self::assertTrue(MailProbe::dkimAligned(['mail.example.com'], 'example.com'), 'subdomain of the From domain');
+        self::assertTrue(MailProbe::dkimAligned(['example.com'], 'news.example.com'), 'same organisational domain');
+        self::assertTrue(MailProbe::dkimAligned(['example.co.uk'], 'shop.example.co.uk'), 'two-label public suffix');
+        self::assertTrue(MailProbe::dkimAligned(['sender.example.net', 'example.com'], 'example.com'), 'one aligned signature is enough');
+        self::assertFalse(MailProbe::dkimAligned(['sender.example.net'], 'example.com'), "a provider's own signature");
+        self::assertFalse(MailProbe::dkimAligned(['other.co.uk'], 'example.co.uk'));
+        self::assertNull(MailProbe::dkimAligned([null], 'example.com'), 'signing domain unreadable');
+        self::assertNull(MailProbe::dkimAligned(['sender.example.net', null], 'example.com'));
+        self::assertNull(MailProbe::dkimAligned(['example.com'], null), 'From domain unreadable');
     }
 
     public function testHeaderValuesUnfoldsAndKeepsMessageOrder(): void
@@ -131,6 +152,8 @@ final class MailProbeTest extends TestCase
             'spf'         => 'pass',
             'dkim'        => 'pass',
             'dmarc'       => 'pass',
+            'dkim_domains' => ['example.com'],
+            'dkim_aligned' => true,
         ], $result->data);
     }
 

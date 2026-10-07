@@ -20,6 +20,7 @@ use SatelliteWP\Manager\Rules\CheckResult;
 use SatelliteWP\Manager\Rules\Context;
 use SatelliteWP\Manager\Rules\Rule;
 use SatelliteWP\Manager\Rules\Severity;
+use SatelliteWP\Manager\Rules\Status;
 use SatelliteWP\Manager\Rules\VulnerabilityMerge;
 
 // Behind HTTP Basic Auth the probe sees the auth gate, not the site: anything
@@ -28,6 +29,55 @@ use SatelliteWP\Manager\Rules\VulnerabilityMerge;
 $homepageReadable = static fn (Context $c): bool => $c->probeRan('http')
     && $c->get('probe.http.auth.required') !== true
     && $c->number('probe.http.status_code') !== 401.0;
+
+// An empty header value enforces nothing: browsers ignore it.
+$headerPresent = static function (Context $c, string $name): bool {
+    $value = $c->get("probe.http.security_headers.{$name}");
+
+    return is_string($value) && trim($value) !== '';
+};
+
+// Exposure checks run from the outside: behind an auth gate every path reads
+// clean, so nothing they report is trusted then.
+$exposureFlag = static fn (Context $c, string $field): ?bool => $homepageReadable($c)
+    ? $c->bool("probe.http.exposure.{$field}")
+    : null;
+
+// Sensitive files found, or null when that can't be proven clean: auth gate,
+// skipped check (soft-404), or a path whose request failed.
+$sensitiveFiles = static function (Context $c) use ($homepageReadable): ?array {
+    $found = $c->get('probe.http.exposure.sensitive_files');
+    if (!$homepageReadable($c) || !is_array($found)) {
+        return null;
+    }
+
+    return $found === [] && $c->list('probe.http.exposure.evidence.sensitive_files.unverified') !== [] ? null : array_values($found);
+};
+
+// Whether the default-path debug log is publicly downloadable; null = not proven either way.
+$debugLogExposed = static function (Context $c) use ($homepageReadable): ?bool {
+    $log   = 'wp-content/debug.log';
+    $found = $c->get('probe.http.exposure.sensitive_files');
+    if (!$homepageReadable($c)) {
+        return null;
+    }
+    if (is_array($found) && in_array($log, $found, true)) {
+        return true;
+    }
+    $evidence   = $c->list('probe.http.exposure.evidence.sensitive_files');
+    $unverified = (array) ($evidence['unverified'] ?? []);
+    if (in_array($log, $unverified, true)) {
+        return null;
+    }
+    if (is_array($found)) {
+        return false;
+    }
+
+    // The list is null when another path's request failed; this one still answered.
+    return $unverified !== [] && in_array($log, (array) ($evidence['checked'] ?? []), true)
+        ? in_array($log, (array) ($evidence['found'] ?? []), true)
+        : null;
+};
 
 // A DNS field is null when its lookup failed (unknown), [] when it has no record.
 $dnsKnown = static fn (Context $c, string $field): bool => $c->probeRan('dns')
@@ -133,12 +183,29 @@ return [
     [
         'id' => 'A8', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.strict-transport-security') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'strict-transport-security') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
+        // Reads the http:// chain only; a chain that failed or looped is unknown
+        // (forces_https null). Ending on an http:// error page is not plain-text traffic.
         'id' => 'A10', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.redirects.forces_https')),
+        'check' => static function (Context $c) {
+            if (!$c->probeRan('http') || $c->string('probe.http.redirects.error') !== null) {
+                return Check::unknown();
+            }
+            $forces = $c->bool('probe.http.redirects.forces_https');
+            if ($forces !== false) {
+                return Check::isTrue($forces);
+            }
+            $chain = $c->list('probe.http.redirects.chain');
+            $last  = end($chain);
+            $code  = is_array($last) && is_numeric($last['status'] ?? null) ? (int) $last['status'] : null;
+
+            return $code !== null && $code >= 400
+                ? Check::fail($code, ['variant' => 'http_error'])
+                : Check::fail(false);
+        },
     ],
 
     // ===================================================================
@@ -168,10 +235,20 @@ return [
     ],
     [
         'id' => 'B6', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 86400,
-        'check' => static function (Context $c, Rule $rule) {
+        'check' => static function (Context $c, Rule $rule) use ($homepageReadable) {
             $asset = $c->get('probe.http.asset');
-            if (!is_array($asset) || ($asset['checked'] ?? false) !== true) {
-                return Check::na();
+            if (!$homepageReadable($c) || !is_array($asset)) {
+                return Check::unknown();
+            }
+            if (($asset['checked'] ?? false) !== true) {
+                // Not applicable only when the page links no first-party asset; a failed fetch is unknown.
+                return isset($asset['url']) || isset($asset['error']) ? Check::unknown() : Check::na();
+            }
+            // Only a served asset tells its cache policy; an undecoded HTML entity in the URL means another file was asked for.
+            $status = $asset['status'] ?? null;
+            if (($status !== null && !(($status >= 200 && $status < 300) || $status === 304))
+                || preg_match('/&(?:#\d+|#x[0-9a-f]+|amp);/i', (string) ($asset['url'] ?? '')) === 1) {
+                return Check::unknown();
             }
             $maxAge = (int) ($asset['max_age'] ?? 0);
             $data   = [
@@ -187,37 +264,39 @@ return [
     [
         'id' => 'B7a', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.x-content-type-options') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'x-content-type-options') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
+        // A CSP prevents framing only through its frame-ancestors directive.
         'id' => 'B7b', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) use ($homepageReadable) {
+        'check' => static function (Context $c) use ($homepageReadable, $headerPresent) {
             if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
-            $xfo = $c->get('probe.http.security_headers.x-frame-options');
-            $csp = $c->get('probe.http.security_headers.content-security-policy');
+            $csp = (string) $c->string('probe.http.security_headers.content-security-policy');
 
-            return ($xfo ?? $csp) !== null ? Check::pass() : Check::fail();
+            return $headerPresent($c, 'x-frame-options') || preg_match('/(?:^|;)\s*frame-ancestors\s/i', $csp) === 1
+                ? Check::pass()
+                : Check::fail();
         },
     ],
     [
         'id' => 'B7c', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.content-security-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'content-security-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7d', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.referrer-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'referrer-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         'id' => 'B7e', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
-            ? ($c->get('probe.http.security_headers.permissions-policy') !== null ? Check::pass() : Check::fail())
+            ? ($headerPresent($c, 'permissions-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
@@ -346,7 +425,23 @@ return [
     ],
     [
         'id' => 'D2', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => $mailAuth($c, 'dkim'),
+        // A valid signature proves the sender only when it is made for the From
+        // domain (DMARC relaxed alignment); a provider's own signature does not.
+        'check' => static function (Context $c) use ($mailAuth) {
+            $result = $mailAuth($c, 'dkim');
+            if ($result->status !== Status::Pass) {
+                return $result;
+            }
+
+            return match ($c->bool('probe.mail.dkim_aligned')) {
+                true    => $result,
+                false   => Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => implode(', ', array_filter(
+                    array_map('strval', $c->list('probe.mail.dkim_domains')),
+                    static fn (string $d): bool => $d !== ''
+                ))]),
+                default => Check::unknown(),
+            };
+        },
     ],
     [
         'id' => 'D3', 'category' => Category::EMAIL, 'source' => 'EXT', 'severity' => Severity::High,
@@ -709,8 +804,9 @@ return [
         },
     ],
     [
-        // PHP caps an upload at the smaller of the two limits, so they should
-        // match and clear a working size. post_max_size 0 means unlimited.
+        // post_max_size bounds the whole request, so it must be at least
+        // upload_max_filesize (larger is PHP's own advice); the smaller of the
+        // two must clear a working size. post_max_size 0 means unlimited.
         'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
         'check' => static function (Context $c, Rule $rule) {
             $postRaw   = $c->string('payload.php.post_max_size');
@@ -730,7 +826,7 @@ return [
             }
             $data = ['effective_mb' => (int) round($effective / 1048576)];
 
-            if ($post !== INF && $post != $upload) {
+            if ($post < $upload) {
                 return Check::fail($observed, $data + ['variant' => 'mismatch']);
             }
 
@@ -889,7 +985,7 @@ return [
     // ===================================================================
     [
         'id' => 'K1', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($debugLogExposed) {
             $debug = $c->constant('WP_DEBUG');
             if ($debug === null) {
                 return Check::unknown();
@@ -898,11 +994,15 @@ return [
                 return Check::pass(false);
             }
             // Debug on is acceptable only when it logs to a file confirmed private.
-            $sensitiveFiles = $c->get('probe.http.exposure.sensitive_files');
-            $logsToFile     = $c->get('payload.constants.WP_DEBUG_LOG') === true;
-            $logIsPrivate   = is_array($sensitiveFiles) && !in_array('wp-content/debug.log', $sensitiveFiles, true);
+            if ($c->get('payload.constants.WP_DEBUG_LOG') !== true) {
+                return Check::fail(true);
+            }
 
-            return ($logsToFile && $logIsPrivate) ? Check::pass(true, ['variant' => 'private_log']) : Check::fail(true);
+            return match ($debugLogExposed($c)) {
+                false   => Check::pass(true, ['variant' => 'private_log']),
+                true    => Check::fail(true),
+                default => Check::unknown(),
+            };
         },
     ],
     [
@@ -919,7 +1019,7 @@ return [
     [
         // Informational: when the default-path log is actually reachable, X4 carries the red.
         'id' => 'K3', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Info,
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c) use ($debugLogExposed) {
             $debug = $c->constant('WP_DEBUG');
             if ($debug === null) {
                 return Check::unknown();
@@ -931,17 +1031,19 @@ return [
             if ($debugLog !== true) {
                 return Check::pass('custom');
             }
-            $found = $c->get('probe.http.exposure.sensitive_files');
-            if (!is_array($found)) {
-                return Check::unknown();
-            }
-
-            return in_array('wp-content/debug.log', $found, true) ? Check::fail('default') : Check::pass('default');
+            return match ($debugLogExposed($c)) {
+                true    => Check::fail('default'),
+                false   => Check::pass('default'),
+                default => Check::unknown(),
+            };
         },
     ],
     [
+        // DISALLOW_FILE_MODS makes core disable the file editor as well.
         'id' => 'K4', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
+        'check' => static fn (Context $c) => $c->constant('DISALLOW_FILE_MODS') === true
+            ? Check::pass(true, ['variant' => 'file_mods'])
+            : Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
     ],
     [
         // A site-wide HTTPS redirect already protects the admin login.
@@ -1075,30 +1177,29 @@ return [
     // Every check is a request any anonymous visitor could make.
     [
         'id' => 'X1', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.xmlrpc_enabled')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'xmlrpc_enabled')),
     ],
     [
         'id' => 'X2', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.rest_user_enumeration')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'rest_user_enumeration')),
     ],
     [
         'id' => 'X3', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.author_enumeration')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'author_enumeration')),
     ],
     [
         'id' => 'X4', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Critical,
-        'check' => static function (Context $c) {
-            // null = not checked (soft-404 catch-all or auth gate): never a clean pass.
-            $found = $c->get('probe.http.exposure.sensitive_files');
-            if (!is_array($found)) {
+        'check' => static function (Context $c) use ($sensitiveFiles) {
+            $found = $sensitiveFiles($c);
+            if ($found === null) {
                 return Check::unknown();
             }
 
-            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', $found));
+            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', array_map('strval', $found)));
         },
     ],
     [
         'id' => 'X5', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isFalse($c->bool('probe.http.exposure.directory_listing')),
+        'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'directory_listing')),
     ],
 ];

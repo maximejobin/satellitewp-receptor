@@ -32,7 +32,7 @@ final class TlsProbe extends AbstractProbe
 
     public function version(): string
     {
-        return '1.1';
+        return '1.2';
     }
 
     protected function collect(SiteContext $site): array
@@ -56,7 +56,7 @@ final class TlsProbe extends AbstractProbe
 
         if ($cert === null) {
             [$cert, , $handshakeError2] = $this->fetchCertificate($host, $ip, verify: false);
-            $chainValid = false;
+            $chainValid = self::chainVerdictFromHandshakeError($handshakeError);
 
             if ($cert === null) {
                 return [
@@ -67,7 +67,7 @@ final class TlsProbe extends AbstractProbe
         }
 
         $parsed = openssl_x509_parse($cert);
-        $data   = self::parseCertificate(is_array($parsed) ? $parsed : [], $host, (bool) $chainValid);
+        $data   = self::parseCertificate(is_array($parsed) ? $parsed : [], $host, $chainValid);
 
         $data['protocols'] = $this->probeProtocols($host, $ip);
 
@@ -83,7 +83,7 @@ final class TlsProbe extends AbstractProbe
      * @param array<string, mixed> $parsed
      * @return array<string, mixed>
      */
-    public static function parseCertificate(array $parsed, string $host, bool $chainValid): array
+    public static function parseCertificate(array $parsed, string $host, ?bool $chainValid): array
     {
         $subject = (array) ($parsed['subject'] ?? []);
         $issuer  = (array) ($parsed['issuer'] ?? []);
@@ -141,7 +141,16 @@ final class TlsProbe extends AbstractProbe
     }
 
     /**
-     * @return array{0: \OpenSSLCertificate|null, 1: bool, 2: string|null}
+     * Pure. The verified handshake failing proves a broken chain only when
+     * OpenSSL rejected the certificate; a timeout or reset proves nothing (null).
+     */
+    public static function chainVerdictFromHandshakeError(?string $error): ?bool
+    {
+        return $error !== null && preg_match('/certificate verify failed/i', $error) === 1 ? false : null;
+    }
+
+    /**
+     * @return array{0: \OpenSSLCertificate|null, 1: bool, 2: string|null} error carries OpenSSL's own messages
      */
     private function fetchCertificate(string $host, string $ip, bool $verify): array
     {
@@ -154,17 +163,30 @@ final class TlsProbe extends AbstractProbe
             'peer_name'         => $host,
         ]]);
 
-        $client = @stream_socket_client(
-            self::socketTarget($ip),
-            $errno,
-            $errstr,
-            $this->connectTimeout,
-            STREAM_CLIENT_CONNECT,
-            $context
-        );
+        // OpenSSL's reason ("certificate verify failed") only reaches the warnings, not $errstr.
+        $warnings = [];
+        set_error_handler(static function (int $no, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+        try {
+            $client = stream_socket_client(
+                self::socketTarget($ip),
+                $errno,
+                $errstr,
+                $this->connectTimeout,
+                STREAM_CLIENT_CONNECT,
+                $context
+            );
+        } finally {
+            restore_error_handler();
+        }
 
         if ($client === false) {
-            return [null, false, $errstr !== '' ? $errstr : "Connection failed (errno {$errno})"];
+            $reason = $errstr !== '' ? $errstr : "Connection failed (errno {$errno})";
+
+            return [null, false, implode(' | ', array_merge($warnings, [$reason]))];
         }
 
         $params = stream_context_get_params($client);
