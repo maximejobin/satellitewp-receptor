@@ -16,6 +16,10 @@ final class ObservationsCsv
     public const int MAX_BYTES = 1_048_576;
     public const int MAX_ROWS  = 500;
 
+    // Bounds on what a single observation can push into the report document.
+    public const int MAX_TITLE       = 200;
+    public const int MAX_DESCRIPTION = 5000;
+
     private const array REQUIRED = ['section', 'title'];
     private const array COLUMNS  = ['section', 'color', 'title', 'description', 'include'];
 
@@ -86,16 +90,7 @@ final class ObservationsCsv
             $row     = array_combine($header, array_pad(array_map(static fn ($c): string => trim((string) $c), $cells), count($header), ''));
             $color   = strtolower($row['color'] ?? '') ?: Pastille::Blue->value;
             $include = strtolower($row['include'] ?? '');
-            $problems = [];
-            if (!in_array($row['section'], $sections, true)) {
-                $problems[] = "unknown section \"{$row['section']}\"";
-            }
-            if (!Pastille::isValid($color)) {
-                $problems[] = "unknown color \"{$color}\" (" . implode(', ', Pastille::values()) . ')';
-            }
-            if ($row['title'] === '') {
-                $problems[] = 'empty title';
-            }
+            $problems = self::problems($row['section'], $color, $row['title'], $row['description'] ?? '', $sections);
             if (!in_array($include, [...self::INCLUDE_TRUE, ...self::INCLUDE_FALSE], true)) {
                 $problems[] = "include \"{$row['include']}\" is neither 1 nor 0";
             }
@@ -119,6 +114,34 @@ final class ObservationsCsv
         }
 
         return $errors === [] ? ['items' => $items, 'errors' => []] : ['items' => [], 'errors' => $errors];
+    }
+
+    /**
+     * What is wrong with one observation — shared by the CSV import and the
+     * add/edit form so both accept exactly the same records.
+     *
+     * @param list<string> $sections
+     * @return list<string>
+     */
+    public static function problems(string $section, string $color, string $title, string $description, array $sections): array
+    {
+        $problems = [];
+        if (!in_array($section, $sections, true)) {
+            $problems[] = "unknown section \"{$section}\"";
+        }
+        if (!Pastille::isValid($color)) {
+            $problems[] = "unknown color \"{$color}\" (" . implode(', ', Pastille::values()) . ')';
+        }
+        if ($title === '') {
+            $problems[] = 'empty title';
+        } elseif (mb_strlen($title) > self::MAX_TITLE) {
+            $problems[] = 'title longer than ' . self::MAX_TITLE . ' characters';
+        }
+        if (mb_strlen($description) > self::MAX_DESCRIPTION) {
+            $problems[] = 'description longer than ' . self::MAX_DESCRIPTION . ' characters';
+        }
+
+        return $problems;
     }
 
     /** @return array{items: list<never>, errors: list<string>} */

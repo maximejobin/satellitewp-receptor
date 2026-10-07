@@ -5,8 +5,13 @@
 use SatelliteWP\Manager\Catalog\SoftwareCatalog;
 use SatelliteWP\Manager\Rules\Pastille;
 use SatelliteWP\Manager\Web\HardeningConstants;
+use SatelliteWP\Manager\Web\ObservationsCsv;
 
 $p    = $payload;
+
+// The payload's shape is untrusted too: a typed closure or helper must never receive an array.
+$str = static fn (mixed $v): ?string => is_scalar($v) ? (string) $v : null;
+$arr = static fn (mixed $v): ?array => is_array($v) ? $v : null;
 $dns  = $probes['dns']['data'] ?? [];
 $mail = $probes['mail']['data'] ?? [];
 $crm  = $probes['crm']['data'] ?? [];
@@ -25,7 +30,7 @@ $bvThemesBySlug  = array_column($bv['themes']['items'] ?? [], null, 'slug');
 $wfThemesBySlug  = array_column($wf['themes']['items'] ?? [], null, 'slug');
 
 // Merged once, shared by the WordPress card and the CVE table so they agree.
-$coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['core']['vulnerabilities'] ?? [], $p['wp_version'] ?? null, $ignoredVulnerabilities);
+$coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['core']['vulnerabilities'] ?? [], $str($p['wp_version'] ?? null), $ignoredVulnerabilities);
 
 /**
  * State column: Active/Inactive, then Auto-update/Vulnerable/Abandoned badges.
@@ -163,7 +168,7 @@ if ($status !== 'done'):
     ]) ?>
     <h1><?= e(site_display($site['site_url'] ?? '') ?: $siteId) ?></h1>
     <p class="muted">
-        <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
+        <?= link_or_text($site['site_url'] ?? null, (string) $str($site['site_url'] ?? '')) ?>
         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
         <?php if (!in_array($status, ['queued', 'running'], true)): ?>
             · <?= badge($row['status'] ?? null) ?>
@@ -294,7 +299,7 @@ if ($status !== 'done'):
                     <div class="xt-hero-eyebrow">Health &amp; Security Report</div>
                     <h1><?= e(site_display($site['site_url'] ?? '') ?: $siteId) ?></h1>
                     <div class="xt-hero-url">
-                        <a href="<?= e($site['site_url'] ?? '#') ?>"><?= e($site['site_url'] ?? '') ?></a>
+                        <?= link_or_text($site['site_url'] ?? null, (string) $str($site['site_url'] ?? '')) ?>
                         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
                         · signature <?= !empty($meta['signature_valid']) ? 'valid' : 'absent/unverified' ?>
                         · <?= badge($row['status'] ?? null) ?>
@@ -601,24 +606,24 @@ if ($status !== 'done'):
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h4>
                 <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($plugins as $file => $pl):
-                    $slug   = SoftwareCatalog::normalizeSlug('plugin', (string) ($pl['slug'] ?? ''));
+                    $slug   = SoftwareCatalog::normalizeSlug('plugin', $str($pl['slug'] ?? null) ?? '');
                     $merged = merge_vulnerabilities(
                         $bvPluginsBySlug[$slug]['vulnerabilities'] ?? [],
                         $wfPluginsBySlug[$slug]['vulnerabilities'] ?? [],
-                        $pl['version'] ?? null,
+                        $str($pl['version'] ?? null),
                         $ignoredVulnerabilities
                     );
                     $hasUpdate = !empty($pl['new_version']) || in_array($file, $pluginUpdates, true);
                     $inactive  = empty($pl['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $pl['name'] ?? $slug, 'slug' => $slug]; } ?>
                     <tr<?= $inactive ? ' class="row-inactive"' : '' ?>>
-                        <td><?= $nameCell('plugin', (string) ($pl['name'] ?? '?'), (string) ($pl['slug'] ?? ''), $slug, $wporg['plugins'][$slug] ?? null) ?></td>
-                        <td style="white-space:nowrap"><?= $versionCell($pl['version'] ?? null, $hasUpdate, $pl['new_version'] ?? null) ?></td>
-                        <td><?= requirement_cell($pl['requires_wp'] ?? null, $pl['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
-                        <?php $pluginLicense = $licenseStatuses['plugin:' . $slug] ?? 'n_a'; ?>
-                        <td><?= $stateCell($inactive, $merged, $wporg['plugins'][$slug] ?? null, in_array($file, $autoUpdatePlugins, true)) ?></td>
+                        <td><?= $nameCell('plugin', $str($pl['name'] ?? null) ?? '?', $str($pl['slug'] ?? null) ?? '', $slug, $arr($wporg['plugins'][$slug] ?? null)) ?></td>
+                        <td style="white-space:nowrap"><?= $versionCell($str($pl['version'] ?? null), $hasUpdate, $str($pl['new_version'] ?? null)) ?></td>
+                        <td><?= requirement_cell($str($pl['requires_wp'] ?? null), $str($pl['requires_php'] ?? null), $str($p['wp_version'] ?? null), $str($p['php']['version'] ?? null)) ?></td>
+                        <?php $pluginLicense = (string) $str($licenseStatuses['plugin:' . $slug] ?? 'n_a'); ?>
+                        <td><?= $stateCell($inactive, $merged, $arr($wporg['plugins'][$slug] ?? null), in_array($file, $autoUpdatePlugins, true)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'plugin', $slug, $pluginLicense, $csrf,
-                            '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td>
+                            "/site/{$siteId}/extraction/{$extractionId}") ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody></table>
@@ -627,24 +632,24 @@ if ($status !== 'done'):
                 <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
                 <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>Template</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($orderThemes($themes) as $file => $th):
-                    $slug   = SoftwareCatalog::normalizeSlug('theme', (string) ($th['slug'] ?? ''));
+                    $slug   = SoftwareCatalog::normalizeSlug('theme', $str($th['slug'] ?? null) ?? '');
                     $merged = merge_vulnerabilities(
                         $bvThemesBySlug[$slug]['vulnerabilities'] ?? [],
                         $wfThemesBySlug[$slug]['vulnerabilities'] ?? [],
-                        $th['version'] ?? null,
+                        $str($th['version'] ?? null),
                         $ignoredVulnerabilities
                     );
                     $hasUpdate = !empty($th['new_version']) || in_array($file, $themeUpdates, true);
                     $inactive  = empty($th['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $th['name'] ?? $slug, 'slug' => $slug]; } ?>
-                    <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= $nameCell('theme', (string) ($th['name'] ?? '?'), (string) ($th['slug'] ?? ''), $slug, $wporg['themes'][$slug] ?? null) ?></td>
-                        <td style="white-space:nowrap"><?= $versionCell($th['version'] ?? null, $hasUpdate, $th['new_version'] ?? null) ?></td>
-                        <td><?= requirement_cell($th['requires_wp'] ?? null, $th['requires_php'] ?? null, $p['wp_version'] ?? null, $p['php']['version'] ?? null) ?></td>
+                    <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= $nameCell('theme', $str($th['name'] ?? null) ?? '?', $str($th['slug'] ?? null) ?? '', $slug, $arr($wporg['themes'][$slug] ?? null)) ?></td>
+                        <td style="white-space:nowrap"><?= $versionCell($str($th['version'] ?? null), $hasUpdate, $str($th['new_version'] ?? null)) ?></td>
+                        <td><?= requirement_cell($str($th['requires_wp'] ?? null), $str($th['requires_php'] ?? null), $str($p['wp_version'] ?? null), $str($p['php']['version'] ?? null)) ?></td>
                         <td class="mono"><?= e($th['template'] ?? '') ?></td>
-                        <?php $themeLicense = $licenseStatuses['theme:' . $slug] ?? 'n_a'; ?>
-                        <td><?= $stateCell($inactive, $merged, $wporg['themes'][$slug] ?? null) ?></td>
+                        <?php $themeLicense = (string) $str($licenseStatuses['theme:' . $slug] ?? 'n_a'); ?>
+                        <td><?= $stateCell($inactive, $merged, $arr($wporg['themes'][$slug] ?? null)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'theme', $slug, $themeLicense, $csrf,
-                            '/site/' . e($siteId) . '/extraction/' . e($extractionId)) ?></td></tr>
+                            "/site/{$siteId}/extraction/{$extractionId}") ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
@@ -805,13 +810,14 @@ if ($status !== 'done'):
                 // Passive checks an anonymous visitor could run; each row shows its evidence (URL + status).
                 $exp      = $http['exposure'] ?? [];
                 $evidence = $exp['evidence'] ?? [];
-                $evNote   = static function (?array $ev, ?string $extra = null): string {
+                // $extra is plain text read from the site's own responses (usernames, a Location header).
+                $evNote   = static function (mixed $ev, ?string $extra = null): string {
                     if (!is_array($ev) || ($ev['url'] ?? null) === null) {
                         return '';
                     }
-                    $line = e($ev['url']) . ($ev['status'] !== null ? ' → HTTP ' . e($ev['status']) : ' → no response');
+                    $line = e($ev['url']) . (($ev['status'] ?? null) !== null ? ' → HTTP ' . e($ev['status']) : ' → no response');
 
-                    return '<br><span class="mono val-muted" style="font-size:.78em">' . $line . ($extra !== null ? ' — ' . $extra : '') . '</span>';
+                    return '<br><span class="mono val-muted" style="font-size:.78em">' . $line . ($extra !== null ? ' — ' . e($extra) : '') . '</span>';
                 };
                 $exposureRow = static function (string $label, ?bool $exposed, string $exposedWord, string $safeWord, string $note): string {
                     if ($exposed === null) {
@@ -820,7 +826,7 @@ if ($status !== 'done'):
 
                     return field_raw($label, '<span class="' . ($exposed ? 'val-warn' : 'val-ok') . '">' . e($exposed ? $exposedWord : $safeWord) . '</span>' . $note);
                 };
-                $restUsernames  = $evidence['rest_users']['usernames'] ?? [];
+                $restUsernames  = array_filter((array) ($evidence['rest_users']['usernames'] ?? []), 'is_scalar');
                 $sensitiveFiles = $exp['sensitive_files'] ?? null;
                 $sensitiveEv    = $evidence['sensitive_files'] ?? null;
                 if (($exp['auth_required'] ?? false) === true) {
@@ -837,11 +843,11 @@ if ($status !== 'done'):
                     . $exposureRow('REST user enumeration', $exp['rest_user_enumeration'] ?? null, 'exposed', 'blocked',
                         $evNote($evidence['rest_users'] ?? null, $restUsernames !== [] ? 'usernames: ' . implode(', ', $restUsernames) : null))
                     . $exposureRow('Author enumeration (?author=1)', $exp['author_enumeration'] ?? null, 'exposed', 'blocked',
-                        $evNote($evidence['author'] ?? null, !empty($evidence['author']['location']) ? 'redirects to ' . $evidence['author']['location'] : null))
+                        $evNote($evidence['author'] ?? null, $str($evidence['author']['location'] ?? null) ? 'redirects to ' . $str($evidence['author']['location']) : null))
                     . field_raw('Sensitive files', match (true) {
                         !is_array($sensitiveFiles) => '<span class="val-muted">not checked</span>',
                         $sensitiveFiles === []     => '<span class="val-ok">none</span>' . (is_array($sensitiveEv)
-                            ? '<br><span class="mono val-muted" style="font-size:.78em">checked: ' . e(implode(', ', $sensitiveEv['checked'])) . '</span>' : ''),
+                            ? '<br><span class="mono val-muted" style="font-size:.78em">checked: ' . e(implode(', ', array_filter((array) ($sensitiveEv['checked'] ?? []), 'is_scalar'))) . '</span>' : ''),
                         default                    => '<span class="val-error">' . fmt_list($sensitiveFiles) . '</span>',
                     })
                     . $exposureRow('Uploads directory listing', $exp['directory_listing'] ?? null, 'browsable', 'not browsable', $evNote($evidence['directory_listing'] ?? null))
@@ -1022,6 +1028,12 @@ if ($status !== 'done'):
                     <ul style="margin:.4rem 0 0"><?php foreach ($observationsImport['errors'] as $importError): ?><li><?= e($importError) ?></li><?php endforeach; ?></ul>
                 </div>
             <?php endif; ?>
+            <?php if ($observationErrors !== []): ?>
+                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">
+                    The observation was not saved:
+                    <ul style="margin:.4rem 0 0"><?php foreach ($observationErrors as $observationError): ?><li><?= e($observationError) ?></li><?php endforeach; ?></ul>
+                </div>
+            <?php endif; ?>
             <?php
             // "wp_core_observations" → "WordPress core": the field name stays visible as a hint.
             $sectionLabel = static fn (string $s): string => ucfirst(str_replace(['wp_', '_'], ['WordPress ', ' '], preg_replace('/_observations$/', '', $s) ?? $s));
@@ -1055,7 +1067,7 @@ if ($status !== 'done'):
                                         'title'       => (string) ($rec['title'] ?? ''),
                                         'description' => (string) ($rec['description'] ?? ''),
                                         'include'     => !empty($rec['include']),
-                                    ])) ?>"><?= icon_edit() ?></button>
+                                    ], JSON_INVALID_UTF8_SUBSTITUTE)) ?>"><?= icon_edit() ?></button>
                             <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations" style="display:inline;margin:0"
                                   onsubmit="return confirm('Remove this observation?')">
                                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -1105,11 +1117,11 @@ if ($status !== 'done'):
                         </fieldset>
                         <div class="obs-field">
                             <label for="obs-title">Title</label>
-                            <input id="obs-title" type="text" name="title" required maxlength="300" placeholder="e.g. Three administrators share one account">
+                            <input id="obs-title" type="text" name="title" required maxlength="<?= ObservationsCsv::MAX_TITLE ?>" placeholder="e.g. Three administrators share one account">
                         </div>
                         <div class="obs-field">
                             <label for="obs-description">Description <span class="muted">(optional)</span></label>
-                            <textarea id="obs-description" name="description" rows="5" placeholder="What was observed, its impact for the client and what to do."></textarea>
+                            <textarea id="obs-description" name="description" rows="5" maxlength="<?= ObservationsCsv::MAX_DESCRIPTION ?>" placeholder="What was observed, its impact for the client and what to do."></textarea>
                             <small>Formatting: <span class="mono">**bold**</span>, <span class="mono">_italic_</span>, <span class="mono">[link text](https://…)</span> — rendered here and in the report.</small>
                         </div>
                         <label class="obs-include">

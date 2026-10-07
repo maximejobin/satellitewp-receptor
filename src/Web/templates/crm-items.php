@@ -42,28 +42,8 @@
           d.updateAvailable = $('#items-update').is(':checked') ? 1 : '';
         }
       },
+      // Cells arrive as escaped HTML from CrmController::itemRows().
       columnDefs: [
-        {
-          targets: 2,
-          render: function (data, type) {
-            return type === 'display' ? '<span class="mono">' + xtEscapeHtml(data) + '</span>' : data;
-          }
-        },
-        {
-          targets: 5,
-          render: function (data, type) {
-            if (type !== 'display') { return data; }
-            return data === 'Vulnerable' ? '<span class="val-error">Vulnerable</span>' : '—';
-          }
-        },
-        {
-          targets: 7,
-          render: function (data, type, row) {
-            return type === 'display'
-              ? '<a href="/websites/' + encodeURIComponent(row[8]) + '">' + xtEscapeHtml(data) + '</a>'
-              : data;
-          }
-        },
         { targets: 8, visible: false, searchable: false }
       ]
     });

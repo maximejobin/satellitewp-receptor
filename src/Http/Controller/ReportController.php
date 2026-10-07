@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager\Http\Controller;
 use RuntimeException;
 use SatelliteWP\Manager\Http\ReportContext;
 use SatelliteWP\Manager\Http\ReportContract;
+use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Web\ReportBuilder;
 
 /**
@@ -32,8 +33,16 @@ final class ReportController extends Controller
 
         $store   = $this->app->dataStore();
         $payload = $store->readExtractionPayload($siteId, $extractionId);
-        if ($payload === null) {
-            $this->notFound();
+        $row     = $this->app->index()->getExtraction($siteId, $extractionId);
+        if ($payload === null || $row === null) {
+            $this->response->json(['error' => 'Extraction not found'], 404);
+
+            return;
+        }
+
+        // Before "done" the findings and probes are partial: a report built from them would read as complete.
+        if (($row['status'] ?? null) !== Index::STATUS_DONE) {
+            $this->response->json(['error' => 'The analysis of this extraction is not done'], 409);
 
             return;
         }

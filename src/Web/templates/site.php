@@ -14,7 +14,7 @@
     <p class="pending-note">This site is paired but has not sent an extraction yet.</p>
 <?php else: ?>
     <p>
-        <a href="<?= e($site['site_url'] ?? '#') ?>" rel="noopener noreferrer"><?= e($site['site_url'] ?? '') ?></a>
+        <?= link_or_text($site['site_url'] ?? null, (string) ($site['site_url'] ?? '')) ?>
     </p>
 <?php endif; ?>
 

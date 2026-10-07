@@ -116,7 +116,7 @@ final class Router
             return;
         }
 
-        $cookieToken = (string) ($_COOKIE['swp_csrf'] ?? '');
+        $cookieToken = (string) ($_COOKIE[Session::csrfCookieName()] ?? '');
         if ($cookieToken === '' || !hash_equals($cookieToken, (string) ($_POST['_csrf'] ?? ''))) {
             $this->response->text(400, 'Invalid CSRF token');
 

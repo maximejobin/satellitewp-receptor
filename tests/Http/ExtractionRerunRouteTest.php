@@ -99,7 +99,7 @@ final class ExtractionRerunRouteTest extends TestCase
         $defaults = require dirname(__DIR__, 2) . '/config/config.php';
         $app      = new App(new Config(array_replace_recursive($defaults, [
             'data_dir' => $this->tmpDir,
-            'auth'     => ['users_file' => $this->tmpDir . '/users.json'],
+            'auth'     => ['users_file' => $this->tmpDir . '/users.json', 'open_mode' => true],
         ], $overrides)));
 
         $this->extractionId = $app->dataStore()->storeExtraction(self::SITE, $this->fixture('extraction-valid.json'), [

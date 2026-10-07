@@ -5,15 +5,10 @@
   var report = document.querySelector('.xt-report');
   if (!report) { return; }
 
-  // Scrollspy: highlight the sticky nav entry for whichever group is
-  // currently in view. IntersectionObserver only — no scroll listener.
-  // Keyed by `data-nav-target`'s *value*, not the element's own id: the
-  // Overview nav link has to jump to the hero (id="overview", so visiting
-  // #overview or clicking Overview never scrolls the hero itself out of
-  // view above the fold — that used to be the actual bug), while scrollspy
-  // still needs to track the KPI/findings block below it as "Overview" once
-  // the user has scrolled past the hero. Two different elements, one nav
-  // entry — hence the explicit attribute value instead of matching on id.
+  // Scrollspy: highlight the sticky nav entry for whichever group is in view
+  // (IntersectionObserver, no scroll listener). Keyed by data-nav-target, not
+  // id: the Overview link jumps to the hero while the block below it is what
+  // the spy tracks as "Overview" — two elements, one nav entry.
   var nav = report.querySelector('.xt-nav');
   var groups = report.querySelectorAll('[data-nav-target]');
   if (nav && groups.length && 'IntersectionObserver' in window) {
@@ -51,8 +46,8 @@
   });
 
   // "Report data key" — mints a one-hour, single-extraction token server-side
-  // (Router::issueReportToken()) and copies the ready-to-paste URL, instead
-  // of ever putting the shared reports.api_key on screen.
+  // (ExtractionController::reportToken()) and copies the ready-to-paste URL,
+  // so the shared reports.api_key is never put on screen.
   var keyBtn = report.querySelector('#xt-report-key-btn');
   if (keyBtn) {
     keyBtn.addEventListener('click', function () {

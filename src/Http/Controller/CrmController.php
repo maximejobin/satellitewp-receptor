@@ -239,18 +239,32 @@ final class CrmController extends Controller
             'draw'            => (int) ($_GET['draw'] ?? 0),
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
-            'data'            => array_map(static fn (array $row): array => [
-                strtoupper((string) $row['type']),
-                (string) $row['name'],
-                (string) $row['slug'],
-                (string) $row['version'],
-                $row['is_update_available'] ? ((string) ($row['new_version'] ?? '?')) : '—',
-                $row['is_vulnerable'] ? 'Vulnerable' : '—',
-                $row['is_active'] ? 'Yes' : 'No',
-                SiteDisplay::of($row['website_url']),
-                (int) $row['website_id'],
-            ], $result['rows']),
+            'data'            => self::itemRows($result['rows']),
         ]);
+    }
+
+    /**
+     * DataTables inserts each cell as HTML and CRM item names come from
+     * plugin headers: text is escaped here, markup built around it.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<list<int|string>>
+     */
+    public static function itemRows(array $rows): array
+    {
+        require_once dirname(__DIR__, 2) . '/Web/helpers.php';
+
+        return array_map(static fn (array $row): array => [
+            e(strtoupper((string) ($row['type'] ?? ''))),
+            e($row['name'] ?? ''),
+            '<span class="mono">' . e($row['slug'] ?? '') . '</span>',
+            e($row['version'] ?? ''),
+            !empty($row['is_update_available']) ? e($row['new_version'] ?? '?') : '—',
+            !empty($row['is_vulnerable']) ? '<span class="val-error">Vulnerable</span>' : '—',
+            !empty($row['is_active']) ? 'Yes' : 'No',
+            '<a href="/websites/' . (int) ($row['website_id'] ?? 0) . '">' . e(SiteDisplay::of($row['website_url'] ?? '')) . '</a>',
+            (int) ($row['website_id'] ?? 0),
+        ], $rows);
     }
 
     /**

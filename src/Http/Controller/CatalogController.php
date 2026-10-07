@@ -37,10 +37,6 @@ final class CatalogController extends Controller
             return;
         }
 
-        // Rows carry license_select() markup; helpers.php is otherwise only
-        // loaded by the layout.
-        require_once dirname(__DIR__, 2) . '/Web/helpers.php';
-
         $length = (int) ($_GET['length'] ?? 50);
         $length = $length > 0 ? min($length, 200) : 50;
 
@@ -53,26 +49,38 @@ final class CatalogController extends Controller
             $length
         );
 
-        $csrf = $this->csrfToken();
-
         $this->response->json([
             'draw'            => (int) ($_GET['draw'] ?? 0),
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
-            'data'            => array_map(static fn (array $e): array => [
-                $e['type'],
-                $e['slug'],
-                $e['name'],
-                license_select(
-                    (string) $e['type'],
-                    (string) $e['slug'],
-                    (string) ($e['license'] ?? 'unknown'),
-                    $csrf,
-                    '/catalog',
-                    $e['suggested'] ?? null
-                ),
-            ], $result['rows']),
+            'data'            => self::tableRows($result['rows'], $this->csrfToken()),
         ]);
+    }
+
+    /**
+     * DataTables inserts each cell as HTML, and slugs and names come from
+     * plugin headers: every text cell is escaped here.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<list<string>>
+     */
+    public static function tableRows(array $rows, string $csrf): array
+    {
+        require_once dirname(__DIR__, 2) . '/Web/helpers.php';
+
+        return array_map(static fn (array $e): array => [
+            e($e['type'] ?? ''),
+            e($e['slug'] ?? ''),
+            e($e['name'] ?? ''),
+            license_select(
+                (string) ($e['type'] ?? ''),
+                (string) ($e['slug'] ?? ''),
+                (string) ($e['license'] ?? 'unknown'),
+                $csrf,
+                '/catalog',
+                is_string($e['suggested'] ?? null) ? $e['suggested'] : null
+            ),
+        ], $rows);
     }
 
     /**

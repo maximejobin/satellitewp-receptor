@@ -62,7 +62,7 @@ if (isset($notices[$notice])):
                     </form>
                 <?php elseif (!$isLastActiveAdmin): ?>
                     <form method="post" action="/users" style="display:inline;margin:0"
-                          onsubmit="return confirm('Suspend <?= e($user['email']) ?>? They will not be able to sign in until reactivated.')">
+                          onsubmit="return confirm(<?= e(json_encode('Suspend ' . $user['email'] . '? They will not be able to sign in until reactivated.', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>)">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="action" value="suspend">
                         <input type="hidden" name="email" value="<?= e($user['email']) ?>">
@@ -73,7 +73,7 @@ if (isset($notices[$notice])):
             <?php if ($can['remove']): ?>
                 <?php if (!$isLastActiveAdmin): ?>
                     <form method="post" action="/users" style="display:inline;margin:0"
-                          onsubmit="return confirm('Remove <?= e($user['email']) ?>? This cannot be undone.')">
+                          onsubmit="return confirm(<?= e(json_encode('Remove ' . $user['email'] . '? This cannot be undone.', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>)">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="action" value="remove">
                         <input type="hidden" name="email" value="<?= e($user['email']) ?>">

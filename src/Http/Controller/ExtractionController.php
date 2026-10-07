@@ -11,7 +11,6 @@ use SatelliteWP\Manager\Http\ReportContract;
 use SatelliteWP\Manager\Http\Router;
 use SatelliteWP\Manager\Http\Session;
 use SatelliteWP\Manager\Probe\BlogVaultProbe;
-use SatelliteWP\Manager\Rules\Pastille;
 use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Support\HostGuard;
 use SatelliteWP\Manager\Web\ObservationsCsv;
@@ -37,8 +36,8 @@ final class ExtractionController extends Controller
 
         $row = $this->app->index()->getExtraction($siteId, $extractionId);
 
-        // The pre-flights only matter while the analyst decides whether to run.
-        $awaiting       = in_array((string) ($row['status'] ?? ''), [Index::STATUS_PENDING, Index::STATUS_QUEUED], true);
+        // The pre-flights only matter while the analyst decides whether to run (live calls, so not on every queued-page refresh).
+        $awaiting       = (string) ($row['status'] ?? '') === Index::STATUS_PENDING;
         $debuggingTools = (bool) $this->app->config->get('debugging_tools', false) && $this->currentUserCan('extraction_run');
 
         $this->render('extraction', [
@@ -62,6 +61,7 @@ final class ExtractionController extends Controller
             'observationSections' => ReportContract::observationSections(ReportContract::load($this->app)),
             'canEditObservations' => $this->currentUserCan('extraction_observations_edit'),
             'observationsImport'  => $this->takeImportFlash("{$siteId}/{$extractionId}"),
+            'observationErrors'   => $this->takeObservationErrors("{$siteId}/{$extractionId}"),
             'licenseStatuses'     => $store->readLicenses($siteId, $extractionId) ?? [],
             'debuggingTools'      => $debuggingTools,
             'rerunProbes'         => $debuggingTools
@@ -118,7 +118,7 @@ final class ExtractionController extends Controller
         }
 
         $this->app->index()->setExtractionStatus($siteId, $extractionId, Index::STATUS_QUEUED);
-        $this->redirect(Router::safeReturn($_POST['return'] ?? "/site/{$siteId}/extraction/{$extractionId}"));
+        $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
     }
 
     /** @param array<string, string> $params */
@@ -132,7 +132,7 @@ final class ExtractionController extends Controller
         }
 
         $this->app->index()->setExtractionStatus($siteId, $extractionId, Index::STATUS_ABORTED);
-        $this->redirect(Router::safeReturn($_POST['return'] ?? "/site/{$siteId}/extraction/{$extractionId}"));
+        $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
     }
 
     /**
@@ -190,11 +190,12 @@ final class ExtractionController extends Controller
      */
     public function reportToken(array $params): void
     {
-        if (!$this->requireCapability('extraction_view_technical')) {
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
+        if (!$this->requireCapability('extraction_view_technical')
+            || !$this->requireExtractionStatus($siteId, $extractionId, [Index::STATUS_DONE])
+        ) {
             return;
         }
-
-        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
         $token = $this->app->reportTokenStore()->issue($siteId, $extractionId, $this->currentUserDisplayName());
 
         // The report follows the language chosen before the run; &lang= stays overridable by hand.
@@ -221,26 +222,45 @@ final class ExtractionController extends Controller
             return;
         }
 
-        $action  = (string) ($_POST['action'] ?? '');
-        $id      = (string) ($_POST['id'] ?? '');
-        $section = (string) ($_POST['section'] ?? '');
-        $color   = (string) ($_POST['color'] ?? '');
-        $valid   = in_array($section, ReportContract::observationSections(ReportContract::load($this->app)), true)
-            && Pastille::isValid($color);
-        $record  = static fn (string $recordId): array => [
+        $action      = (string) ($_POST['action'] ?? '');
+        $id          = (string) ($_POST['id'] ?? '');
+        $section     = (string) ($_POST['section'] ?? '');
+        $color       = (string) ($_POST['color'] ?? '');
+        $title       = trim((string) ($_POST['title'] ?? ''));
+        $description = trim((string) ($_POST['description'] ?? ''));
+        $page        = "/site/{$siteId}/extraction/{$extractionId}#observations";
+
+        if (in_array($action, ['add', 'edit'], true)) {
+            $problems = ObservationsCsv::problems(
+                $section,
+                $color,
+                $title,
+                $description,
+                ReportContract::observationSections(ReportContract::load($this->app))
+            );
+            if ($problems !== []) {
+                Session::start();
+                $_SESSION['observation_errors'] = ['extraction' => "{$siteId}/{$extractionId}", 'errors' => $problems];
+                $this->redirect($page);
+
+                return;
+            }
+        }
+
+        $record = static fn (string $recordId): array => [
             'id'          => $recordId,
             'section'     => $section,
             'color'       => $color,
-            'title'       => trim((string) ($_POST['title'] ?? '')),
-            'description' => trim((string) ($_POST['description'] ?? '')),
+            'title'       => $title,
+            'description' => $description,
             'include'     => isset($_POST['include']),
         ];
 
         // Read-modify-write under the extraction's lock: concurrent saves must not drop an edit.
-        $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $items) use ($action, $valid, $id, $record): array {
-            if ($action === 'add' && $valid) {
+        $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $items) use ($action, $id, $record): array {
+            if ($action === 'add') {
                 $items[] = $record(bin2hex(random_bytes(6)));
-            } elseif ($action === 'edit' && $valid) {
+            } elseif ($action === 'edit') {
                 foreach ($items as $k => $item) {
                     if (is_array($item) && ($item['id'] ?? null) === $id) {
                         $items[$k] = $record($id);
@@ -253,7 +273,7 @@ final class ExtractionController extends Controller
             return array_values($items);
         });
 
-        $this->redirect("/site/{$siteId}/extraction/{$extractionId}#observations");
+        $this->redirect($page);
     }
 
     /**
@@ -306,6 +326,23 @@ final class ExtractionController extends Controller
     }
 
     /**
+     * Why the last add/edit was refused, shown once and only on its own extraction.
+     *
+     * @return list<string>
+     */
+    private function takeObservationErrors(string $extraction): array
+    {
+        Session::start();
+        $flash = $_SESSION['observation_errors'] ?? null;
+        if (!is_array($flash) || ($flash['extraction'] ?? null) !== $extraction) {
+            return [];
+        }
+        unset($_SESSION['observation_errors']);
+
+        return array_values(array_map('strval', (array) ($flash['errors'] ?? [])));
+    }
+
+    /**
      * The last CSV import outcome, shown once and only on its own extraction.
      *
      * @return array{imported: int, errors: list<string>}|null
@@ -347,7 +384,7 @@ final class ExtractionController extends Controller
             return;
         }
 
-        $this->redirect(Router::safeReturn($_POST['return'] ?? "/site/{$siteId}/extraction/{$extractionId}"));
+        $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
     }
 
     /**
