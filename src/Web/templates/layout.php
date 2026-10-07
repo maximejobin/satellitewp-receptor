@@ -40,6 +40,7 @@ $nav = $nav ?? 'sites';
     <?php if (!empty($tooltip)): ?>
     <link rel="stylesheet" href="/assets/vendor/tippy/tippy.css">
     <link rel="stylesheet" href="/assets/vendor/tippy/light-border.css">
+    <script src="/assets/vendor/popper/popper.min.js"></script>
     <script src="/assets/vendor/tippy/tippy-bundle.umd.min.js"></script>
     <?php endif; ?>
     <?php if (!empty($reportAssets)): ?>

@@ -276,6 +276,7 @@ return [
             }
             $csp = (string) $c->string('probe.http.security_headers.content-security-policy');
 
+            // Presence only: which origins may frame the site is the site's call, not ours.
             return $headerPresent($c, 'x-frame-options') || preg_match('/(?:^|;)\s*frame-ancestors\s/i', $csp) === 1
                 ? Check::pass()
                 : Check::fail();
