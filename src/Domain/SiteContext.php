@@ -30,10 +30,12 @@ final readonly class SiteContext
         public ?array $httpAuth = null,
         public ?string $locale = null,
         public ?string $blogvaultSiteId = null,
+        public bool $blogvaultFailed = false,
     ) {
     }
 
-    public function withBlogvaultSiteId(?string $id): self
+    /** @param bool $failed the blogvault probe errored: "no id" would be a guess */
+    public function withBlogvaultSiteId(?string $id, bool $failed = false): self
     {
         return new self(
             $this->siteId,
@@ -47,6 +49,7 @@ final readonly class SiteContext
             $this->httpAuth,
             $this->locale,
             $id,
+            $failed,
         );
     }
 

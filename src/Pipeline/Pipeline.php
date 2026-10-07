@@ -37,34 +37,75 @@ final class Pipeline
     }
 
     /**
+     * An explicit run (debug re-run, pipeline:run, probe:run), whatever the
+     * extraction's status.
+     *
      * @param list<string>|null $onlyProbes limit the run to these probe names
      * @return array<string, ProbeResult> probe name => result
      */
     public function run(string $siteId, string $extractionId, ?array $onlyProbes = null): array
     {
-        $payload = $this->store->readExtractionPayload($siteId, $extractionId)
+        $payload = $this->readPayload($siteId, $extractionId);
+        $this->index->markManualRun($siteId, $extractionId);
+
+        return $this->process($siteId, $extractionId, $payload, $onlyProbes);
+    }
+
+    /**
+     * The worker's run: only if the extraction is still queued when claimed,
+     * so an abort pressed after the worker listed it is honoured.
+     *
+     * @return array<string, ProbeResult>|null null when it was no longer queued
+     */
+    public function runQueued(string $siteId, string $extractionId): ?array
+    {
+        if (!$this->index->claimQueued($siteId, $extractionId)) {
+            return null;
+        }
+
+        try {
+            $payload = $this->readPayload($siteId, $extractionId);
+        } catch (Throwable $e) {
+            $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_ERROR);
+
+            throw $e;
+        }
+
+        return $this->process($siteId, $extractionId, $payload);
+    }
+
+    /** @return array<string, mixed> */
+    private function readPayload(string $siteId, string $extractionId): array
+    {
+        return $this->store->readExtractionPayload($siteId, $extractionId)
             ?? throw new RuntimeException("Extraction {$siteId}/{$extractionId} not found");
+    }
 
-        $meta   = $this->store->readMeta($siteId, $extractionId) ?? [];
-        $locale = is_string($meta['language'] ?? null) && $meta['language'] !== '' ? $meta['language'] : null;
-
-        $context = new ExtractionContext(
-            SiteContext::fromExtractionPayload($siteId, $payload, $this->keyStore?->getHttpAuth($siteId), $locale),
-            $extractionId,
-            $this->store->extractionDir($siteId, $extractionId)
-        );
-
-        $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_RUNNING);
-
+    /**
+     * @param array<string, mixed> $payload
+     * @param list<string>|null $onlyProbes
+     * @return array<string, ProbeResult>
+     */
+    private function process(string $siteId, string $extractionId, array $payload, ?array $onlyProbes = null): array
+    {
         // Anything that escapes (unknown probe, storage failure) must not leave
         // the extraction stuck in "running" — probe throws are already isolated.
         try {
+            $meta   = $this->store->readMeta($siteId, $extractionId) ?? [];
+            $locale = is_string($meta['language'] ?? null) && $meta['language'] !== '' ? $meta['language'] : null;
+
+            $context = new ExtractionContext(
+                SiteContext::fromExtractionPayload($siteId, $payload, $this->keyStore?->getHttpAuth($siteId), $locale),
+                $extractionId,
+                $this->store->extractionDir($siteId, $extractionId)
+            );
+
             $this->catalog?->recordExtraction($payload);
 
             $results = [];
             foreach ($this->selectProbes($onlyProbes) as $probe) {
                 $site = $probe->name() === 'crm'
-                    ? $context->site->withBlogvaultSiteId($this->blogvaultSiteId($siteId, $extractionId, $results))
+                    ? $this->withBlogvault($context->site, $siteId, $extractionId, $results)
                     : $context->site;
                 $result = $this->runProbe($probe, $site);
 
@@ -97,18 +138,28 @@ final class Pipeline
 
     /**
      * The BlogVault site id from this run's blogvault result, else from the one
-     * already stored (a lone `probe:run crm`). Null when BlogVault has no such site.
+     * already stored (a lone `probe:run crm`). A failed BlogVault lookup is
+     * flagged rather than read as "no id", so the CRM link is not reported missing.
      *
      * @param array<string, ProbeResult> $results
      */
-    private function blogvaultSiteId(string $siteId, string $extractionId, array $results): ?string
+    private function withBlogvault(SiteContext $site, string $siteId, string $extractionId, array $results): SiteContext
     {
-        $data = isset($results['blogvault'])
-            ? $results['blogvault']->data
-            : (array) ($this->store->readProbeResult($siteId, $extractionId, 'blogvault')['data'] ?? []);
+        if (isset($results['blogvault'])) {
+            $status = $results['blogvault']->status;
+            $data   = $results['blogvault']->data;
+        } else {
+            $stored = $this->store->readProbeResult($siteId, $extractionId, 'blogvault') ?? [];
+            $status = $stored['status'] ?? null;
+            $data   = (array) ($stored['data'] ?? []);
+        }
+        if ($status === ProbeResult::STATUS_ERROR) {
+            return $site->withBlogvaultSiteId(null, true);
+        }
+
         $id = $data['site']['id'] ?? null;
 
-        return ($data['linked'] ?? false) === true && is_string($id) && $id !== '' ? $id : null;
+        return $site->withBlogvaultSiteId(($data['linked'] ?? false) === true && is_string($id) && $id !== '' ? $id : null);
     }
 
     /**

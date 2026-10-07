@@ -21,6 +21,7 @@ final class ReportTokenStoreTest extends TestCase
     protected function tearDown(): void
     {
         @unlink($this->file);
+        @unlink($this->file . '.lock');
     }
 
     public function testIssuedTokenVerifiesOnlyForItsOwnSiteAndExtraction(): void
@@ -58,5 +59,19 @@ final class ReportTokenStoreTest extends TestCase
 
         self::assertSame('600', substr(sprintf('%o', fileperms($this->file)), -3));
         self::assertSame([], glob($this->file . '.tmp*') ?: []);
+    }
+
+    public function testAnUnencodableIssueKeepsTheTokensAlreadyIssued(): void
+    {
+        $store = new ReportTokenStore($this->file);
+        $token = $store->issue('site-1', 'extraction-1');
+
+        try {
+            $store->issue('site-1', 'extraction-1', "Na\xB1me");
+            self::fail('an invalid UTF-8 name must not be written');
+        } catch (\RuntimeException) {
+        }
+
+        self::assertTrue($store->verify($token, 'site-1', 'extraction-1'));
     }
 }

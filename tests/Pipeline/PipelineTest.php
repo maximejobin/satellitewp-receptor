@@ -140,6 +140,48 @@ final class PipelineTest extends TestCase
         $this->assertNull($results['crm']->data['blogvault_site_id']);
     }
 
+    public function testAFailedBlogvaultProbeIsFlaggedToTheCrmProbe(): void
+    {
+        $registry = new ProbeRegistry(['blogvault', 'crm']);
+        $registry->register(new StubProbe('blogvault', ProbeResult::STATUS_ERROR));
+        $registry->register(new SiteIdEchoProbe());
+
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId);
+        $this->assertTrue($results['crm']->data['blogvault_failed']);
+
+        // A lone re-run of crm reads the failure from the stored blogvault file.
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId, ['crm']);
+        $this->assertTrue($results['crm']->data['blogvault_failed']);
+    }
+
+    public function testTheWorkerSkipsAnExtractionNoLongerQueued(): void
+    {
+        $registry = new ProbeRegistry(['fine']);
+        $registry->register(new StubProbe('fine', ProbeResult::STATUS_OK));
+        $this->index->setExtractionStatus(self::SITE_ID, $this->extractionId, Index::STATUS_ABORTED);
+
+        $this->assertNull($this->pipeline($registry)->runQueued(self::SITE_ID, $this->extractionId));
+        $this->assertNull($this->store->readProbeResult(self::SITE_ID, $this->extractionId, 'fine'));
+        $this->assertSame('aborted', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+
+        $this->index->setExtractionStatus(self::SITE_ID, $this->extractionId, Index::STATUS_QUEUED);
+        $results = $this->pipeline($registry)->runQueued(self::SITE_ID, $this->extractionId);
+        $this->assertSame(['fine'], array_keys((array) $results));
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+    }
+
+    public function testAnExplicitRunStillWorksOnADoneExtraction(): void
+    {
+        $registry = new ProbeRegistry(['fine']);
+        $registry->register(new StubProbe('fine', ProbeResult::STATUS_OK));
+        $this->index->setExtractionStatus(self::SITE_ID, $this->extractionId, Index::STATUS_DONE);
+
+        $results = $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId, ['fine']);
+
+        $this->assertSame(['fine'], array_keys($results));
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+    }
+
     public function testAFailureMidRunMarksTheExtractionErrorNotRunning(): void
     {
         $registry = new ProbeRegistry(['a']);
@@ -254,6 +296,6 @@ final class SiteIdEchoProbe extends AbstractProbe
 
     protected function collect(SiteContext $site): array
     {
-        return ['data' => ['blogvault_site_id' => $site->blogvaultSiteId]];
+        return ['data' => ['blogvault_site_id' => $site->blogvaultSiteId, 'blogvault_failed' => $site->blogvaultFailed]];
     }
 }

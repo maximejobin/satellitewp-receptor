@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Manager\Storage;
 
-use RuntimeException;
+use SatelliteWP\Manager\Support\JsonFileStore;
 
 /**
  * Per-site API keys used to verify X-SWP-Signature. Stored in data/keys.json.
  */
 final class KeyStore
 {
-    public function __construct(private readonly string $file)
+    private readonly JsonFileStore $json;
+
+    public function __construct(string $file)
     {
+        $this->json = new JsonFileStore($file, 0600);
     }
 
     public function getKey(string $siteId): ?string
@@ -33,21 +36,23 @@ final class KeyStore
     ): string {
         $apiKey ??= bin2hex(random_bytes(32));
 
-        $keys     = $this->all();
-        $existing = $keys[$siteId] ?? [];
-        $entry    = [
-            'api_key'    => $apiKey,
-            // A rotation (key re-added for a known site) must not unbind it —
-            // that would silently disable the restored-backup 409 guard.
-            'origin'     => $origin ?? ($existing['origin'] ?? null),
-            'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
-            'revoked'    => false,
-        ];
-        if (isset($existing['http_auth'])) {
-            $entry['http_auth'] = $existing['http_auth'];
-        }
-        $keys[$siteId] = $entry;
-        $this->save($keys);
+        $this->json->mutate(static function (array $keys) use ($siteId, $apiKey, $origin): array {
+            $existing = is_array($keys[$siteId] ?? null) ? $keys[$siteId] : [];
+            $entry    = [
+                'api_key'    => $apiKey,
+                // A rotation (key re-added for a known site) must not unbind it —
+                // that would silently disable the restored-backup 409 guard.
+                'origin'     => $origin ?? ($existing['origin'] ?? null),
+                'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
+                'revoked'    => false,
+            ];
+            if (isset($existing['http_auth'])) {
+                $entry['http_auth'] = $existing['http_auth'];
+            }
+            $keys[$siteId] = $entry;
+
+            return [null, $keys];
+        });
 
         return $apiKey;
     }
@@ -73,16 +78,12 @@ final class KeyStore
      */
     public function setOrigin(string $siteId, string $origin): bool
     {
-        $keys = $this->all();
-        if (!isset($keys[$siteId])) {
-            return false;
-        }
+        return $this->updateEntry($siteId, static function (array $entry) use ($origin): array {
+            $entry['origin']     = $origin;
+            $entry['rebound_at'] = gmdate('Y-m-d\TH:i:s\Z');
 
-        $keys[$siteId]['origin']      = $origin;
-        $keys[$siteId]['rebound_at']  = gmdate('Y-m-d\TH:i:s\Z');
-        $this->save($keys);
-
-        return true;
+            return $entry;
+        });
     }
 
     /**
@@ -101,62 +102,47 @@ final class KeyStore
     /** Set this site's Basic Auth credentials for probing, or clear them (empty/null username). */
     public function setHttpAuth(string $siteId, ?string $username, ?string $password): bool
     {
-        $keys = $this->all();
-        if (!isset($keys[$siteId])) {
-            return false;
-        }
+        return $this->updateEntry($siteId, static function (array $entry) use ($username, $password): array {
+            if ($username === null || $username === '') {
+                unset($entry['http_auth']);
+            } else {
+                $entry['http_auth'] = ['username' => $username, 'password' => (string) $password];
+            }
 
-        if ($username === null || $username === '') {
-            unset($keys[$siteId]['http_auth']);
-        } else {
-            $keys[$siteId]['http_auth'] = ['username' => $username, 'password' => (string) $password];
-        }
-        $this->save($keys);
-
-        return true;
+            return $entry;
+        });
     }
 
     public function revokeKey(string $siteId): bool
     {
-        $keys = $this->all();
-        if (!isset($keys[$siteId])) {
-            return false;
-        }
+        return $this->updateEntry($siteId, static function (array $entry): array {
+            $entry['revoked']    = true;
+            $entry['revoked_at'] = gmdate('Y-m-d\TH:i:s\Z');
 
-        $keys[$siteId]['revoked']    = true;
-        $keys[$siteId]['revoked_at'] = gmdate('Y-m-d\TH:i:s\Z');
-        $this->save($keys);
-
-        return true;
+            return $entry;
+        });
     }
 
     /** @return array<string, array<string, mixed>> */
     public function all(): array
     {
-        if (!is_file($this->file)) {
-            return [];
-        }
-
-        $decoded = json_decode((string) file_get_contents($this->file), true);
-
-        return is_array($decoded) ? $decoded : [];
+        /** @var array<string, array<string, mixed>> */
+        return $this->json->read();
     }
 
-    /** @param array<string, array<string, mixed>> $keys */
-    private function save(array $keys): void
+    /**
+     * @param callable(array<string, mixed>): array<string, mixed> $change
+     * @return bool false when the site has no key record
+     */
+    private function updateEntry(string $siteId, callable $change): bool
     {
-        $dir = dirname($this->file);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
+        return $this->json->mutate(static function (array $keys) use ($siteId, $change): array {
+            if (!is_array($keys[$siteId] ?? null)) {
+                return [false, null];
+            }
+            $keys[$siteId] = $change($keys[$siteId]);
 
-        $json = json_encode($keys, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        $tmp  = $this->file . '.tmp.' . bin2hex(random_bytes(4));
-
-        if (file_put_contents($tmp, $json . "\n") === false || !rename($tmp, $this->file)) {
-            @unlink($tmp);
-            throw new RuntimeException("Unable to write {$this->file}");
-        }
-        @chmod($this->file, 0600);
+            return [true, $keys];
+        });
     }
 }

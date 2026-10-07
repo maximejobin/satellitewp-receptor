@@ -34,6 +34,12 @@ final class CrmProbe extends AbstractProbe
 
     protected function collect(SiteContext $site): array
     {
+        // Without a BlogVault answer the link is unknown, not absent: an error
+        // keeps a missing link from being reported for a site that has one.
+        if ($site->blogvaultFailed) {
+            return ['target' => 'crm', 'status' => ProbeResult::STATUS_ERROR, 'errors' => ['BlogVault probe failed: no site id to link (blogvault_unavailable)']];
+        }
+
         $blogvaultId = $site->blogvaultSiteId;
         if ($blogvaultId === null || $blogvaultId === '') {
             return ['target' => 'crm', 'data' => ['linked' => false, 'reason' => 'no_blogvault_id']];

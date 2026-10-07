@@ -81,7 +81,7 @@ final class DataStore
         $file = $dir . '/' . substr($receivedAt, 0, 7) . '.jsonl';
         $line = json_encode(
             ['received_at' => $receivedAt] + $payload,
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR
         ) . "\n";
 
         if (file_put_contents($file, $line, FILE_APPEND | LOCK_EX) === false) {
@@ -292,9 +292,11 @@ final class DataStore
     /** @param array<string, mixed> $data */
     public function writeJson(string $file, array $data): void
     {
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Probe data carries bytes from remote servers (headers, WHOIS, certificate
+        // names): one invalid UTF-8 byte must not fail the whole extraction.
+        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
-            throw new RuntimeException("Unable to encode JSON for {$file}");
+            throw new RuntimeException("Unable to encode JSON for {$file}: " . json_last_error_msg());
         }
 
         $this->writeRaw($file, $json . "\n");

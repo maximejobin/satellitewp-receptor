@@ -22,7 +22,10 @@ final class Index
     public const string STATUS_ABORTED = 'aborted';
 
     /** Bumped whenever an upgrade step is added to migrate(); stored in PRAGMA user_version. */
-    public const int SCHEMA_VERSION = 1;
+    public const int SCHEMA_VERSION = 2;
+
+    /** Worker claims of one queued extraction before a run that keeps dying is set to error. */
+    public const int MAX_ATTEMPTS = 3;
 
     private ?PDO $pdo = null;
 
@@ -74,6 +77,8 @@ final class Index
                 database_version TEXT,
                 status           TEXT NOT NULL DEFAULT 'pending',
                 processed_at     TEXT,
+                attempts         INTEGER NOT NULL DEFAULT 0,
+                previous_status  TEXT,
                 PRIMARY KEY (site_id, id)
             );
             CREATE TABLE IF NOT EXISTS probe_runs (
@@ -89,11 +94,17 @@ final class Index
             CREATE INDEX IF NOT EXISTS idx_extractions_site ON extractions(site_id, received_at DESC);
             SQL);
 
-        // Version 1: bring an index created by an older build to today's columns.
+        // Versions 1–2: bring an index created by an older build to today's columns.
         $columns = array_column($pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
-        foreach (['database_type', 'database_version'] as $column) {
+        $added   = [
+            'database_type'    => 'TEXT',
+            'database_version' => 'TEXT',
+            'attempts'         => 'INTEGER NOT NULL DEFAULT 0',
+            'previous_status'  => 'TEXT',
+        ];
+        foreach ($added as $column => $definition) {
             if (!in_array($column, $columns, true)) {
-                $pdo->exec("ALTER TABLE extractions ADD COLUMN {$column} TEXT");
+                $pdo->exec("ALTER TABLE extractions ADD COLUMN {$column} {$definition}");
             }
         }
         $siteColumns = array_column($pdo->query('PRAGMA table_info(sites)')->fetchAll(), 'name');
@@ -150,10 +161,13 @@ final class Index
     public function setExtractionStatus(string $siteId, string $extractionId, string $status): void
     {
         // Stamped on running/done/error so requeueStale() measures from the run's start, not receipt.
+        // An analyst queueing the extraction starts a fresh attempt count.
         $this->pdo()->prepare(<<<'SQL'
             UPDATE extractions
             SET status = :status,
-                processed_at = CASE WHEN :status IN ('running', 'done', 'error') THEN :now ELSE processed_at END
+                processed_at = CASE WHEN :status IN ('running', 'done', 'error') THEN :now ELSE processed_at END,
+                attempts = CASE WHEN :status = 'queued' THEN 0 ELSE attempts END,
+                previous_status = NULL
             WHERE site_id = :site_id AND id = :id
             SQL)->execute([
             'status'  => $status,
@@ -161,6 +175,40 @@ final class Index
             'site_id' => $siteId,
             'id'      => $extractionId,
         ]);
+    }
+
+    /**
+     * The worker's claim: queued → running in one statement, so an extraction
+     * aborted (or claimed by another run) after it was listed is skipped.
+     *
+     * @return bool false when the extraction was no longer queued
+     */
+    public function claimQueued(string $siteId, string $extractionId): bool
+    {
+        $stmt = $this->pdo()->prepare(<<<'SQL'
+            UPDATE extractions
+            SET status = 'running', processed_at = :now, attempts = attempts + 1, previous_status = NULL
+            WHERE site_id = :site_id AND id = :id AND status = 'queued'
+            SQL);
+        $stmt->execute(['now' => gmdate('Y-m-d\TH:i:s\Z'), 'site_id' => $siteId, 'id' => $extractionId]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /**
+     * An explicit run (debug re-run, pipeline:run, probe:run) from whatever
+     * status: the status it left is kept so requeueStale() never turns an
+     * interrupted re-run of a frozen snapshot into a silent full re-probe.
+     */
+    public function markManualRun(string $siteId, string $extractionId): void
+    {
+        $this->pdo()->prepare(<<<'SQL'
+            UPDATE extractions
+            SET previous_status = CASE WHEN status = 'running' THEN COALESCE(previous_status, 'error') ELSE status END,
+                status = 'running',
+                processed_at = :now
+            WHERE site_id = :site_id AND id = :id
+            SQL)->execute(['now' => gmdate('Y-m-d\TH:i:s\Z'), 'site_id' => $siteId, 'id' => $extractionId]);
     }
 
     public function upsertProbeRun(
@@ -214,16 +262,29 @@ final class Index
     }
 
     /**
-     * Reset extractions stuck in "running" for longer than $minutes back to "queued", so the worker picks them up again.
+     * Settles extractions stuck in "running" for longer than $minutes. A
+     * worker run goes back to "queued" until it has been claimed
+     * MAX_ATTEMPTS times, then to "error"; an explicit run goes back to "done"
+     * if it started from there, else to "error" — never to the queue.
+     *
+     * @return int number of extractions settled
      */
     public function requeueStale(int $minutes): int
     {
         $cutoff = gmdate('Y-m-d\TH:i:s\Z', time() - $minutes * 60);
         $stmt   = $this->pdo()->prepare(<<<'SQL'
-            UPDATE extractions SET status = 'queued'
+            UPDATE extractions
+            SET status = CASE
+                    WHEN previous_status IS NOT NULL THEN CASE WHEN previous_status = 'done' THEN 'done' ELSE 'error' END
+                    WHEN attempts >= :max THEN 'error'
+                    ELSE 'queued'
+                END,
+                previous_status = NULL
             WHERE status = 'running' AND COALESCE(processed_at, received_at) < :cutoff
             SQL);
-        $stmt->execute(['cutoff' => $cutoff]);
+        $stmt->bindValue('max', self::MAX_ATTEMPTS, PDO::PARAM_INT);
+        $stmt->bindValue('cutoff', $cutoff);
+        $stmt->execute();
 
         return $stmt->rowCount();
     }

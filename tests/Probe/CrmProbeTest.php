@@ -110,6 +110,16 @@ final class CrmProbeTest extends TestCase
         self::assertSame(ProbeResult::STATUS_ERROR, $result->status);
     }
 
+    public function testAFailedBlogvaultProbeIsAnErrorNotAnUnlinkedSite(): void
+    {
+        $site   = (new SiteContext('s', 'https://example.com', 'https://example.com', 'example.com', 'example.com'))->withBlogvaultSiteId(null, true);
+        $result = (new CrmProbe(fn (): ClientsRepository => new ClientsRepository($this->pdo)))->run($site);
+
+        self::assertSame(ProbeResult::STATUS_ERROR, $result->status);
+        self::assertStringContainsString('blogvault_unavailable', $result->errors[0]);
+        self::assertArrayNotHasKey('reason', $result->data);
+    }
+
     public function testDatabaseFailureStoresNoDriverMessage(): void
     {
         $this->pdo->exec('DROP TABLE swp_websites');

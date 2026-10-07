@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Manager\Storage;
 
-use RuntimeException;
+use SatelliteWP\Manager\Support\JsonFileStore;
 
 /**
  * One-hour tokens scoped to one extraction's report.json (the "Report data
@@ -15,8 +15,12 @@ final class ReportTokenStore
 {
     private const int TTL_SECONDS = 3600;
 
-    public function __construct(private readonly string $file)
+    private readonly JsonFileStore $json;
+
+    /** Live bearer tokens: the file is owner-only. */
+    public function __construct(string $file)
     {
+        $this->json = new JsonFileStore($file, 0600);
     }
 
     /**
@@ -28,15 +32,17 @@ final class ReportTokenStore
         $token = bin2hex(random_bytes(24));
         $now   = time();
 
-        $tokens = $this->pruneExpired($this->all(), $now);
-        $tokens[$token] = [
-            'site_id'       => $siteId,
-            'extraction_id' => $extractionId,
-            'issued_by'     => $issuedBy,
-            'expires_at'    => $now + self::TTL_SECONDS,
-        ];
+        $this->json->mutate(function (array $tokens) use ($token, $now, $siteId, $extractionId, $issuedBy): array {
+            $tokens = $this->pruneExpired($tokens, $now);
+            $tokens[$token] = [
+                'site_id'       => $siteId,
+                'extraction_id' => $extractionId,
+                'issued_by'     => $issuedBy,
+                'expires_at'    => $now + self::TTL_SECONDS,
+            ];
 
-        $this->save($tokens);
+            return [null, $tokens];
+        });
 
         return $token;
     }
@@ -68,39 +74,16 @@ final class ReportTokenStore
     /** @return array<string, array<string, mixed>> */
     private function all(): array
     {
-        if (!is_file($this->file)) {
-            return [];
-        }
-        $decoded = json_decode((string) file_get_contents($this->file), true);
-
-        return is_array($decoded) ? $decoded : [];
+        /** @var array<string, array<string, mixed>> */
+        return $this->json->read();
     }
 
     /**
-     * @param array<string, array<string, mixed>> $tokens
-     * @return array<string, array<string, mixed>>
+     * @param array<mixed> $tokens
+     * @return array<mixed>
      */
     private function pruneExpired(array $tokens, int $now): array
     {
-        return array_filter($tokens, static fn (array $t): bool => ($t['expires_at'] ?? 0) > $now);
-    }
-
-    /** @param array<string, array<string, mixed>> $tokens */
-    private function save(array $tokens): void
-    {
-        $dir = dirname($this->file);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-        // Live bearer tokens: owner-only, and a unique temp name so two
-        // concurrent issue() calls can't rename each other's half-written file.
-        $tmp = $this->file . '.tmp.' . bin2hex(random_bytes(4));
-        if (file_put_contents($tmp, (string) json_encode($tokens, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)) === false
-            || !chmod($tmp, 0600)
-            || !rename($tmp, $this->file)
-        ) {
-            @unlink($tmp);
-            throw new RuntimeException("Unable to write {$this->file}");
-        }
+        return array_filter($tokens, static fn (mixed $t): bool => is_array($t) && ($t['expires_at'] ?? 0) > $now);
     }
 }

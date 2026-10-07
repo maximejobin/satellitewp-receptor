@@ -102,6 +102,17 @@ final class DataStoreTest extends TestCase
         $this->assertSame('A1', $store->readFindings(self::SITE_ID, $id)['findings'][0]['id']);
     }
 
+    /** A remote server's invalid UTF-8 byte (header, WHOIS, certificate name) must not fail the write. */
+    public function testProbeDataWithInvalidUtf8IsStoredWithAReplacementCharacter(): void
+    {
+        $store = new DataStore($this->tmpDir);
+        $id    = $store->storeExtraction(self::SITE_ID, '{}', []);
+
+        $store->writeProbeResult(self::SITE_ID, $id, 'http', ['probe' => 'http', 'data' => ['server' => "Apache\xB1"]]);
+
+        $this->assertSame("Apache\u{FFFD}", $store->readProbeResult(self::SITE_ID, $id, 'http')['data']['server']);
+    }
+
     public function testObservationsRoundTripAndDefaultToNull(): void
     {
         $store = new DataStore($this->tmpDir);

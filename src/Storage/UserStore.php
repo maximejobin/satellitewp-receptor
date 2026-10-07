@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace SatelliteWP\Manager\Storage;
 
-use RuntimeException;
+use SatelliteWP\Manager\Support\JsonFileStore;
+use Throwable;
 
 final class UserStore
 {
@@ -21,9 +22,16 @@ final class UserStore
      */
     private ?array $users = null;
 
+    /**
+     * currentUser() re-reads this file on every request: writes are atomic (a
+     * half-written file would read as an empty allowlist) and owner-only.
+     */
+    private readonly JsonFileStore $json;
+
     /** @param list<string> $knownRoles roles add()/updateUser() will accept; empty = accept anything */
-    public function __construct(private readonly string $file, private readonly array $knownRoles = [])
+    public function __construct(string $file, private readonly array $knownRoles = [])
     {
+        $this->json = new JsonFileStore($file, 0600);
     }
 
     /**
@@ -34,22 +42,19 @@ final class UserStore
      */
     public function all(): array
     {
-        if ($this->users !== null) {
-            return $this->users;
-        }
+        return $this->users ??= self::parse($this->json->read());
+    }
 
-        if (!is_file($this->file)) {
-            return $this->users = [];
-        }
-
-        $decoded = json_decode((string) file_get_contents($this->file), true);
-        if (!is_array($decoded)) {
-            return $this->users = [];
-        }
-
-        return $this->users = self::isLegacyFormat($decoded)
-            ? self::fromLegacy($decoded)
-            : self::fromCurrent($decoded);
+    /**
+     * @param array<mixed> $decoded
+     * @return list<array{
+     *     email:string,role:string,first_name:string,last_name:string,status:string,
+     *     data:array<string,mixed>|null,runcloud_api_key:string|null,public_ssh_key:string|null
+     * }>
+     */
+    private static function parse(array $decoded): array
+    {
+        return self::isLegacyFormat($decoded) ? self::fromLegacy($decoded) : self::fromCurrent($decoded);
     }
 
     /** @param array<mixed> $decoded */
@@ -191,27 +196,27 @@ final class UserStore
     public function add(string $email, string $role = self::DEFAULT_ROLE, string $firstName = '', string $lastName = ''): bool
     {
         $email = self::normalize($email);
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return false;
-        }
-        if ($this->exists($email) || !$this->isKnownRole($role)) {
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$this->isKnownRole($role)) {
             return false;
         }
 
-        $users   = $this->all();
-        $users[] = [
-            'email'            => $email,
-            'role'             => $role,
-            'first_name'       => trim($firstName),
-            'last_name'        => trim($lastName),
-            'status'           => self::STATUS_ACTIVE,
-            'data'             => null,
-            'runcloud_api_key' => null,
-            'public_ssh_key'   => null,
-        ];
-        $this->save($users);
+        return $this->change(function (array $users) use ($email, $role, $firstName, $lastName): ?array {
+            if ($this->exists($email)) {
+                return null;
+            }
+            $users[] = [
+                'email'            => $email,
+                'role'             => $role,
+                'first_name'       => trim($firstName),
+                'last_name'        => trim($lastName),
+                'status'           => self::STATUS_ACTIVE,
+                'data'             => null,
+                'runcloud_api_key' => null,
+                'public_ssh_key'   => null,
+            ];
 
-        return true;
+            return $users;
+        });
     }
 
     /**
@@ -227,43 +232,40 @@ final class UserStore
     {
         $email    = self::normalize($email);
         $newEmail = self::normalize($newEmail);
-        $current  = $this->find($email);
-
-        if ($current === null || !$this->isKnownRole($role)) {
-            return false;
-        }
-        if ($newEmail === '' || !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
-            return false;
-        }
-        if ($newEmail !== $email && $this->exists($newEmail)) {
+        if (!$this->isKnownRole($role) || $newEmail === '' || !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
             return false;
         }
 
-        $users = $this->all();
-        $wasActiveAdmin = $current['role'] === self::ROLE_ADMIN && $current['status'] === self::STATUS_ACTIVE;
-        $staysActiveAdmin = $role === self::ROLE_ADMIN && $current['status'] === self::STATUS_ACTIVE;
-        if ($wasActiveAdmin && !$staysActiveAdmin && !self::hasOtherActiveAdmin($users, $email)) {
-            return false;
-        }
-
-        foreach ($users as $i => $user) {
-            if ($user['email'] === $email) {
-                // Profile fields belong to updateProfile(); carried over untouched.
-                $users[$i] = [
-                    'email'            => $newEmail,
-                    'role'             => $role,
-                    'first_name'       => trim($firstName),
-                    'last_name'        => trim($lastName),
-                    'status'           => $user['status'],
-                    'data'             => $user['data'],
-                    'runcloud_api_key' => $user['runcloud_api_key'],
-                    'public_ssh_key'   => $user['public_ssh_key'],
-                ];
+        return $this->change(function (array $users) use ($email, $newEmail, $firstName, $lastName, $role): ?array {
+            $current = $this->find($email);
+            if ($current === null || ($newEmail !== $email && $this->exists($newEmail))) {
+                return null;
             }
-        }
-        $this->save($users);
 
-        return true;
+            $wasActiveAdmin   = $current['role'] === self::ROLE_ADMIN && $current['status'] === self::STATUS_ACTIVE;
+            $staysActiveAdmin = $role === self::ROLE_ADMIN && $current['status'] === self::STATUS_ACTIVE;
+            if ($wasActiveAdmin && !$staysActiveAdmin && !self::hasOtherActiveAdmin($users, $email)) {
+                return null;
+            }
+
+            foreach ($users as $i => $user) {
+                if ($user['email'] === $email) {
+                    // Profile fields belong to updateProfile(); carried over untouched.
+                    $users[$i] = [
+                        'email'            => $newEmail,
+                        'role'             => $role,
+                        'first_name'       => trim($firstName),
+                        'last_name'        => trim($lastName),
+                        'status'           => $user['status'],
+                        'data'             => $user['data'],
+                        'runcloud_api_key' => $user['runcloud_api_key'],
+                        'public_ssh_key'   => $user['public_ssh_key'],
+                    ];
+                }
+            }
+
+            return $users;
+        });
     }
 
     /**
@@ -272,25 +274,24 @@ final class UserStore
      */
     public function updateProfile(string $email, ?array $data, ?string $runcloudApiKey, ?string $publicSshKey): bool
     {
-        $email = self::normalize($email);
-        if ($this->find($email) === null) {
-            return false;
-        }
-
+        $email          = self::normalize($email);
         $runcloudApiKey = $runcloudApiKey !== null && trim($runcloudApiKey) !== '' ? trim($runcloudApiKey) : null;
         $publicSshKey   = $publicSshKey !== null && trim($publicSshKey) !== '' ? trim($publicSshKey) : null;
 
-        $users = $this->all();
-        foreach ($users as $i => $user) {
-            if ($user['email'] === $email) {
-                $users[$i]['data']             = $data;
-                $users[$i]['runcloud_api_key'] = $runcloudApiKey;
-                $users[$i]['public_ssh_key']   = $publicSshKey;
+        return $this->change(function (array $users) use ($email, $data, $runcloudApiKey, $publicSshKey): ?array {
+            if ($this->find($email) === null) {
+                return null;
             }
-        }
-        $this->save($users);
+            foreach ($users as $i => $user) {
+                if ($user['email'] === $email) {
+                    $users[$i]['data']             = $data;
+                    $users[$i]['runcloud_api_key'] = $runcloudApiKey;
+                    $users[$i]['public_ssh_key']   = $publicSshKey;
+                }
+            }
 
-        return true;
+            return $users;
+        });
     }
 
     /**
@@ -305,25 +306,28 @@ final class UserStore
     public function setStatus(string $email, string $status): bool
     {
         $email = self::normalize($email);
-        $user  = $this->find($email);
-        if ($user === null || !in_array($status, [self::STATUS_ACTIVE, self::STATUS_SUSPENDED], true)) {
+        if (!in_array($status, [self::STATUS_ACTIVE, self::STATUS_SUSPENDED], true)) {
             return false;
         }
 
-        $users = $this->all();
-        $isActiveAdmin = $user['role'] === self::ROLE_ADMIN && $user['status'] === self::STATUS_ACTIVE;
-        if ($isActiveAdmin && $status === self::STATUS_SUSPENDED && !self::hasOtherActiveAdmin($users, $email)) {
-            return false;
-        }
-
-        foreach ($users as $i => $u) {
-            if ($u['email'] === $email) {
-                $users[$i]['status'] = $status;
+        return $this->change(function (array $users) use ($email, $status): ?array {
+            $user = $this->find($email);
+            if ($user === null) {
+                return null;
             }
-        }
-        $this->save($users);
+            $isActiveAdmin = $user['role'] === self::ROLE_ADMIN && $user['status'] === self::STATUS_ACTIVE;
+            if ($isActiveAdmin && $status === self::STATUS_SUSPENDED && !self::hasOtherActiveAdmin($users, $email)) {
+                return null;
+            }
 
-        return true;
+            foreach ($users as $i => $u) {
+                if ($u['email'] === $email) {
+                    $users[$i]['status'] = $status;
+                }
+            }
+
+            return $users;
+        });
     }
 
     /**
@@ -335,20 +339,19 @@ final class UserStore
     public function remove(string $email): bool
     {
         $email = self::normalize($email);
-        $user  = $this->find($email);
-        if ($user === null) {
-            return false;
-        }
 
-        $users = $this->all();
-        $isActiveAdmin = $user['role'] === self::ROLE_ADMIN && $user['status'] === self::STATUS_ACTIVE;
-        if ($isActiveAdmin && !self::hasOtherActiveAdmin($users, $email)) {
-            return false;
-        }
+        return $this->change(function (array $users) use ($email): ?array {
+            $user = $this->find($email);
+            if ($user === null) {
+                return null;
+            }
+            $isActiveAdmin = $user['role'] === self::ROLE_ADMIN && $user['status'] === self::STATUS_ACTIVE;
+            if ($isActiveAdmin && !self::hasOtherActiveAdmin($users, $email)) {
+                return null;
+            }
 
-        $this->save(array_values(array_filter($users, static fn (array $u): bool => $u['email'] !== $email)));
-
-        return true;
+            return array_values(array_filter($users, static fn (array $u): bool => $u['email'] !== $email));
+        });
     }
 
     /** @param list<array{email:string,role:string,first_name:string,last_name:string,status:string}> $users */
@@ -369,27 +372,36 @@ final class UserStore
     }
 
     /**
-     * @param list<array{
+     * Applies $edit to the list re-read under the file lock, so the checks it
+     * makes (duplicate address, last active admin) see concurrent writes.
+     *
+     * @param callable(list<array{
      *     email:string,role:string,first_name:string,last_name:string,status:string,
      *     data:array<string,mixed>|null,runcloud_api_key:string|null,public_ssh_key:string|null
-     * }> $users
+     * }>): (list<array{
+     *     email:string,role:string,first_name:string,last_name:string,status:string,
+     *     data:array<string,mixed>|null,runcloud_api_key:string|null,public_ssh_key:string|null
+     * }>|null) $edit returns the new list, or null to refuse without writing
+     * @return bool false when $edit refused
      */
-    private function save(array $users): void
+    private function change(callable $edit): bool
     {
-        $dir = dirname($this->file);
-        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-            throw new RuntimeException("Cannot create directory for the users file: {$dir}");
-        }
+        try {
+            return $this->json->mutate(function (array $raw) use ($edit): array {
+                $this->users = self::parse($raw);
+                $users       = $edit($this->users);
+                if ($users === null) {
+                    return [false, null];
+                }
+                $this->users = $users;
 
-        // Temp + rename: currentUser() re-reads this file on every request, and
-        // a half-written file would read as an empty allowlist (everyone out).
-        $json = (string) json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
-        $tmp  = $this->file . '.tmp.' . bin2hex(random_bytes(4));
-        if (file_put_contents($tmp, $json) === false || !chmod($tmp, 0600) || !rename($tmp, $this->file)) {
-            @unlink($tmp);
-            throw new RuntimeException("Unable to write {$this->file}");
+                return [true, $users];
+            });
+        } catch (Throwable $e) {
+            $this->users = null;
+
+            throw $e;
         }
-        $this->users = $users;
     }
 
     private static function normalize(string $email): string

@@ -309,4 +309,39 @@ final class UserStoreTest extends TestCase
         $this->assertSame('600', substr(sprintf('%o', fileperms($file)), -3));
         $this->assertSame([], glob($file . '.tmp*') ?: []);
     }
+
+    public function testAnUnencodableWriteKeepsTheAllowlist(): void
+    {
+        $store = $this->store();
+        $store->add('admin@example.com', 'admin');
+        $file   = $this->tmpDir . '/users.json';
+        $before = (string) file_get_contents($file);
+
+        try {
+            $store->add('second@example.com', 'maintenance', "Na\xB1me");
+            $this->fail('an invalid UTF-8 name must not be written');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame($before, file_get_contents($file));
+        $this->assertTrue($store->isAllowed('admin@example.com'));
+        $this->assertFalse($store->exists('second@example.com'));
+    }
+
+    /** An instance holding an old copy re-reads the file before writing. */
+    public function testWritesReReadTheFileRatherThanAStaleCopy(): void
+    {
+        $a = $this->store();
+        $a->add('admin@example.com', 'admin');
+
+        $b = new UserStore($this->tmpDir . '/users.json', self::ROLES);
+        $b->add('second@example.com', 'maintenance');
+
+        $a->add('third@example.com', 'maintenance');
+
+        $this->assertSame(
+            ['admin@example.com', 'second@example.com', 'third@example.com'],
+            array_column((new UserStore($this->tmpDir . '/users.json', self::ROLES))->all(), 'email')
+        );
+    }
 }

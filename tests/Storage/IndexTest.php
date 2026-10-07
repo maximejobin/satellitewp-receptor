@@ -141,6 +141,87 @@ final class IndexTest extends TestCase
         $this->assertSame('running', $this->index->getExtraction(self::SITE_B, '20260722T110000Z')['status']);
     }
 
+    private function makeStale(string $id): void
+    {
+        $this->index->pdo()->prepare('UPDATE extractions SET processed_at = :t WHERE id = :id')
+            ->execute(['t' => gmdate('Y-m-d\TH:i:s\Z', time() - 40 * 60), 'id' => $id]);
+    }
+
+    public function testClaimOnlyTakesAnExtractionStillQueued(): void
+    {
+        $this->seedExtraction(self::SITE_A, 'e1');
+        $this->index->setExtractionStatus(self::SITE_A, 'e1', Index::STATUS_QUEUED);
+
+        $this->assertTrue($this->index->claimQueued(self::SITE_A, 'e1'));
+        $row = $this->index->getExtraction(self::SITE_A, 'e1');
+        $this->assertSame('running', $row['status']);
+        $this->assertSame(1, (int) $row['attempts']);
+        $this->assertFalse($this->index->claimQueued(self::SITE_A, 'e1'), 'already running');
+
+        // Aborted after the worker listed it: never claimed.
+        $this->seedExtraction(self::SITE_A, 'e2');
+        $this->index->setExtractionStatus(self::SITE_A, 'e2', Index::STATUS_QUEUED);
+        $this->index->setExtractionStatus(self::SITE_A, 'e2', Index::STATUS_ABORTED);
+        $this->assertFalse($this->index->claimQueued(self::SITE_A, 'e2'));
+        $this->assertSame('aborted', $this->index->getExtraction(self::SITE_A, 'e2')['status']);
+    }
+
+    public function testARunThatKeepsDyingEndsInErrorAfterMaxAttempts(): void
+    {
+        $this->seedExtraction(self::SITE_A, 'e1');
+        $this->index->setExtractionStatus(self::SITE_A, 'e1', Index::STATUS_QUEUED);
+
+        for ($i = 1; $i < Index::MAX_ATTEMPTS; $i++) {
+            $this->assertTrue($this->index->claimQueued(self::SITE_A, 'e1'));
+            $this->makeStale('e1');
+            $this->assertSame(1, $this->index->requeueStale(30));
+            $this->assertSame('queued', $this->index->getExtraction(self::SITE_A, 'e1')['status']);
+        }
+
+        $this->assertTrue($this->index->claimQueued(self::SITE_A, 'e1'));
+        $this->makeStale('e1');
+        $this->index->requeueStale(30);
+        $this->assertSame('error', $this->index->getExtraction(self::SITE_A, 'e1')['status']);
+
+        // The analyst queueing it again starts a fresh count.
+        $this->index->setExtractionStatus(self::SITE_A, 'e1', Index::STATUS_QUEUED);
+        $this->assertSame(0, (int) $this->index->getExtraction(self::SITE_A, 'e1')['attempts']);
+    }
+
+    public function testAnInterruptedManualRunIsNeverRequeued(): void
+    {
+        $this->seedExtraction(self::SITE_A, 'done1', [], 'done');
+        $this->index->markManualRun(self::SITE_A, 'done1');
+        $this->seedExtraction(self::SITE_A, 'pend1');
+        $this->index->markManualRun(self::SITE_A, 'pend1');
+        $this->assertSame('running', $this->index->getExtraction(self::SITE_A, 'done1')['status']);
+        $this->makeStale('done1');
+        $this->makeStale('pend1');
+
+        $this->assertSame(2, $this->index->requeueStale(30));
+
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_A, 'done1')['status']);
+        $this->assertSame('error', $this->index->getExtraction(self::SITE_A, 'pend1')['status']);
+    }
+
+    public function testMigratesAVersionOneIndex(): void
+    {
+        $file = $this->tmpDir . '/old.sqlite';
+        $pdo  = new PDO('sqlite:' . $file);
+        $pdo->exec("CREATE TABLE extractions (id TEXT NOT NULL, site_id TEXT NOT NULL, received_at TEXT NOT NULL,
+            schema_version TEXT, wp_version TEXT, php_version TEXT, database_type TEXT, database_version TEXT,
+            status TEXT NOT NULL DEFAULT 'pending', processed_at TEXT, PRIMARY KEY (site_id, id))");
+        $pdo->exec("INSERT INTO extractions (id, site_id, received_at, status) VALUES ('e1', 's', '2026-07-22T10:00:00Z', 'queued')");
+        $pdo->exec('PRAGMA user_version = 1');
+        unset($pdo);
+
+        $index = new Index($file);
+
+        $this->assertTrue($index->claimQueued('s', 'e1'));
+        $this->assertSame(1, (int) $index->getExtraction('s', 'e1')['attempts']);
+        $this->assertSame(Index::SCHEMA_VERSION, (int) $index->pdo()->query('PRAGMA user_version')->fetchColumn());
+    }
+
     /**
      * The worker must never pick up an extraction that merely arrived: probes
      * (and their PageSpeed / BlogVault quotas) only run once an analyst has

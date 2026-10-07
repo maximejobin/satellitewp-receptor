@@ -48,9 +48,9 @@ final class IngestProcessCommand extends Command
             $index = $this->app->index();
 
             if (($stale = $input->getOption('requeue-stale')) !== null) {
-                $requeued = $index->requeueStale((int) $stale);
-                if ($requeued > 0) {
-                    $output->writeln("Requeued {$requeued} stale extraction(s).");
+                $settled = $index->requeueStale((int) $stale);
+                if ($settled > 0) {
+                    $output->writeln("Settled {$settled} stale running extraction(s) (requeued, or error after " . Index::MAX_ATTEMPTS . ' attempts).');
                 }
             }
 
@@ -69,7 +69,11 @@ final class IngestProcessCommand extends Command
                 $output->write("Processing {$siteId}/{$extractionId} … ");
 
                 try {
-                    $results  = $this->app->pipeline()->run($siteId, $extractionId);
+                    $results = $this->app->pipeline()->runQueued($siteId, $extractionId);
+                    if ($results === null) {
+                        $output->writeln('<comment>skipped (no longer queued)</comment>');
+                        continue;
+                    }
                     $statuses = array_map(static fn ($r) => $r->probe . ':' . $r->status, $results);
                     $output->writeln('<info>done</info> [' . implode(' ', $statuses) . ']');
                 } catch (Throwable $e) {

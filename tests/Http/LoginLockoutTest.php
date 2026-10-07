@@ -73,4 +73,17 @@ final class LoginLockoutTest extends TestCase
 
         $this->assertTrue((new LoginLockout($file))->isLocked('1.2.3.4'));
     }
+
+    public function testTwoInstancesShareTheirFailures(): void
+    {
+        $file = $this->tmpDir . '/login-lockout.json';
+        $a    = new LoginLockout($file);
+        $b    = new LoginLockout($file);
+        for ($i = 0; $i < 5; $i++) {
+            ($i % 2 === 0 ? $a : $b)->recordFailure('1.2.3.4');
+        }
+
+        $this->assertTrue($a->isLocked('1.2.3.4'));
+        $this->assertSame('600', substr(sprintf('%o', fileperms($file)), -3));
+    }
 }

@@ -12,13 +12,14 @@ use RuntimeException;
  */
 final class AtomicFile
 {
-    public static function write(string $file, string $contents): void
+    /** @param int|null $mode set on the temp file, so the new file is never readable with looser permissions */
+    public static function write(string $file, string $contents, ?int $mode = null): void
     {
-        self::writeChunks($file, [$contents]);
+        self::writeChunks($file, [$contents], $mode);
     }
 
     /** @param iterable<string> $chunks streamed to disk, so a large file is never built in memory */
-    public static function writeChunks(string $file, iterable $chunks): void
+    public static function writeChunks(string $file, iterable $chunks, ?int $mode = null): void
     {
         $tmp    = $file . '.tmp.' . bin2hex(random_bytes(4));
         $handle = @fopen($tmp, 'wb');
@@ -34,6 +35,9 @@ final class AtomicFile
             }
         }
         $ok = fclose($handle) && $ok;
+        if ($ok && $mode !== null) {
+            $ok = chmod($tmp, $mode);
+        }
 
         if (!$ok || !rename($tmp, $file)) {
             @unlink($tmp);

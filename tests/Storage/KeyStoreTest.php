@@ -79,4 +79,37 @@ final class KeyStoreTest extends TestCase
 
         $this->assertSame('moved.example', $keys->getOrigin(self::SITE_ID));
     }
+
+    public function testAnUnencodableWriteKeepsEveryExistingKey(): void
+    {
+        $file = $this->tmpDir . '/keys.json';
+        $keys = $this->store();
+        $keys->addKey(self::SITE_ID, 'secret', 'https://example.com');
+        $before = (string) file_get_contents($file);
+
+        try {
+            $keys->setHttpAuth(self::SITE_ID, "user\xB1", 'pass');
+            $this->fail('an invalid UTF-8 value must not be written');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame($before, file_get_contents($file));
+        $this->assertSame('secret', $keys->getKey(self::SITE_ID));
+    }
+
+    public function testKeysFileIsOwnerOnlyAndWritersReReadIt(): void
+    {
+        $file = $this->tmpDir . '/keys.json';
+        $a    = new KeyStore($file);
+        $b    = new KeyStore($file);
+
+        $a->addKey(self::SITE_ID, 'one');
+        $b->addKey('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'two');
+        $a->revokeKey('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+
+        $this->assertSame('600', substr(sprintf('%o', fileperms($file)), -3));
+        $this->assertSame([], glob($file . '.tmp*') ?: []);
+        $this->assertSame('one', $b->getKey(self::SITE_ID));
+        $this->assertNull($b->getKey('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'));
+    }
 }
