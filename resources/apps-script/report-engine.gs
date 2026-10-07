@@ -20,9 +20,14 @@
  * Observations (long form): a coloured ◼ + bold title, then the description;
  * a purple observation (client action) becomes a ☐ checkbox followed by the
  * title and description, to tick on paper.
+ *
+ * Only an observation's title and message are markup (**bold**, _italic_,
+ * [text](url)); Manager backslash-escapes \ * _ [ ] in text that must stay
+ * literal. Values and table cells are plain text; a cell's icons come as URLs
+ * in its own 'icons' list.
  */
 
-var VERSION = 29;
+var VERSION = 30;
 
 var COLORS = {
   red:    '#c0392f',
@@ -41,13 +46,40 @@ var RENDERERS = {
   observations: insertObservations
 };
 
+/** A token's inside: name, optional colours, optional mode. */
+var TOKEN_SHAPE = /^[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]*(?:,[a-zA-Z0-9_]+)*)?(?::[a-zA-Z0-9_]+)?$/;
+
+/** Loose search pattern for findText (no groups); each hit is checked against TOKEN_SHAPE. */
+var TOKEN_SEARCH = '\\{\\{[a-zA-Z0-9_:,]+\\}\\}';
+
 /** Each distinct {{token}}, suffixes included, in order of appearance. */
 function tokensInText(text) {
-  var pattern = /\{\{([a-zA-Z0-9_]+(?::[a-zA-Z0-9_]*(?:,[a-zA-Z0-9_]+)*)?(?::[a-zA-Z0-9_]+)?)\}\}/g;
+  var pattern = /\{\{([a-zA-Z0-9_:,]+)\}\}/g;
   var found   = [];
   var m;
   while ((m = pattern.exec(text)) !== null) {
-    if (found.indexOf(m[1]) === -1) { found.push(m[1]); }
+    if (TOKEN_SHAPE.test(m[1]) && found.indexOf(m[1]) === -1) { found.push(m[1]); }
+  }
+  return found;
+}
+
+/**
+ * Every {{token}} occurrence of the body, in document order, collected before
+ * anything is replaced: inserted data is never searched, so a value that reads
+ * like a {{token}} stays text.
+ */
+function tokenOccurrences(body) {
+  var found = [];
+  var range = body.findText(TOKEN_SEARCH);
+  while (range) {
+    var text  = range.getElement().asText();
+    var start = range.getStartOffset();
+    var end   = range.getEndOffsetInclusive();
+    var token = text.getText().substring(start + 2, end - 1);
+    if (TOKEN_SHAPE.test(token)) {
+      found.push({ token: token, text: text, start: start, end: end });
+    }
+    range = body.findText(TOKEN_SEARCH, range);
   }
   return found;
 }
@@ -62,25 +94,17 @@ function parseToken(token) {
   };
 }
 
-/** {{name}} as a search pattern (findText takes a regular expression). */
-function tokenPattern(name) {
-  return '\\{\\{' + name + '\\}\\}';
-}
-
 /**
- * Replaces {{name}} with its value, keeping the style already applied to the
- * token in the Doc; field.color, when given, only changes the colour.
+ * Replaces one {{name}} occurrence with its value, keeping the style already
+ * applied to the token in the Doc; field.color, when given, only changes the colour.
  */
-function insertValue(body, name, field) {
-  var found = body.findText(tokenPattern(name));
-  if (!found) { return false; }
-
-  var text       = found.getElement().asText();
-  var start      = found.getStartOffset();
+function insertValue(body, occurrence, field) {
+  var text       = occurrence.text;
+  var start      = occurrence.start;
   var attributes = text.getAttributes(start);
   var value      = field.value === null || field.value === undefined ? '' : String(field.value);
 
-  text.deleteText(start, found.getEndOffsetInclusive());
+  text.deleteText(start, occurrence.end);
   if (value.length > 0) {
     text.insertText(start, value);
     text.setAttributes(start, start + value.length - 1, attributes);
@@ -96,8 +120,8 @@ function insertValue(body, name, field) {
  * Replaces the line of {{name}} (alone on its line) with a table. The table is
  * created empty then filled cell by cell, so icons can be inserted.
  */
-function insertTable(body, name, field) {
-  var paragraph = topLevelParagraph(body, name);
+function insertTable(body, occurrence, field) {
+  var paragraph = topLevelElement(occurrence.text);
   if (!paragraph) { return false; }
 
   var columnCount = field.headers.length;
@@ -105,19 +129,19 @@ function insertTable(body, name, field) {
   for (var r = 0; r < 1 + field.rows.length; r++) { rows.push(new Array(columnCount).fill('')); }
 
   var table = body.insertTable(body.getChildIndex(paragraph), rows);
-  body.removeChild(paragraph);
+  removeTopLevel(body, paragraph);
   table.setColumnWidth(0, firstColumnWidth(field));
 
   for (var c = 0; c < columnCount; c++) {
     var header = table.getCell(0, c);
     header.setBackgroundColor('#eaeef3');
-    fillCell(header, field.headers[c], null);
+    fillCell(header, field.headers[c], null, null);
     header.editAsText().setBold(true);
   }
 
   field.rows.forEach(function (row, rowIndex) {
     row.forEach(function (cell, columnIndex) {
-      fillCell(table.getCell(rowIndex + 1, columnIndex), cell.text, cell.color);
+      fillCell(table.getCell(rowIndex + 1, columnIndex), cell.text, cell.color, cell.icons);
     });
   });
 
@@ -140,19 +164,16 @@ function firstColumnWidth(field) {
 /** Each icon is downloaded once per run. */
 var IMAGE_CACHE = {};
 
-/** Fills a cell; each [img url="…"] becomes an inline icon. */
-function fillCell(cell, text, color) {
-  var paragraph    = cell.getChild(0).asParagraph();
-  var imagePattern = /\[img url="([^"]+)"\]/g;
-  var last = 0;
-  var m;
+/** Fills a cell with its text as is, then its icons, space-separated. */
+function fillCell(cell, text, color, icons) {
+  var paragraph = cell.getChild(0).asParagraph();
+  var value     = text === null || text === undefined ? '' : String(text);
 
-  while ((m = imagePattern.exec(text)) !== null) {
-    if (m.index > last) { paragraph.appendText(text.substring(last, m.index)); }
-    paragraph.appendInlineImage(imageAt(m[1])).setWidth(14).setHeight(14);
-    last = imagePattern.lastIndex;
-  }
-  if (last < text.length) { paragraph.appendText(text.substring(last)); }
+  if (value.length > 0) { paragraph.appendText(value); }
+  (icons || []).forEach(function (url, i) {
+    if (i > 0 || value.length > 0) { paragraph.appendText(' '); }
+    paragraph.appendInlineImage(imageAt(url)).setWidth(14).setHeight(14);
+  });
 
   if (color && COLORS[color]) {
     cell.editAsText().setForegroundColor(COLORS[color]);
@@ -166,10 +187,18 @@ function imageAt(url) {
   return IMAGE_CACHE[url];
 }
 
-/** Replaces the line of {{name}} with its observations, in long or short form. */
-function insertObservations(body, name, field) {
-  var paragraph = topLevelParagraph(body, name);
-  if (!paragraph || !field.items || field.items.length === 0) { return false; }
+/**
+ * Replaces the line of {{name}} with its observations, in long or short form;
+ * the line is removed when no item is left after the colour filter.
+ */
+function insertObservations(body, occurrence, field) {
+  var paragraph = topLevelElement(occurrence.text);
+  if (!paragraph) { return false; }
+
+  if (!field.items || field.items.length === 0) {
+    removeTopLevel(body, paragraph);
+    return true;
+  }
 
   if (field.mode === 'short') {
     insertObservationsShort(body, paragraph, field.items);
@@ -185,7 +214,7 @@ function insertObservations(body, name, field) {
       return;
     }
 
-    var title = body.insertParagraph(position + offset, '◼ ' + item.title);
+    var title = body.insertParagraph(position + offset, '◼ ' + unescapeMarkup(item.title));
     offset++;
     title.setSpacingBefore(i === 0 ? 0 : 14).setSpacingAfter(3);
     var titleText = title.editAsText();
@@ -199,7 +228,7 @@ function insertObservations(body, name, field) {
     applyMarks(description.editAsText().setBold(false).setFontSize(11).setForegroundColor(TEXT_COLOR), parsed.marks, 0);
   });
 
-  body.removeChild(paragraph);
+  removeTopLevel(body, paragraph);
   return true;
 }
 
@@ -213,13 +242,13 @@ function insertObservationsShort(body, paragraph, items) {
   var rows = [];
   for (var r = 0; r < half; r++) {
     rows.push([
-      items[r].title,
-      items[r + half] ? items[r + half].title : ''
+      unescapeMarkup(items[r].title),
+      items[r + half] ? unescapeMarkup(items[r + half].title) : ''
     ]);
   }
 
   var table = body.insertTable(body.getChildIndex(paragraph), rows);
-  body.removeChild(paragraph);
+  removeTopLevel(body, paragraph);
   table.setBorderWidth(0);
 
   for (var row = 0; row < table.getNumRows(); row++) {
@@ -257,12 +286,32 @@ function applyMarks(text, marks, shift) {
   });
 }
 
+/** A backslash-escaped markup character: \\ \* \_ \[ \] */
+var ESCAPED_MARKUP = /\\([\\*_\[\]])/g;
+
+/** The escapable characters, in the order of their stand-ins U+E000…U+E004. */
+var ESCAPABLE = '\\*_[]';
+
+/** Text with its escapes resolved, where no marks are rendered. */
+function unescapeMarkup(text) {
+  return String(text === null || text === undefined ? '' : text).replace(ESCAPED_MARKUP, '$1');
+}
+
+function restoreEscaped(text) {
+  return text.replace(/[-]/g, function (c) { return ESCAPABLE.charAt(c.charCodeAt(0) - 0xE000); });
+}
+
 /**
  * Strips the **bold**, _italic_ (word start/end only) and [text](https://url)
  * markers — the same syntax as Manager's format_observation_text() — and
- * returns the marks with their positions in the cleaned text.
+ * returns the marks with their positions in the cleaned text. An escaped
+ * character becomes a one-character stand-in no pattern matches (offsets
+ * hold), restored to the literal character afterwards.
  */
-function parseFormattedText(text) {
+function parseFormattedText(raw) {
+  var text = String(raw === null || raw === undefined ? '' : raw).replace(ESCAPED_MARKUP, function (all, c) {
+    return String.fromCharCode(0xE000 + ESCAPABLE.indexOf(c));
+  });
   var markPattern = /\*\*(.+?)\*\*|(?<![\p{L}\p{N}])_(.+?)_(?![\p{L}\p{N}])|\[(.+?)\]\((https?:\/\/[^\s)]+)\)/gu;
   var clean = '';
   var marks = [];
@@ -281,51 +330,65 @@ function parseFormattedText(text) {
       marks.push({ start: start, end: clean.length - 1, italic: true });
     } else {
       clean += m[3];
-      marks.push({ start: start, end: clean.length - 1, link: m[4] });
+      marks.push({ start: start, end: clean.length - 1, link: restoreEscaped(m[4]) });
     }
 
     last = markPattern.lastIndex;
   }
   clean += text.substring(last);
 
-  return { text: clean, marks: marks };
+  return { text: restoreEscaped(clean), marks: marks };
 }
 
-/** The top-level paragraph containing {{name}}, or null. */
-function topLevelParagraph(body, name) {
-  var found = body.findText(tokenPattern(name));
-  if (!found) { return null; }
-
-  var element = found.getElement();
-  while (element && element.getParent() && element.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
+/**
+ * The body-level element holding an occurrence, or null once it has left the
+ * body (a later replacement on the same line removed it).
+ */
+function topLevelElement(element) {
+  while (element.getParent() && element.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION) {
     element = element.getParent();
   }
 
-  return element;
+  return element.getParent() ? element : null;
+}
+
+/** Removes a body-level element; the body's last paragraph cannot be removed, so it is emptied instead. */
+function removeTopLevel(body, element) {
+  if (body.getChildIndex(element) === body.getNumChildren() - 1) {
+    element.clear();
+  } else {
+    body.removeChild(element);
+  }
 }
 
 /** Fills each {{variable}} of the document that has data in the report. */
 function fill(ui, data) {
-  var body   = DocumentApp.getActiveDocument().getBody();
-  var filled = [];
+  var body        = DocumentApp.getActiveDocument().getBody();
+  var occurrences = tokenOccurrences(body);
+  var done        = {};
 
-  // Driven by the document's {{tokens}}: one field can appear several times
-  // with different filters.
-  tokensInText(body.getText()).forEach(function (token) {
-    var parsed = parseToken(token);
-    var field  = data.fields[parsed.name];
-    if (!field) { return; }
+  // Driven by the document's {{tokens}}: a field can appear several times,
+  // with the same or different filters. Last to first, so a replacement never
+  // shifts the offsets of an earlier occurrence in the same text.
+  for (var i = occurrences.length - 1; i >= 0; i--) {
+    var occurrence = occurrences[i];
+    var parsed     = parseToken(occurrence.token);
+    var field      = data.fields[parsed.name];
+    if (!field) { continue; }
 
     if (field.type === 'observations') {
-      var items = field.items;
-      if (parsed.colors) {
-        items = items.filter(function (item) { return parsed.colors.indexOf(item.color) !== -1; });
-      }
+      var colors = parsed.colors;
+      var items  = (field.items || []).filter(function (item) { return !colors || colors.indexOf(item.color) !== -1; });
       field = { type: field.type, items: items, mode: parsed.mode };
     }
 
     var render = RENDERERS[field.type];
-    if (render && render(body, token, field)) { filled.push(token); }
+    if (render && render(body, occurrence, field)) { done[occurrence.token] = true; }
+  }
+
+  var filled = [];
+  occurrences.forEach(function (occurrence) {
+    if (done[occurrence.token] && filled.indexOf(occurrence.token) === -1) { filled.push(occurrence.token); }
   });
 
   ui.alert(filled.length
