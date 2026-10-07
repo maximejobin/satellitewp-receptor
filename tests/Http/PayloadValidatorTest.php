@@ -88,6 +88,30 @@ final class PayloadValidatorTest extends TestCase
         $this->validator->validate($body, 'bogus', self::SITE);
     }
 
+    public function testPartialExtractionRejected(): void
+    {
+        $payload                     = $this->fixtureArray('extraction-valid.json');
+        $payload['collector_errors'] = ['plugins' => 'host forbids this'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('collector_errors');
+        $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+    }
+
+    public function testEmptyCollectorErrorsTolerated(): void
+    {
+        $payload                     = $this->fixtureArray('extraction-valid.json');
+        $payload['collector_errors'] = [];
+
+        $result = $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+        $this->assertSame(self::SITE, $result['site_id']);
+    }
+
+    public function testFixtureCarriesNoCollectorErrors(): void
+    {
+        $this->assertArrayNotHasKey('collector_errors', $this->fixtureArray('extraction-valid.json'));
+    }
+
     public function testUnknownKeysAreTolerated(): void
     {
         $body = (string) json_encode([

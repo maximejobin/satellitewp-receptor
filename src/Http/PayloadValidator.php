@@ -39,7 +39,10 @@ final class PayloadValidator
         }
 
         match ($type) {
-            self::TYPE_EXTRACTION => null, // flat object; presence of site_id/schema_version is enough
+            // Flat object. An extraction is complete or it is not sent: a missing
+            // section would read as "nothing there" to the rules.
+            self::TYPE_EXTRACTION => empty($payload['collector_errors'])
+                ? null : throw new InvalidArgumentException('Partial extraction: collector_errors is not empty'),
             self::TYPE_EVENT      => is_array($payload['events'] ?? null)
                 ? null : throw new InvalidArgumentException('Event payload requires an "events" array'),
             self::TYPE_INTEGRITY  => is_array($payload['integrity'] ?? null)

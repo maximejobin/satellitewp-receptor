@@ -52,8 +52,9 @@ framework.
 ## Flow
 
 Plugin `POST` → `public/receptor/index.php` (**Extractor**: HMAC over
-`timestamp . '.' . body`, timestamp window ±300 s, replay cache, store, index as
-`pending`) → analyst presses **Run analysis** (→ `queued`) → cron
+`timestamp . '.' . body`, timestamp window ±300 s, replay cache, a non-empty
+`collector_errors` refused with 422 (the plugin aborts on any collector or
+connector failure), store, index as `pending`) → analyst presses **Run analysis** (→ `queued`) → cron
 `ingest:process` runs **Pipeline** on queued extractions only: probes `dns`,
 `rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail`, `crm`, `seranking` write
 `probes/*.json`, plugin/theme slugs go to the **SoftwareCatalog**, then
@@ -93,6 +94,8 @@ an extraction from another address gets 409. `PayloadValidator::normalizeOrigin(
 mirrors the plugin's `ConfigFile::normalize_url()` — keep them in step. A real
 move is `keys:rebind` (keeps `site_id`, hence history). Pairing UI lives in
 `/site/{id}` → "⚙ Site settings"; the site_id UUID always comes from the plugin.
+A multisite network is one site: one pairing file bound to the main site's
+address, extractions sent from the main site only.
 
 **`@` does not suppress an `Error`.** A function in `disable_functions` throws;
 optional calls need `try/catch`.
