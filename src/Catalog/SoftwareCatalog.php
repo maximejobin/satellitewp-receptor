@@ -28,6 +28,12 @@ final class SoftwareCatalog
         self::LICENSE_FREE, self::LICENSE_PREMIUM, self::LICENSE_MIXED, self::LICENSE_CUSTOM, self::LICENSE_UNKNOWN,
     ];
 
+    /**
+     * Upper bound of the catalogue: every site key can push new slugs, and the
+     * whole file is loaded on each catalogue page. New slugs past it are not recorded.
+     */
+    public const int MAX_ENTRIES = 20_000;
+
     /** @var array<string, array<string, mixed>>|null lazy-loaded cache */
     private ?array $entries = null;
 
@@ -78,6 +84,9 @@ final class SoftwareCatalog
                 $this->entries[$key]['name'] = $name;
             }
 
+            return 0;
+        }
+        if (count((array) $this->entries) >= self::MAX_ENTRIES) {
             return 0;
         }
 
@@ -262,10 +271,20 @@ final class SoftwareCatalog
     {
         $slug = trim($slug);
         if ($type === 'plugin' && str_contains($slug, '/')) {
-            return explode('/', $slug)[0];
+            $slug = explode('/', $slug)[0];
+        } elseif ($type === 'plugin') {
+            $slug = preg_replace('/\.php$/', '', $slug) ?? $slug;
         }
-        if ($type === 'plugin') {
-            return preg_replace('/\.php$/', '', $slug) ?? $slug;
+
+        // Slugs come from the payload and end up in catalogue keys and wp.org
+        // URLs: no dot segments, separators or control bytes.
+        foreach (explode('/', $slug) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                return '';
+            }
+        }
+        if (strlen($slug) > 255 || preg_match('/[\\\\\x00-\x1f\x7f]/', $slug) === 1) {
+            return '';
         }
 
         return $slug;

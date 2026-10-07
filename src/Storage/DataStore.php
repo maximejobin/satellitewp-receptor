@@ -89,6 +89,23 @@ final class DataStore
         }
     }
 
+    /** Size of the month's event log $receivedAt falls in (0 when none yet). */
+    public function eventFileBytes(string $siteId, string $receivedAt): int
+    {
+        $file = $this->siteDir($siteId) . '/events/' . substr($receivedAt, 0, 7) . '.jsonl';
+        clearstatcache(true, $file);
+
+        return is_file($file) ? (int) filesize($file) : 0;
+    }
+
+    /** Extractions stored for this site in the clock hour of $receivedAt (ids are UTC timestamps). */
+    public function countExtractionsInHour(string $siteId, string $receivedAt): int
+    {
+        $prefix = substr($this->timestampId($receivedAt), 0, 11);
+
+        return count(glob($this->siteDir($siteId) . '/extractions/' . $prefix . '*', GLOB_ONLYDIR) ?: []);
+    }
+
     /** @param array<string, mixed> $payload */
     public function storeIntegrity(string $siteId, array $payload, string $receivedAt): string
     {

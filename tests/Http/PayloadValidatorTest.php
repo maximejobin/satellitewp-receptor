@@ -117,6 +117,8 @@ final class PayloadValidatorTest extends TestCase
         $body = (string) json_encode([
             'schema_version' => '1.0',
             'site_id'        => self::SITE,
+            'site_url'       => 'https://example.com',
+            'home_url'       => 'https://example.com',
             'some_future_field' => ['nested' => true],
         ]);
 

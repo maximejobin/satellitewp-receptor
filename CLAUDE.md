@@ -70,6 +70,16 @@ JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
 404 otherwise) and `public/admin/` (the UI behind Google sign-in). They share
 `src/` and `data/` only.
 
+**`PayloadValidator` is the trust boundary.** A signature proves only key
+possession: a hijacked plugin signs anything. Every known section is
+shape-checked (types, plugin-file/stylesheet keys without `..`, slug = key,
+http(s) URLs without credentials, non-empty `home_url`) and the whole tree is
+capped (nodes counted before decoding, depth, string/key lengths, map/list
+sizes) — refused with 422, never rewritten (the raw body is stored). A new
+payload field the server reads gets its check there. Extractions are capped
+per site per hour and the monthly event log by size (429).
+`tests/Security/HostilePayloadTest.php` pushes hostile payloads end to end.
+
 **HTTP layer (`src/Http`).** `Router` resolves declarative GET/POST route
 tables (`matchRoute()`, `matchPostRoute()`), enforces auth + CSRF and hands
 off to one controller per domain in `Controller/` (Auth, Home, Site,

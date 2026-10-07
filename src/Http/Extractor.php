@@ -17,6 +17,13 @@ use Throwable;
  */
 final class Extractor
 {
+    /** The plugin's event queue holds 200 small events: tens of KB. */
+    public const int MAX_EVENT_BODY_BYTES = 1024 * 1024;
+    /** One month of events per site; the site page reads its tail. */
+    public const int MAX_EVENT_FILE_BYTES = 20 * 1024 * 1024;
+    /** Extractions accepted per site per clock hour: each stores the raw body. */
+    public const int MAX_EXTRACTIONS_PER_HOUR = 30;
+
     public function __construct(
         private readonly SignatureVerifier $signatures,
         private readonly PayloadValidator $validator,
@@ -45,6 +52,9 @@ final class Extractor
         if ($rawBody === '') {
             return $this->error(400, 'Empty body');
         }
+        if ($type === PayloadValidator::TYPE_EVENT && strlen($rawBody) > self::MAX_EVENT_BODY_BYTES) {
+            return $this->error(413, 'Payload too large');
+        }
         if (!PayloadValidator::isUuid($siteId)) {
             return $this->error(400, 'Missing or malformed X-SWP-Site');
         }
@@ -72,6 +82,16 @@ final class Extractor
         }
 
         $receivedAt = gmdate('Y-m-d\TH:i:s\Z');
+
+        // A key holder can sign as many pushes as it likes; disk is the cost.
+        if ($type === PayloadValidator::TYPE_EXTRACTION
+            && $this->store->countExtractionsInHour($siteId, $receivedAt) >= self::MAX_EXTRACTIONS_PER_HOUR) {
+            return $this->error(429, 'Too many extractions this hour');
+        }
+        if ($type === PayloadValidator::TYPE_EVENT
+            && $this->store->eventFileBytes($siteId, $receivedAt) >= self::MAX_EVENT_FILE_BYTES) {
+            return $this->error(429, 'Event quota for this month reached');
+        }
 
         try {
             return match ($type) {
@@ -174,13 +194,9 @@ final class Extractor
             return null;
         }
 
-        $claimed = PayloadValidator::normalizeOrigin(
-            (string) ($payload['home_url'] ?? $payload['site_url'] ?? '')
-        );
-
-        if ($claimed === '') {
-            return null;
-        }
+        // home_url is a validated, non-empty URL: an empty claim can no longer
+        // slip past the binding and point the probes at another host.
+        $claimed = PayloadValidator::normalizeOrigin((string) $payload['home_url']);
 
         $bound = $this->keys->getOrigin($siteId);
 

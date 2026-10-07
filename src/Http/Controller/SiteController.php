@@ -132,8 +132,8 @@ final class SiteController extends Controller
     }
 
     /**
-     * Newest first. Monthly files are read newest-first and the walk stops at
-     * $limit, so the cost is bounded by one month's volume, not the history.
+     * Newest first. Monthly files are read newest-first, each by its tail only,
+     * and the walk stops at $limit, so the cost does not grow with the logs.
      *
      * @return list<array<string, mixed>>
      */
@@ -144,13 +144,16 @@ final class SiteController extends Controller
 
         $events = [];
         foreach ($files as $file) {
-            foreach (array_reverse(array_filter(explode("\n", (string) file_get_contents($file)))) as $line) {
+            foreach (array_reverse(array_filter(explode("\n", self::tail($file, self::EVENT_TAIL_BYTES)))) as $line) {
                 $batch = json_decode($line, true);
                 if (!is_array($batch)) {
                     continue;
                 }
-                foreach (array_reverse((array) ($batch['events'] ?? [])) as $event) {
-                    $events[] = (array) $event + ['received_at' => $batch['received_at'] ?? null];
+                foreach (array_reverse(is_array($batch['events'] ?? null) ? $batch['events'] : []) as $event) {
+                    if (!is_array($event)) {
+                        continue;
+                    }
+                    $events[] = $event + ['received_at' => $batch['received_at'] ?? null];
                     if (count($events) >= $limit) {
                         return $events;
                     }
@@ -159,5 +162,35 @@ final class SiteController extends Controller
         }
 
         return $events;
+    }
+
+    /** Event batches are small; the tail of a month's log holds the latest ones. */
+    private const int EVENT_TAIL_BYTES = 1024 * 1024;
+
+    /**
+     * The last $bytes of $file, starting at a line boundary: a month's log can
+     * grow to the extractor's quota and is never read whole.
+     */
+    private static function tail(string $file, int $bytes): string
+    {
+        $handle = @fopen($file, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+        try {
+            $size = (int) (fstat($handle)['size'] ?? 0);
+            if ($size > $bytes) {
+                fseek($handle, $size - $bytes);
+            }
+            $data = (string) stream_get_contents($handle, $bytes);
+        } finally {
+            fclose($handle);
+        }
+        if ($size > $bytes) {
+            $newline = strpos($data, "\n");
+            $data    = $newline === false ? '' : substr($data, $newline + 1);
+        }
+
+        return $data;
     }
 }
