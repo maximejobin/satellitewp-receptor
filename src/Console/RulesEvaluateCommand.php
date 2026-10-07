@@ -111,7 +111,7 @@ final class RulesEvaluateCommand extends Command
                 $finding['id'],
                 $t->category($finding['category']),
                 $tag,
-                $t->title($finding['id'], $finding['status'] ?? null),
+                $t->title($finding['id'], $finding['status'] ?? null, is_string($finding['data']['variant'] ?? null) ? $finding['data']['variant'] : null),
                 $t->message($finding) ?? '',
             ];
         }

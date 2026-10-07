@@ -80,4 +80,16 @@ final class ReportContextTest extends TestCase
         $this->assertSame($t->title('A1', 'pass'), $findings[1]['title']);
         $this->assertNotSame($findings[0]['title'], $findings[1]['title'], 'the title follows the outcome');
     }
+
+    public function testAVariantFailureUsesItsOwnTitle(): void
+    {
+        $t = new Translator('fr', dirname(__DIR__, 2) . '/config/lang', 'fr');
+
+        $findings = ReportContext::translatedFindings(['findings' => [
+            ['id' => 'D2', 'category' => 'EMAIL', 'severity' => 'H', 'status' => 'fail', 'pastille' => 'red', 'data' => ['variant' => 'unaligned', 'domains' => 'example.net']],
+        ]], $t);
+
+        $this->assertSame($t->title('D2', 'fail', 'unaligned'), $findings[0]['title']);
+        $this->assertNotSame($t->title('D2', 'fail'), $findings[0]['title'], 'signed for another domain is not "unsigned"');
+    }
 }

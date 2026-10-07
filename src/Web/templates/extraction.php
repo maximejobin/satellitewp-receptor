@@ -422,7 +422,7 @@ if ($status !== 'done'):
                         <td><?= pastille($col, $t->pastille($col)) ?></td>
                         <td class="id"><?= e($f['id']) ?></td>
                         <td class="tag"><?= e($t->category($f['category'])) ?></td>
-                        <td class="rule"><?= e($t->title($f['id'], $f['status'] ?? null)) ?></td>
+                        <td class="rule"><?= e($t->title($f['id'], $f['status'] ?? null, is_string($f['data']['variant'] ?? null) ? $f['data']['variant'] : null)) ?></td>
                         <td class="obs"><?= e($t->message($f) ?? '—') ?></td>
                     </tr>
                 <?php endforeach; ?>

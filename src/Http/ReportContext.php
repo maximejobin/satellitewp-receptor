@@ -108,7 +108,7 @@ final class ReportContext
                 'category'      => $t->category((string) ($f['category'] ?? '')),
                 'pastille'      => (string) ($f['pastille'] ?? 'grey'),
                 'severity'      => $t->severity((string) ($f['severity'] ?? '')),
-                'title'         => $t->title($id, $status),
+                'title'         => $t->title($id, $status, is_string($f['data']['variant'] ?? null) ? $f['data']['variant'] : null),
                 'message'       => $message,
                 'status'        => (string) $status,
             ];
