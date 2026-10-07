@@ -9,6 +9,17 @@ final class Session
 {
     public const string NAME = 'swp_session';
 
+    /** __Host- pins the CSRF cookie to this exact origin: Secure, Path=/, no Domain attribute. */
+    public const string CSRF_COOKIE = '__Host-swp_csrf';
+
+    /** Browsers refuse a Secure (hence __Host-) cookie over plain http, so a non-https dev server keeps this name. */
+    public const string CSRF_COOKIE_PLAIN_HTTP = 'swp_csrf';
+
+    public static function csrfCookieName(): string
+    {
+        return self::isHttps() ? self::CSRF_COOKIE : self::CSRF_COOKIE_PLAIN_HTTP;
+    }
+
     public static function start(): void
     {
         // No browser session under the CLI (console, tests), nor once output has

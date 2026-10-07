@@ -80,11 +80,11 @@ are pure static helpers (`resolveRawFile` has no name allowlist: `basename()`
 confines it).
 
 **Auth & permissions.** Google OAuth (userinfo endpoint, no JWT handling);
-Basic auth / open mode only as dev fallbacks. The allowlist is re-checked on
+Basic auth / explicit `auth.open_mode` only as dev fallbacks (neither = access refused). The allowlist is re-checked on
 every request. `data/users.json`: first entry is the admin; no "first sign-in
 becomes admin" bootstrap (seed with `users:add`). Capabilities are
 `<entity>_<verb>` (`config/roles.php`); `Controller::requireCapability()` is
-the single gate (permissive only when Google sign-in is off). `/users`
+the single gate (permissive only under Basic auth or open mode). `/users`
 mutations additionally require a real Google identity. The last active admin
 can't be removed, demoted or suspended.
 

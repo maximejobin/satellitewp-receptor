@@ -28,8 +28,8 @@ final class AuthController extends Controller
     }
 
     /**
-     * Google sign-in when configured, Basic auth as a dev fallback, open when
-     * neither is set (server-level protection is then expected).
+     * Google sign-in when configured, Basic auth as a dev fallback; with
+     * neither, closed unless auth.open_mode is explicitly on.
      */
     public function authenticate(): bool
     {
@@ -43,12 +43,18 @@ final class AuthController extends Controller
             return false;
         }
 
-        $user     = $this->app->config->get('web.user');
-        $passHash = $this->app->config->get('web.pass_hash');
+        if (!$this->basicAuthConfigured()) {
+            if ($this->openMode()) {
+                return true;
+            }
 
-        if ($user === null || $passHash === null) {
-            return true;
+            $this->response->text(403, 'Access is closed: configure Google sign-in or Basic auth (auth.open_mode is for dev only).');
+
+            return false;
         }
+
+        $user     = (string) $this->app->config->get('web.user');
+        $passHash = (string) $this->app->config->get('web.pass_hash');
 
         $ip      = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
         $lockout = $this->app->loginLockout();
@@ -63,7 +69,7 @@ final class AuthController extends Controller
         $givenUser = (string) ($_SERVER['PHP_AUTH_USER'] ?? '');
         $givenPass = (string) ($_SERVER['PHP_AUTH_PW'] ?? '');
 
-        if (hash_equals((string) $user, $givenUser) && password_verify($givenPass, (string) $passHash)) {
+        if (hash_equals($user, $givenUser) && password_verify($givenPass, $passHash)) {
             if ($ip !== '') {
                 $lockout->recordSuccess($ip);
             }

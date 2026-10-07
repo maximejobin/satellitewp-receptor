@@ -60,48 +60,10 @@
             url: '/data/vulnerabilities/search',
             data: function (d) { d.ignored = $('#wf-ignored-filter').val() || ''; }
           },
+          // Cells arrive as escaped HTML from DataController::vulnerabilityRows().
           columnDefs: [
             { targets: [1, 7, 9], visible: false, searchable: false },
             { targets: [8, 10], orderable: false },
-            {
-              targets: 0,
-              render: function (data, type, row) {
-                if (type !== 'display') { return data; }
-                var tag = row[9] && row[9].ignored ? ' <span class="badge badge-muted" title="Excluded from findings and reports (config: vulnerabilities.ignored)">Ignored</span>' : '';
-                return '<div>' + xtEscapeHtml(data) + tag + '</div>'
-                  + '<div class="muted mono" style="font-size:.8rem">' + xtEscapeHtml(row[1]) + '</div>';
-              }
-            },
-            {
-              targets: 2,
-              render: function (data, type) {
-                if (type !== 'display') { return data; }
-                var byType = { core: ['WP', 'WordPress core'], plugin: ['P', 'Plugin'], theme: ['T', 'Theme'] };
-                var info = byType[data] || [xtEscapeHtml(String(data || '?')).toUpperCase(), data || 'Unknown'];
-                return '<span class="badge badge-muted" title="' + xtEscapeHtml(info[1]) + '">' + info[0] + '</span>';
-              }
-            },
-            {
-              targets: 5,
-              render: function (data, type) {
-                if (type !== 'display') { return data === null ? '' : data; }
-                if (data === null || data === undefined || data === '') { return '—'; }
-                return xtEscapeHtml(String(data).slice(0, 10));
-              }
-            },
-            {
-              targets: 6,
-              render: function (data, type, row) {
-                if (type !== 'display') { return data === null ? '' : data; }
-                if (data === null || data === undefined || data === '') { return '—'; }
-                var score = parseFloat(data);
-                // Never green, however low the score (mirrors cvss_badge()).
-                var cls = score >= 9.0 ? 'badge-critical' : score >= 8.1 ? 'badge-error' : score >= 6.1 ? 'badge-warn' : 'badge-low';
-                var rating = row[7];
-                var title = 'CVSS ' + score + (rating ? ' — ' + rating : '');
-                return '<span class="badge ' + cls + '" title="' + xtEscapeHtml(title) + '">' + score + '</span>';
-              }
-            },
             {
               targets: 10,
               searchable: false,

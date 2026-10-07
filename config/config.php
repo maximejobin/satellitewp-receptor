@@ -197,7 +197,8 @@ return [
     //      listed in the users file below.
     //   2. Basic auth (web.*) — fallback for local dev, used only while OAuth
     //      is unconfigured.
-    // With neither set, the UI is open: protect it at the server level.
+    // With neither set, every request is refused unless auth.open_mode is
+    // true (dev only: no sign-in, every capability granted).
     'web' => [
         'user' => null,
         'pass_hash' => null,
@@ -217,5 +218,9 @@ return [
 
         // Allowed accounts with their roles; seed the first admin with `users:add`.
         'users_file' => dirname(__DIR__) . '/data/users.json',
+
+        // Dev only: serve the UI with no sign-in when neither Google nor Basic
+        // auth is configured. Ignored as soon as either one is.
+        'open_mode' => false,
     ],
 ];

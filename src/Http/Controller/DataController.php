@@ -228,20 +228,51 @@ final class DataController extends Controller
             'draw'            => (int) ($_GET['draw'] ?? 0),
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
-            'data'            => array_map(static fn (array $row): array => [
-                $row['name'] ?? $row['slug'],
-                $row['slug'],
-                (string) $row['type'],
-                $row['cve_id'] ?? '—',
-                $row['title'] ?? '',
-                $row['published_at'] ?? null,
-                $row['cvss_score'],
-                $row['cvss_rating'] ?? null,
-                !empty($row['patched']) ? implode(', ', $row['patched_versions']) : '—',
+            'data'            => self::vulnerabilityRows($result['rows']),
+        ]);
+    }
+
+    /**
+     * DataTables inserts each cell as HTML and Wordfence titles and names are
+     * third-party text: every cell is escaped here. Column 9 keeps the raw row
+     * for the JSON dialog, which only ever sets it as textContent.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<list<mixed>>
+     */
+    public static function vulnerabilityRows(array $rows): array
+    {
+        require_once dirname(__DIR__, 2) . '/Web/helpers.php';
+
+        $byType = ['core' => ['WP', 'WordPress core'], 'plugin' => ['P', 'Plugin'], 'theme' => ['T', 'Theme']];
+
+        return array_map(static function (array $row) use ($byType): array {
+            $type      = (string) ($row['type'] ?? '');
+            [$abbr, $typeLabel] = $byType[$type] ?? [strtoupper($type !== '' ? $type : '?'), $type !== '' ? $type : 'Unknown'];
+            $published = (string) ($row['published_at'] ?? '');
+            $rating    = is_string($row['cvss_rating'] ?? null) ? $row['cvss_rating'] : null;
+            $patched   = is_array($row['patched_versions'] ?? null)
+                ? implode(', ', array_map('strval', array_filter($row['patched_versions'], 'is_scalar')))
+                : '';
+            $ignored   = !empty($row['ignored'])
+                ? ' <span class="badge badge-muted" title="Excluded from findings and reports (config: vulnerabilities.ignored)">Ignored</span>'
+                : '';
+
+            return [
+                '<div>' . e($row['name'] ?? $row['slug'] ?? '') . $ignored . '</div>'
+                    . '<div class="muted mono" style="font-size:.8rem">' . e($row['slug'] ?? '') . '</div>',
+                e($row['slug'] ?? ''),
+                '<span class="badge badge-muted" title="' . e($typeLabel) . '">' . e($abbr) . '</span>',
+                e($row['cve_id'] ?? '—'),
+                e($row['title'] ?? ''),
+                $published !== '' ? e(substr($published, 0, 10)) : '—',
+                is_numeric($row['cvss_score'] ?? null) ? cvss_badge($row['cvss_score'], $rating) : '—',
+                e($rating),
+                !empty($row['patched']) && $patched !== '' ? e($patched) : '—',
                 $row,
                 null,
-            ], $result['rows']),
-        ]);
+            ];
+        }, $rows);
     }
 
     /** @return array{synced_at: string|null, threshold_seconds: int, stale: bool} */

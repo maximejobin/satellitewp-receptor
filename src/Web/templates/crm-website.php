@@ -53,8 +53,7 @@ $clientLabels = array_map(
 ?>
 <section class="card info-card kv-tight">
     <table class="kv"><tbody><?= implode('', [
-        field_raw('URL', '<a href="' . e($website['url']) . '" target="_blank" rel="noopener noreferrer">'
-            . e(site_display($website['url'])) . '</a>'),
+        field_raw('URL', link_or_text($website['url'] ?? null, site_display($website['url'] ?? ''), true)),
         field('Connection status', $website['connection_status'] ?? null),
         $versionField('PHP version', $website['php_version'] ?? null, $eolPhp),
         $versionField('MySQL version', $website['mysql_version'] ?? null, $eolMysql),
@@ -64,8 +63,8 @@ $clientLabels = array_map(
             isset($website['blogvault_site_id']) ? substr((string) $website['blogvault_site_id'], 0, 8) : null,
             (string) ($website['blogvault_site_id'] ?? '—')
         )),
-        field_raw('Tags', $website['tags'] !== []
-            ? implode(' ', array_map(static fn (string $t): string => '<span class="badge badge-muted">' . e($t) . '</span>', $website['tags']))
+        field_raw('Tags', !empty($website['tags']) && is_array($website['tags'])
+            ? implode(' ', array_map(static fn (mixed $t): string => '<span class="badge badge-muted">' . e($t) . '</span>', $website['tags']))
             : '—'),
         field_raw('Client', $clientLabels !== [] ? implode(', ', $clientLabels) : '—'),
         field('Last synced', $website['date_sync'] ?? null),

@@ -57,20 +57,33 @@ abstract class Controller
     }
 
     /**
-     * Without Google sign-in there is no per-user role to check (Basic auth /
-     * open dev), so every capability is granted — the /users mutations
-     * require a real identity separately.
+     * Without Google sign-in there is no per-user role to check: the single
+     * Basic-auth operator and an explicit open_mode get every capability, any
+     * other unconfigured setup none. /users mutations require a real identity separately.
      */
     protected function currentUserCan(string $capability): bool
     {
         if (!$this->app->googleAuth()->isConfigured()) {
-            return true;
+            return $this->basicAuthConfigured() || $this->openMode();
         }
 
         $me   = $this->currentUser();
         $role = $me !== null ? $this->app->userStore()->roleOf($me) : null;
 
         return $role !== null && $this->app->roleCapabilities()->can($role, $capability);
+    }
+
+    protected function basicAuthConfigured(): bool
+    {
+        return $this->app->config->get('web.user') !== null && $this->app->config->get('web.pass_hash') !== null;
+    }
+
+    /** No sign-in at all: only when explicitly enabled and no real mechanism is configured. */
+    protected function openMode(): bool
+    {
+        return $this->app->config->get('auth.open_mode', false) === true
+            && !$this->app->googleAuth()->isConfigured()
+            && !$this->basicAuthConfigured();
     }
 
     /** Writes the 403 itself; call sites just `return` on false. */
@@ -114,10 +127,11 @@ abstract class Controller
     /** Double-submit CSRF token, stored in a cookie and echoed into forms. */
     protected function csrfToken(): string
     {
-        $token = (string) ($_COOKIE['swp_csrf'] ?? '');
+        $name  = Session::csrfCookieName();
+        $token = (string) ($_COOKIE[$name] ?? '');
         if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
             $token = bin2hex(random_bytes(16));
-            $this->response->cookie('swp_csrf', $token, [
+            $this->response->cookie($name, $token, [
                 'httponly' => true,
                 'samesite' => 'Strict',
                 'secure'   => Session::isHttps(),

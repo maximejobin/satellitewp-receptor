@@ -6,10 +6,43 @@ declare(strict_types=1);
  * Template helpers — loaded by layout.php.
  */
 
-/** HTML-escape. */
+/** HTML-escape. A structure (from an unexpected payload shape) renders as nothing rather than failing. */
 function e(mixed $value): string
 {
-    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
+    if (!is_scalar($value) && !$value instanceof \Stringable) {
+        return '';
+    }
+
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/**
+ * $url when it is an absolute http(s) URL, else null: a javascript: or data:
+ * URL from a payload, probe or CRM row must never become a clickable href.
+ */
+function safe_href(mixed $url): ?string
+{
+    if (!is_string($url) || preg_match('/[\x00-\x20\x7F]/', $url) === 1) {
+        return null;
+    }
+
+    $scheme = parse_url($url, PHP_URL_SCHEME);
+    $host   = parse_url($url, PHP_URL_HOST);
+
+    return is_string($scheme) && in_array(strtolower($scheme), ['http', 'https'], true) && is_string($host) && $host !== ''
+        ? $url
+        : null;
+}
+
+/** An external link to $url when safe_href() accepts it, else the escaped label alone. */
+function link_or_text(mixed $url, string $label, bool $newTab = false): string
+{
+    $href = safe_href($url);
+    if ($href === null) {
+        return e($label);
+    }
+
+    return '<a href="' . e($href) . '"' . ($newTab ? ' target="_blank"' : '') . ' rel="noopener noreferrer">' . e($label) . '</a>';
 }
 
 /** See SatelliteWP\Manager\Support\SiteDisplay — this is just the template-friendly wrapper. */
