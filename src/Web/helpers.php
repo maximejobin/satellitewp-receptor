@@ -61,7 +61,7 @@ function dt_search_box(string $tableId): string
 function fmt_bytes(mixed $bytes): string
 {
     if (!is_numeric($bytes)) {
-        return '—';
+        return '';
     }
 
     $bytes = (float) $bytes;
@@ -408,7 +408,7 @@ function field(string $label, mixed $value, ?string $status = null, ?string $sou
     if (is_array($value)) {
         $value = null;
     }
-    $display = ($value === null || $value === '') ? '—' : e($value);
+    $display = ($value === null || $value === '') ? '' : e($value);
 
     return field_raw($label, $display, $status, $source);
 }
@@ -481,7 +481,7 @@ function eol_annotation(?array $status, \SatelliteWP\Manager\Rules\Translator $t
 function fmt_list(mixed $items, int $max = 12): string
 {
     if (!is_array($items) || $items === []) {
-        return '—';
+        return '';
     }
 
     $shown = array_slice($items, 0, $max);
@@ -494,7 +494,7 @@ function fmt_list(mixed $items, int $max = 12): string
 function fmt_lines(mixed $items, int $max = 30): string
 {
     if (!is_array($items) || $items === []) {
-        return '—';
+        return '';
     }
 
     $shown = array_slice($items, 0, $max);
@@ -545,7 +545,7 @@ function vulnerability_source_badge(array $sources): string
 function cvss_badge(mixed $score, ?string $rating): string
 {
     if ($score === null) {
-        return '—';
+        return '';
     }
 
     $score = (float) $score;
@@ -565,7 +565,7 @@ function cvss_badge(mixed $score, ?string $rating): string
 function fmt_status_tally(mixed $items): string
 {
     if (!is_array($items) || $items === []) {
-        return '—';
+        return '';
     }
 
     $tally = [];
@@ -599,7 +599,7 @@ function fmt_refreshed(?string $isoDate, int $maxAgeSeconds, string $label = 'La
 function fmt_relative_time(?string $isoDate): string
 {
     if ($isoDate === null || $isoDate === '') {
-        return '<span class="muted">—</span>';
+        return '';
     }
 
     $timestamp = strtotime($isoDate);
@@ -649,7 +649,7 @@ function requirement_cell(?string $requiresWp, ?string $requiresPhp, ?string $in
         $part('PHP', $requiresPhp, $installedPhp),
     ]);
 
-    return $parts === [] ? '—' : implode(' · ', $parts);
+    return $parts === [] ? '' : implode(' · ', $parts);
 }
 
 /** Inline SVG icons for the report's groups; aria-hidden since each sits next to a text label. */

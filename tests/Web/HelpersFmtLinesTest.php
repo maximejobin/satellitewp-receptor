@@ -19,7 +19,7 @@ final class HelpersFmtLinesTest extends TestCase
 
     public function testEmptyListRendersADash(): void
     {
-        $this->assertSame('—', \fmt_lines([]));
+        $this->assertSame('', \fmt_lines([]));
     }
 
     public function testEscapesEachItem(): void

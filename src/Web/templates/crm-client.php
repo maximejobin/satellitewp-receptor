@@ -42,9 +42,9 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
             field_raw('Email', e($client['email'] ?? '') . ' ' . copy_button((string) ($client['email'] ?? ''))),
         ]) ?></tbody></table>
         <table class="kv"><tbody><?= implode('', [
-            field_raw('Teamwork id', external_link($links['teamwork_project_url'] ?? null, $client['teamwork_id'] ?? null, (string) ($client['teamwork_id'] ?? '—'))),
-            field_raw('HubSpot id', external_link($links['hubspot_company_url'] ?? null, $client['hubspot_id'] ?? null, (string) ($client['hubspot_id'] ?? '—'))),
-            field_raw('BlogVault client id', external_link($links['blogvault_client_url'] ?? null, $client['blogvault_client_id'] ?? null, (string) ($client['blogvault_client_id'] ?? '—'))),
+            field_raw('Teamwork id', external_link($links['teamwork_project_url'] ?? null, $client['teamwork_id'] ?? null, (string) ($client['teamwork_id'] ?? ''))),
+            field_raw('HubSpot id', external_link($links['hubspot_company_url'] ?? null, $client['hubspot_id'] ?? null, (string) ($client['hubspot_id'] ?? ''))),
+            field_raw('BlogVault client id', external_link($links['blogvault_client_url'] ?? null, $client['blogvault_client_id'] ?? null, (string) ($client['blogvault_client_id'] ?? ''))),
         ]) ?></tbody></table>
     </div>
 </section>
@@ -88,11 +88,11 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
                 <td><?= e($s['product_name']) ?><?php if (!empty($s['license_slug'])): ?>
                         <div class="muted mono" style="font-size:.8rem"><?= e($s['license_slug']) ?></div>
                     <?php endif; ?></td>
-                <td class="muted"><?= e($s['product_category'] ?? '—') ?></td>
+                <td class="muted"><?= e($s['product_category'] ?? '') ?></td>
                 <td><?= status_dot((string) $s['subscription_status']) ?></td>
-                <td><?= e($s['creation_date'] !== null ? substr((string) $s['creation_date'], 0, 10) : '—') ?></td>
-                <td><?= e($s['last_payment_date'] !== null ? substr((string) $s['last_payment_date'], 0, 10) : '—') ?></td>
-                <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '—') ?></td>
+                <td><?= e($s['creation_date'] !== null ? substr((string) $s['creation_date'], 0, 10) : '') ?></td>
+                <td><?= e($s['last_payment_date'] !== null ? substr((string) $s['last_payment_date'], 0, 10) : '') ?></td>
+                <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
                 <td><?= subscription_website_form($s, $csrf, '/clients/' . (int) $client['id']) ?></td>
                 <td><?= external_link_button($links['wordpress_edit_subscription'] ?? null, $s['id'], 'Edit') ?></td>
             </tr>

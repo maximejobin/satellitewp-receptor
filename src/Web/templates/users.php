@@ -44,7 +44,7 @@ if (isset($notices[$notice])):
         && count(array_filter($users, static fn (array $u): bool => $u['role'] === 'admin' && $u['status'] === 'active')) <= 1;
     ?>
     <tr class="row-display" data-row-id="<?= $i ?>">
-        <td><?= e($name !== '' ? $name : '—') ?></td>
+        <td><?= e($name !== '' ? $name : '') ?></td>
         <td class="mono"><?= e($user['email']) ?><?= $user['email'] === $me ? ' <span class="muted">(you)</span>' : '' ?></td>
         <td><span class="badge <?= $user['role'] === 'admin' ? 'badge-ok' : 'badge-muted' ?>"><?= e($user['role']) ?></span></td>
         <td><?= $user['status'] === 'suspended' ? '<span class="badge badge-warn">suspended</span>' : '<span class="badge badge-ok">active</span>' ?></td>

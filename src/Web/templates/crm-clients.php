@@ -53,7 +53,7 @@ use SatelliteWP\Manager\Crm\ClientsRepository;
             ?>
             <tr>
                 <td><a href="/clients/<?= (int) $c['id'] ?>"><?= e($company !== '' ? $company : ClientsRepository::clientLabel($c)) ?></a></td>
-                <td><?= e($contact !== '' ? $contact : '—') ?></td>
+                <td><?= e($contact !== '' ? $contact : '') ?></td>
                 <td class="mono"><?= e($c['email']) ?></td>
                 <td><?= (int) $c['active_subscription_count'] ?> active / <?= (int) $c['subscription_count'] ?> total
                     <?php if ((int) $c['orphan_subscription_count'] > 0): ?>

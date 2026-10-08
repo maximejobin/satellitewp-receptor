@@ -72,7 +72,7 @@ final class HelpersWpCountTest extends TestCase
         $row = \field('Total users', ['total_users' => 42, 'avail_roles' => []]);
 
         $this->assertStringNotContainsString('Array', $row);
-        $this->assertStringContainsString('—', $row);
+        $this->assertStringContainsString('<td class=""></td>', $row);
     }
 
     public function testFieldRendersTheCountItIsGiven(): void

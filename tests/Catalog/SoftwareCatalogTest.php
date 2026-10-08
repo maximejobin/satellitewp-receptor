@@ -43,6 +43,21 @@ final class SoftwareCatalogTest extends TestCase
         $this->assertSame('unknown', $wc['license']);
     }
 
+    public function testUnclassifiedCountDropsAsEntriesAreClassified(): void
+    {
+        $catalog = $this->catalog();
+        $this->assertSame(0, $catalog->unclassifiedCount());
+
+        $catalog->recordExtraction(['plugins' => [
+            ['slug' => 'woocommerce/woocommerce.php', 'name' => 'WooCommerce'],
+            ['slug' => 'akismet/akismet.php', 'name' => 'Akismet'],
+        ]]);
+        $this->assertSame(2, $catalog->unclassifiedCount());
+
+        $catalog->setLicense('plugin', 'akismet', SoftwareCatalog::LICENSE_FREE);
+        $this->assertSame(1, $catalog->unclassifiedCount());
+    }
+
     public function testSetLicenseAndNeedsLicense(): void
     {
         $catalog = $this->catalog();

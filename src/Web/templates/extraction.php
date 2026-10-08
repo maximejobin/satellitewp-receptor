@@ -363,19 +363,19 @@ if ($status !== 'done'):
     <section class="xt-group" data-nav-target="overview" style="--group-color:var(--group-overview)">
         <section class="tiles xt-stats">
             <div class="xt-stat<?= ($eolWp[0] ?? false) ? ' crit' : '' ?>"><?= report_icon('wordpress') ?>
-                <div><div class="xt-stat-k">WordPress</div><div class="xt-stat-v"><?= e($p['wp_version'] ?? '—') ?></div>
+                <div><div class="xt-stat-k">WordPress</div><div class="xt-stat-v"><?= e($p['wp_version'] ?? '') ?></div>
                     <div class="xt-stat-s<?= ($eolWp[0] ?? false) ? ' crit' : '' ?>"><?= ($eolWp[0] ?? false) ? 'end of life' : 'core' ?></div></div></div>
             <div class="xt-stat<?= ($eolPhp[0] ?? false) ? ' crit' : '' ?>"><?= report_icon('hosting') ?>
-                <div><div class="xt-stat-k">PHP</div><div class="xt-stat-v"><?= e($p['php']['version'] ?? '—') ?></div>
+                <div><div class="xt-stat-k">PHP</div><div class="xt-stat-v"><?= e($p['php']['version'] ?? '') ?></div>
                     <div class="xt-stat-s<?= ($eolPhp[0] ?? false) ? ' crit' : '' ?>"><?= isset($eolPhp[1]) ? 'until ' . e(substr((string) $eolPhp[1], 0, 4)) : '' ?></div></div></div>
             <div class="xt-stat<?= ($eolDb[0] ?? false) ? ' crit' : '' ?>"><?= report_icon('hosting') ?>
                 <div><div class="xt-stat-k">Database</div><div class="xt-stat-v"><?= e(($p['database_type'] ?? '') . ' ' . implode('.', array_slice(explode('.', (string) ($p['database_version'] ?? '')), 0, 2))) ?></div>
                     <div class="xt-stat-s<?= ($eolDb[0] ?? false) ? ' crit' : '' ?>"><?= ($eolDb[0] ?? false) ? ('EOL ' . e(substr((string) ($eolDb[1] ?? ''), 0, 7))) : '' ?></div></div></div>
             <div class="xt-stat<?= (($tls['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= report_icon('security') ?>
-                <div><div class="xt-stat-k">SSL expiry</div><div class="xt-stat-v"><?= isset($tls['days_to_expiry']) ? e($tls['days_to_expiry']) . ' d' : '—' ?></div>
+                <div><div class="xt-stat-k">SSL expiry</div><div class="xt-stat-v"><?= isset($tls['days_to_expiry']) ? e($tls['days_to_expiry']) . ' d' : '' ?></div>
                     <div class="xt-stat-s"><?= e($tls['issuer'] ?? '') ?></div></div></div>
             <div class="xt-stat<?= (($rdap['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= report_icon('domain') ?>
-                <div><div class="xt-stat-k">Domain expiry</div><div class="xt-stat-v"><?= isset($rdap['days_to_expiry']) ? e($rdap['days_to_expiry']) . ' d' : '—' ?></div>
+                <div><div class="xt-stat-k">Domain expiry</div><div class="xt-stat-v"><?= isset($rdap['days_to_expiry']) ? e($rdap['days_to_expiry']) . ' d' : '' ?></div>
                     <div class="xt-stat-s<?= (($rdap['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= (($rdap['days_to_expiry'] ?? 999) < 30) ? 'renew soon' : '' ?></div></div></div>
             <div class="xt-stat"><?= report_icon('performance') ?>
                 <div><div class="xt-stat-k">HTTP</div><div class="xt-stat-v">HTTP/<?= e($http['http_version'] ?? '?') ?></div>
@@ -435,7 +435,7 @@ if ($status !== 'done'):
                         <td class="id"><?= e($f['id']) ?></td>
                         <td class="tag"><?= e($t->category($f['category'])) ?></td>
                         <td class="rule"><?= e($t->title($f['id'], $f['status'] ?? null, is_string($f['data']['variant'] ?? null) ? $f['data']['variant'] : null)) ?></td>
-                        <td class="obs"><?= e($t->message($f) ?? '—') ?></td>
+                        <td class="obs"><?= e($t->message($f) ?? '') ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody></table>
@@ -455,7 +455,7 @@ if ($status !== 'done'):
                     field('Registrar', $rdap['registrar'] ?? null, null, 'probe.rdap.registrar')
                     . field('Created', $rdap['created_at'] ?? null, null, 'probe.rdap.created_at')
                     . field('Updated', $rdap['updated_at'] ?? null, null, 'probe.rdap.updated_at')
-                    . field_raw('Expires', e($rdap['expires_at'] ?? '—') . (isset($rdap['days_to_expiry'])
+                    . field_raw('Expires', e($rdap['expires_at'] ?? '') . (isset($rdap['days_to_expiry'])
                         ? ' <span class="' . ($rdap['days_to_expiry'] < 30 ? 'val-warn' : 'val-muted') . '">(' . e($rdap['days_to_expiry']) . ' d)</span>' : ''), null, 'probe.rdap.expires_at')
                     . field('Statuses', is_array($rdap['statuses'] ?? null) ? implode(', ', $rdap['statuses']) : null, null, 'probe.rdap.statuses')
                     . field_raw('Nameservers', fmt_list($rdap['nameservers'] ?? ($dns['nameservers'] ?? [])), null, 'probe.rdap.nameservers')
@@ -474,7 +474,7 @@ if ($status !== 'done'):
                     . $mailVerdict('DKIM (test email)', 'dkim')
                     . $mailVerdict('DMARC (test email)', 'dmarc')
                     . field('Test email received', $mailFound ? trim(($mail['received_at'] ?? '') . ' · ' . ($mail['from_domain'] ?? ''), ' ·') : null, null, 'probe.mail.received_at')
-                    . field_raw('SPF record (DNS)', '<span class="mono">' . e($dns['spf']['record'] ?? '—') . '</span>', null, 'probe.dns.spf.record')
+                    . field_raw('SPF record (DNS)', '<span class="mono">' . e($dns['spf']['record'] ?? '') . '</span>', null, 'probe.dns.spf.record')
                     . field('DMARC policy (DNS)', ($dns['dmarc']['present'] ?? false) ? ('p=' . ($dns['dmarc']['policy'] ?? 'none')) : 'absent', null, 'probe.dns.dmarc')
                     . field_raw('MX', fmt_list(array_map(static fn ($m) => $m['host'] ?? '', $dns['mx'] ?? [])), null, 'probe.dns.mx')
                 ); ?>
@@ -496,7 +496,7 @@ if ($status !== 'done'):
                     . field('Operating system', $p['os_name'] ?? ($p['os_family'] ?? null), null, 'payload.os_name')
                     . field_raw('IP address (A / AAAA)', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'), null, 'probe.dns.a')
                     . field('Document root', $p['document_root'] ?? null, null, 'payload.document_root')
-                    . field_raw('Free disk', fmt_bytes($p['filesystem']['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($p['filesystem']['disk_total_bytes'] ?? null), null, 'payload.filesystem.disk_free_bytes')
+                    . field_raw('Free disk', is_numeric($p['filesystem']['disk_free_bytes'] ?? null) ? fmt_bytes($p['filesystem']['disk_free_bytes']) . ' / ' . fmt_bytes($p['filesystem']['disk_total_bytes'] ?? null) : '', null, 'payload.filesystem.disk_free_bytes')
                     . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null, null, 'payload.php.max_execution_time')
                     . field('Post / upload max', ($p['php']['post_max_size'] ?? '?') . ' / ' . ($p['php']['upload_max_filesize'] ?? '?'), null, 'payload.php.post_max_size')
                     . field('Max input vars', $p['php']['max_input_vars'] ?? null, null, 'payload.php.max_input_vars')
@@ -517,7 +517,7 @@ if ($status !== 'done'):
                     . field('Redirects', $http['redirects']['hops'] ?? null, null, 'probe.http.redirects.hops')
                 ); ?>
                 <?php echo section('PHP',
-                    field_raw('Version', e($p['php']['version'] ?? '—') . eol_annotation($eolPhp, $t), null, 'payload.php.version')
+                    field_raw('Version', e($p['php']['version'] ?? '') . eol_annotation($eolPhp, $t), null, 'payload.php.version')
                     . field('Memory limit', $p['php']['memory_limit'] ?? null, null, 'payload.php.memory_limit')
                     // Never truncated: the hidden tail is what an analyst needs to check.
                     . field_raw('Extensions (' . count($p['php']['extensions'] ?? []) . ')', fmt_list($p['php']['extensions'] ?? [], PHP_INT_MAX), null, 'payload.php.extensions')
@@ -525,7 +525,7 @@ if ($status !== 'done'):
                 ); ?>
                 <?php echo section('Database',
                     field('Type', $p['database_type'] ?? null, null, 'payload.database_type')
-                    . field_raw('Version', e($p['database_version'] ?? '—') . eol_annotation($eolDb, $t), null, 'payload.database_version')
+                    . field_raw('Version', e($p['database_version'] ?? '') . eol_annotation($eolDb, $t), null, 'payload.database_version')
                     . field('Prefix', $p['db_table_prefix'] ?? null, ($p['db_table_prefix'] ?? '') === 'wp_' ? 'warn' : null, 'payload.db_table_prefix')
                     . field_raw('Size', fmt_bytes($p['database']['total_bytes'] ?? null), null, 'payload.database.total_bytes')
                     . field_raw('Transients', e($p['database']['transients']['total'] ?? '?') . ' (' . e($p['database']['transients']['expired'] ?? '?') . ' expired)', null, 'payload.database.transients')
@@ -551,7 +551,7 @@ if ($status !== 'done'):
                 <table><thead><tr><th>Table</th><th>Rows</th><th>Size</th><th>Overhead</th></tr></thead><tbody>
                 <?php usort($tables, static fn ($a, $b) => ($b['size_bytes'] ?? 0) <=> ($a['size_bytes'] ?? 0));
                 foreach (array_slice($tables, 0, 10) as $tb): ?>
-                    <tr><td class="mono"><?= e($tb['name'] ?? '?') ?></td><td class="num"><?= e($tb['row_count'] ?? '—') ?></td>
+                    <tr><td class="mono"><?= e($tb['name'] ?? '?') ?></td><td class="num"><?= e($tb['row_count'] ?? '') ?></td>
                         <td class="num"><?= fmt_bytes($tb['size_bytes'] ?? null) ?></td><td class="num"><?= fmt_bytes($tb['overhead_bytes'] ?? 0) ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
@@ -571,10 +571,10 @@ if ($status !== 'done'):
                 <?php
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
                 echo section('Core & settings',
-                    field_raw('Version', e($p['wp_version'] ?? '—') . eol_annotation($eolWp, $t), null, 'payload.wp_version')
+                    field_raw('Version', e($p['wp_version'] ?? '') . eol_annotation($eolWp, $t), null, 'payload.wp_version')
                     . field_raw('Known vulnerabilities', $coreVulns !== []
                         ? '<span class="badge badge-error">' . count($coreVulns) . ' CVE</span> — see §Plugins &amp; themes'
-                        : '<span class="badge badge-ok">—</span>', null, 'derived.core_vulnerabilities')
+                        : '', null, 'derived.core_vulnerabilities')
                     . field('WP_AUTO_UPDATE_CORE', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
                     . field('Auto-update minor releases', $p['core_update']['auto_update_minor'] ?? null, null, 'payload.core_update.auto_update_minor')
                     . field('Auto-update major releases', $p['core_update']['auto_update_major'] ?? null, null, 'payload.core_update.auto_update_major')
@@ -664,7 +664,7 @@ if ($status !== 'done'):
                     $hasUpdate = !empty($th['new_version']) || in_array($file, $themeUpdates, true);
                     $inactive  = empty($th['active']);
                     foreach ($merged as $v) { $allVulns[] = $v + ['component' => $th['name'] ?? $slug, 'slug' => $slug]; } ?>
-                    <tr<?= $inactive ? ' class="row-inactive"' : '' ?>><td><?= $nameCell('theme', $str($th['name'] ?? null) ?? '?', $str($th['slug'] ?? null) ?? '', $slug, $arr($wporg['themes'][$slug] ?? null)) ?></td>
+                    <tr<?= $inactive ? ' class="row-inactive-theme"' : '' ?>><td><?= $nameCell('theme', $str($th['name'] ?? null) ?? '?', $str($th['slug'] ?? null) ?? '', $slug, $arr($wporg['themes'][$slug] ?? null)) ?></td>
                         <td style="white-space:nowrap"><?= $versionCell($str($th['version'] ?? null), $hasUpdate, $str($th['new_version'] ?? null)) ?></td>
                         <td><?= requirement_cell($str($th['requires_wp'] ?? null), $str($th['requires_php'] ?? null), $str($p['wp_version'] ?? null), $str($p['php']['version'] ?? null)) ?></td>
                         <td class="mono"><?= e($th['template'] ?? '') ?></td>
@@ -696,13 +696,13 @@ if ($status !== 'done'):
                 <?php foreach ($muPlugins as $file => $mu): ?>
                     <tr><td class="mono"><?= e($file) ?></td><td><span class="badge badge-muted">Must-use</span></td>
                         <td><?= e($mu['Name'] ?? '?') ?><?= trim((string) ($mu['Description'] ?? '')) !== '' ? '<div class="muted" style="font-size:.82em">' . e($mu['Description']) . '</div>' : '' ?></td>
-                        <td class="mono"><?= e(($mu['Version'] ?? '') ?: '—') ?></td></tr>
+                        <td class="mono"><?= e(($mu['Version'] ?? '') ?: '') ?></td></tr>
                 <?php endforeach; ?>
                 <?php foreach ($dropinPlugins as $file => $dropin):
                     $role = $t->dropin((string) $file); ?>
                     <tr><td class="mono"><?= e($file) ?></td><td><span class="badge badge-muted">Drop-in</span></td>
                         <td><?= $role !== null ? e($role) : '<span class="val-muted">Unknown drop-in</span>' ?><?= $headerNote($dropin, (string) $file) ?></td>
-                        <td class="mono"><?= e((is_array($dropin) ? ($dropin['Version'] ?? '') : '') ?: '—') ?></td></tr>
+                        <td class="mono"><?= e((is_array($dropin) ? ($dropin['Version'] ?? '') : '') ?: '') ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
@@ -712,10 +712,10 @@ if ($status !== 'done'):
                 <?php foreach ($allVulns as $v): ?>
                     <tr>
                         <td class="mono"><?= e($v['component']) ?></td>
-                        <td class="mono"><?= $v['cve_id'] ? e($v['cve_id']) : '<span class="muted">—</span>' ?></td>
-                        <td><?= e($v['title'] ?? '—') ?></td>
+                        <td class="mono"><?= $v['cve_id'] ? e($v['cve_id']) : '' ?></td>
+                        <td><?= e($v['title'] ?? '') ?></td>
                         <td><?= cvss_badge($v['cvss_score'] ?? null, $v['cvss_rating'] ?? null) ?></td>
-                        <td class="mono"><?= e($v['patched_version'] ?? '—') ?></td>
+                        <td class="mono"><?= e($v['patched_version'] ?? '') ?></td>
                         <td><?= vulnerability_source_badge($v['sources']) ?></td>
                     </tr>
                 <?php endforeach; ?>
@@ -810,16 +810,16 @@ if ($status !== 'done'):
             <div><h2>Security</h2><p class="muted">Response headers, what an anonymous visitor can reach, TLS and file permissions.</p></div>
         </header>
         <div class="xt-subsection">
-            <div class="cards cards-2">
+            <div class="cards cards-full">
                 <?php
                 $sec = $http['security_headers'] ?? [];
                 echo section('Security headers',
-                    field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.x-content-type-options')
-                    . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', ($sec['x-frame-options'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.x-frame-options')
-                    . field('Content-Security-Policy', $sec['content-security-policy'] ?? 'missing', ($sec['content-security-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.content-security-policy')
-                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', ($sec['referrer-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.referrer-policy')
-                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', ($sec['permissions-policy'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.permissions-policy')
-                    . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? 'ok' : 'warn', 'probe.http.security_headers.strict-transport-security')
+                    field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? null : 'warn', 'probe.http.security_headers.x-content-type-options')
+                    . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', ($sec['x-frame-options'] ?? null) ? null : 'warn', 'probe.http.security_headers.x-frame-options')
+                    . field('Content-Security-Policy', $sec['content-security-policy'] ?? 'missing', ($sec['content-security-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.content-security-policy')
+                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', ($sec['referrer-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.referrer-policy')
+                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', ($sec['permissions-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.permissions-policy')
+                    . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? null : 'warn', 'probe.http.security_headers.strict-transport-security')
                 ); ?>
                 <?php
                 // Passive checks an anonymous visitor could run; each row shows its evidence (URL + status).
@@ -881,7 +881,7 @@ if ($status !== 'done'):
                 echo section('SSL / TLS',
                     field('Issuer', $tls['issuer'] ?? null, null, 'probe.tls.issuer')
                     . field('Subject (CN)', $tls['subject_cn'] ?? null, null, 'probe.tls.subject_cn')
-                    . field_raw('Expires', e($tls['not_after'] ?? '—') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
+                    . field_raw('Expires', e($tls['not_after'] ?? '') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
                     . field_raw('SAN', fmt_list($tls['san'] ?? []), null, 'probe.tls.san')
                     // CAA restricts which CAs may issue for the domain: a certificate fact.
                     . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])), null, 'probe.dns.caa')
@@ -946,7 +946,7 @@ if ($status !== 'done'):
                 $labMetrics = ['lcp' => 'LCP', 'fcp' => 'FCP', 'cls' => 'CLS', 'tbt' => 'TBT', 'speed_index' => 'Speed Index'];
                 $labValue   = static function (string $key, mixed $value): string {
                     if (!is_numeric($value)) {
-                        return '—';
+                        return '';
                     }
                     $v = (float) $value;
                     if ($key === 'cls') {
@@ -963,7 +963,7 @@ if ($status !== 'done'):
                 <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
                     <tr><td><strong><?= e($strat) ?></strong></td>
                         <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
-                            <td><?= $sc === null ? '—' : badge_score((int) $sc) ?></td>
+                            <td><?= $sc === null ? '' : badge_score((int) $sc) ?></td>
                         <?php endforeach; ?>
                         <?php foreach (array_keys($labMetrics) as $key): ?>
                             <td class="num" style="white-space:nowrap"><?= e($labValue($key, $r['lab'][$key]['value'] ?? null)) ?></td>
@@ -986,7 +986,7 @@ if ($status !== 'done'):
                     field('robots.txt', ($robots['present'] ?? false) ? 'present' : 'absent', ($robots['present'] ?? false) ? 'ok' : 'warn', 'probe.http.robots.present')
                     . field('Blocks whole site', ($robots['disallow_all'] ?? false) ? 'yes' : 'no', ($robots['disallow_all'] ?? false) ? 'error' : 'ok', 'probe.http.robots.disallow_all')
                     . field_raw('Sitemaps', fmt_list($robots['sitemaps'] ?? []), null, 'probe.http.robots.sitemaps')
-                    . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '—', null, 'probe.http.robots.sitemap_reachable')
+                    . field('Sitemap reachable', isset($robots['sitemap_reachable']) ? (($robots['sitemap_reachable']) ? 'yes' : 'no') : '', null, 'probe.http.robots.sitemap_reachable')
                     . ($sitemapSourceLabel !== null ? field('Sitemap source', $sitemapSourceLabel, null, 'probe.http.robots.sitemap_source') : ''),
                     class: 'card-full'
                 );
@@ -1004,7 +1004,7 @@ if ($status !== 'done'):
                     $auditNote = '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">Site audit failed: ' . e(implode(' ', (array) ($audit['errors'] ?? []))) . '</div>';
                 } else {
                     $totals    = (array) ($auditData['totals'] ?? []);
-                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '—', null, 'probe.seranking.score')
+                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '', null, 'probe.seranking.score')
                         . field('Pages crawled', $totals['pages'] ?? null, null, 'probe.seranking.totals.pages')
                         . field('Errors', $totals['errors'] ?? null, ($totals['errors'] ?? 0) > 0 ? 'error' : 'ok', 'probe.seranking.totals.errors')
                         . field('Warnings', $totals['warnings'] ?? null, ($totals['warnings'] ?? 0) > 0 ? 'warn' : 'ok', 'probe.seranking.totals.warnings')

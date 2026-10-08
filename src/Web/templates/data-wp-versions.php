@@ -38,7 +38,7 @@
                         <span class="badge badge-warn">Outdated</span>
                     <?php endif; ?>
                 </td>
-                <td class="muted"><?= e($r['branchReleased'] ?? '—') ?></td>
+                <td class="muted"><?= e($r['branchReleased'] ?? '') ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

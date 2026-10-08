@@ -43,7 +43,7 @@ final class HelpersRequirementCellTest extends TestCase
 
     public function testNoRequirementsDeclaredRendersDash(): void
     {
-        $this->assertSame('—', \requirement_cell(null, null, '6.8.1', '8.3.11'));
+        $this->assertSame('', \requirement_cell(null, null, '6.8.1', '8.3.11'));
     }
 
     public function testUnknownInstalledVersionIsNeverFlagged(): void

@@ -57,7 +57,7 @@ if (isset($notices[$notice ?? ''])):
                     <a href="/site/<?= e($site['site_id']) ?>"><?= e(site_display($site['site_url'] ?? '') ?: $site['site_id']) ?></a>
                     <div class="muted mono"><?= e($site['site_id']) ?></div>
                 </td>
-                <td><?= e($site['last_extraction_received_at'] ?? '—') ?></td>
+                <td><?= e($site['last_extraction_received_at'] ?? '') ?></td>
                 <td><?= badge($site['last_extraction_status']) ?><?= incomplete_badge($site['last_extraction_collector_errors'] ?? 0) ?></td>
                 <td><?= e($site['extraction_count']) ?></td>
             </tr>

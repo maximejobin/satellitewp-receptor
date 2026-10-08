@@ -10,9 +10,9 @@ require_once __DIR__ . '/../../src/Web/helpers.php';
 
 final class HelpersFmtRelativeTimeTest extends TestCase
 {
-    public function testNullIsAnEmDash(): void
+    public function testNullRendersNothing(): void
     {
-        $this->assertSame('<span class="muted">—</span>', \fmt_relative_time(null));
+        $this->assertSame('', \fmt_relative_time(null));
     }
 
     public function testJustNow(): void

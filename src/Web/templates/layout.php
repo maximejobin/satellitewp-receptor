@@ -75,7 +75,7 @@ $nav = $nav ?? 'sites';
 
         <div class="nav-label">Extractor</div>
         <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?></a>
-        <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue</a>
+        <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue<?php if (($navUnclassified ?? 0) > 0): ?> <span class="nav-count" title="Not yet classified"><?= (int) $navUnclassified ?></span><?php endif; ?></a>
 
         <div class="nav-label">Data</div>
         <a class="nav-item <?= $nav === 'data-wp-versions' ? 'active' : '' ?>" href="/data/wp-versions">WordPress versions</a>

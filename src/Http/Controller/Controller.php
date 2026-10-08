@@ -200,6 +200,8 @@ abstract class Controller
             ?? (!$this->app->googleAuth()->isConfigured()
                 || ($vars['currentUser'] !== null && $this->app->userStore()->isAdmin($vars['currentUser'])));
 
+        $vars['navUnclassified'] = $this->app->softwareCatalog()->unclassifiedCount();
+
         extract($vars, EXTR_SKIP);
         $templateFile = dirname(__DIR__, 2) . '/Web/templates/' . $template . '.php';
 

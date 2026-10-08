@@ -45,10 +45,10 @@
             <tr>
                 <td><?= e($engine) ?></td>
                 <td class="mono"><?= e($branch) ?></td>
-                <td class="mono"><?= e($c['latest'] ?? '—') ?></td>
-                <td class="muted"><?= e($c['releaseDate'] ?? '—') ?></td>
-                <td class="muted"><?= e($c['latestReleaseDate'] ?? '—') ?></td>
-                <td class="muted"><?= e($status[1] ?? '—') ?></td>
+                <td class="mono"><?= e($c['latest'] ?? '') ?></td>
+                <td class="muted"><?= e($c['releaseDate'] ?? '') ?></td>
+                <td class="muted"><?= e($c['latestReleaseDate'] ?? '') ?></td>
+                <td class="muted"><?= e($status[1] ?? '') ?></td>
                 <td>
                     <?php if ($status === null): ?>
                         <span class="badge badge-muted">Unknown</span>

@@ -61,12 +61,12 @@ $clientLabels = array_map(
         field_raw('BlogVault site id', external_link(
             $links['blogvault_view_website'] ?? null,
             isset($website['blogvault_site_id']) ? substr((string) $website['blogvault_site_id'], 0, 8) : null,
-            (string) ($website['blogvault_site_id'] ?? '—')
+            (string) ($website['blogvault_site_id'] ?? '')
         )),
         field_raw('Tags', !empty($website['tags']) && is_array($website['tags'])
             ? implode(' ', array_map(static fn (mixed $t): string => '<span class="badge badge-muted">' . e($t) . '</span>', $website['tags']))
-            : '—'),
-        field_raw('Client', $clientLabels !== [] ? implode(', ', $clientLabels) : '—'),
+            : ''),
+        field_raw('Client', $clientLabels !== [] ? implode(', ', $clientLabels) : ''),
         field('Last synced', $website['date_sync'] ?? null),
     ]) ?></tbody></table>
 </section>
@@ -83,9 +83,9 @@ $clientLabels = array_map(
         <?php foreach ($subscriptions as $s): ?>
             <tr>
                 <td><?= e($s['product_name']) ?></td>
-                <td class="muted"><?= e($s['product_category'] ?? '—') ?></td>
+                <td class="muted"><?= e($s['product_category'] ?? '') ?></td>
                 <td><?= status_dot((string) $s['subscription_status']) ?></td>
-                <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '—') ?></td>
+                <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
                 <td><?= subscription_website_form(
                     $s + ['website_id' => $website['id'], 'website_url' => $website['url']],
                     $csrf,
@@ -109,8 +109,8 @@ $itemTable = static function (array $rows): string {
             . '<td>' . e($item['name']) . '</td>'
             . '<td class="mono">' . e($item['slug']) . '</td>'
             . '<td class="mono">' . e($item['version']) . '</td>'
-            . '<td class="mono">' . (!empty($item['is_update_available']) ? e($item['new_version'] ?? '?') : '—') . '</td>'
-            . '<td>' . (!empty($item['is_vulnerable']) ? '<span class="badge badge-error">Vulnerable</span>' : '—') . '</td>'
+            . '<td class="mono">' . (!empty($item['is_update_available']) ? e($item['new_version'] ?? '?') : '') . '</td>'
+            . '<td>' . (!empty($item['is_vulnerable']) ? '<span class="badge badge-error">Vulnerable</span>' : '') . '</td>'
             . '<td>' . status_dot(!empty($item['is_active']) ? 'active' : 'inactive') . '</td>'
             . '</tr>';
     }

@@ -88,9 +88,9 @@
         <?php if ($keyRow !== null): ?>
             <?php $apiKey = (string) ($keyRow['api_key'] ?? ''); $revoked = !empty($keyRow['revoked']); ?>
             <table class="kv" style="max-width:40rem"><tbody>
-                <tr><th>Key</th><td class="mono"><?= $apiKey !== '' ? e(substr($apiKey, 0, 6)) . '…' : '—' ?></td></tr>
-                <tr><th>Origin</th><td class="mono"><?= e($keyRow['origin'] ?? '—') ?></td></tr>
-                <tr><th>Created</th><td class="muted"><?= e($keyRow['created_at'] ?? '—') ?></td></tr>
+                <tr><th>Key</th><td class="mono"><?= $apiKey !== '' ? e(substr($apiKey, 0, 6)) . '…' : '' ?></td></tr>
+                <tr><th>Origin</th><td class="mono"><?= e($keyRow['origin'] ?? '') ?></td></tr>
+                <tr><th>Created</th><td class="muted"><?= e($keyRow['created_at'] ?? '') ?></td></tr>
                 <tr><th>Status</th><td><?= $revoked
                         ? '<span class="badge badge-muted">revoked</span>'
                         : '<span class="badge badge-ok">active</span>' ?></td></tr>

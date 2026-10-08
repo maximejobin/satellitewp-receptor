@@ -52,6 +52,6 @@ final class HelpersCvssBadgeTest extends TestCase
 
     public function testNullScoreRendersADashNotABadge(): void
     {
-        $this->assertSame('—', \cvss_badge(null, null));
+        $this->assertSame('', \cvss_badge(null, null));
     }
 }

@@ -38,7 +38,7 @@ $types = [
         <?php foreach ($products as $p): ?>
             <tr>
                 <td><?= e($p['name']) ?></td>
-                <td class="mono"><?= e($p['license_slug'] ?? '—') ?></td>
+                <td class="mono"><?= e($p['license_slug'] ?? '') ?></td>
                 <td><?= badge($p['product_type']) ?></td>
             </tr>
         <?php endforeach; ?>

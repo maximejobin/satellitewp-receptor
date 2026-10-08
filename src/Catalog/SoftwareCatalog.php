@@ -185,6 +185,14 @@ final class SoftwareCatalog
         return $rows;
     }
 
+    /** Entries whose licence is still 'unknown' (the menu's red counter). */
+    public function unclassifiedCount(): int
+    {
+        $this->load();
+
+        return count(array_filter($this->entries, static fn ($e) => ($e['license'] ?? 'unknown') === 'unknown'));
+    }
+
     /**
      * Datatables server-side search for /catalog: all()'s filters plus a
      * slug/name query and pagination. The file is small enough to filter in PHP.

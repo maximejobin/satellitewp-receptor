@@ -93,6 +93,7 @@ body { margin: 0; }
 .nav-label { text-transform: uppercase; letter-spacing: .09em; font-size: .66rem; color: var(--faint); padding: 1.5rem .6rem .35rem; font-weight: 700; }
 .nav-label:first-child { padding-top: .35rem; }
 .nav-item { display: flex; align-items: center; gap: .6rem; padding: .5rem .65rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: .9rem; flex: none; }
+.nav-count { margin-left: auto; padding: .02rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--error); }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active { background: var(--bg-accent); color: var(--accent-2); font-weight: 600; }
 .nav-item-button { width: 100%; border: 0; background: none; font: inherit; font-weight: 500; font-size: .9rem; cursor: pointer; text-align: left; }
@@ -186,6 +187,7 @@ td.num, .tnum { font-variant-numeric: tabular-nums; }
 /* A very pale wash over an inactive plugin/theme row — a glance should tell
    it apart from an active one without reading the Status column. */
 tr.row-inactive { background: var(--bg-error); }
+tr.row-inactive-theme { background: var(--surface-2); color: var(--muted); }
 
 /* ---------- pastilles ---------- */
 .pastille { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; font-size: .82rem; }
