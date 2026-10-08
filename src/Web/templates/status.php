@@ -13,6 +13,7 @@
  *     orphanSubscriptions?: int,
  *     error?: string,
  * }|null $crm
+ * @var list<array{label: string, count: int, detail: string}> $alerts
  */
 use SatelliteWP\Manager\Crm\ClientsRepository;
 
@@ -42,6 +43,16 @@ $clientTile = static function (string $label, int $count, string $sub = ''): str
 <h1>Status</h1>
 <p class="muted">A system-health snapshot — the extraction pipeline, external sync freshness, and a few
     data-quality checks.</p>
+
+<?php if ($alerts !== []): ?>
+    <h2>Alert</h2>
+    <p class="muted">Why the menu shows <span class="nav-count">Alert</span>: each check below needs a look.</p>
+    <div class="tiles">
+        <?php foreach ($alerts as $alert): ?>
+            <?= $clientTile($alert['label'], $alert['count'], $alert['detail']) ?>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
 
 <h2>Clients</h2>
 <?php if (!$crmConfigured): ?>

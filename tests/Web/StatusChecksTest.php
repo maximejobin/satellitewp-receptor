@@ -39,4 +39,16 @@ final class StatusChecksTest extends TestCase
         $this->assertTrue(StatusChecks::needsAttention(self::collected(crm: ['activeNoTeamworkClients' => [['id' => 1]]])));
         $this->assertTrue(StatusChecks::needsAttention(self::collected(crm: ['orphanSubscriptions' => 2])));
     }
+
+    public function testAlertsListOnlyTheTriggeringChecksWithTheirCounts(): void
+    {
+        $alerts = StatusChecks::alerts(self::collected(stale: true, crm: [
+            'activeEmptyCompanyClients' => [], 'activeNoHubspotClients' => [['id' => 1], ['id' => 2]],
+            'activeNoTeamworkClients' => [], 'orphanSubscriptions' => 0, 'unpaidClients' => [['id' => 3]],
+        ]));
+
+        $this->assertSame(['External sync error', 'Missing HubSpot ID (active)'], array_column($alerts, 'label'));
+        $this->assertSame('wordfence intelligence', $alerts[0]['detail']);
+        $this->assertSame(2, $alerts[1]['count']);
+    }
 }

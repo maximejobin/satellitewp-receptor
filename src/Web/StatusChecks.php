@@ -78,31 +78,52 @@ final class StatusChecks
     }
 
     /**
-     * Stale or failed external sync, active clients missing a company,
+     * The checks that raise the menu's "Alert" tag, each with its count:
+     * stale or failed external sync, active clients missing a company,
      * HubSpot or Teamwork id, subscriptions linked to no website. Unpaid and
      * inactive clients are business follow-up, not an alert.
      *
      * @param array{syncSources: array<string, array{stale: bool}>, crm: array<string, mixed>|null} $collected
+     * @return list<array{label: string, count: int, detail: string}>
      */
-    public static function needsAttention(array $collected): bool
+    public static function alerts(array $collected): array
     {
-        foreach ($collected['syncSources'] as $source) {
-            if ($source['stale']) {
-                return true;
-            }
+        $alerts = [];
+        $stale  = array_keys(array_filter($collected['syncSources'], static fn (array $s): bool => $s['stale']));
+        if ($stale !== []) {
+            $alerts[] = ['label' => 'External sync error', 'count' => count($stale), 'detail' => implode(', ', $stale)];
         }
         $crm = $collected['crm'];
         if ($crm === null) {
-            return false;
+            return $alerts;
         }
         if (isset($crm['error'])) {
-            return true;
+            $alerts[] = ['label' => 'CRM database unreachable', 'count' => 1, 'detail' => 'ref ' . $crm['error']];
+
+            return $alerts;
+        }
+        foreach ([
+            'activeEmptyCompanyClients' => 'Missing company (active)',
+            'activeNoHubspotClients'    => 'Missing HubSpot ID (active)',
+            'activeNoTeamworkClients'   => 'Missing Teamwork ID (active)',
+        ] as $key => $label) {
+            $count = count((array) ($crm[$key] ?? []));
+            if ($count > 0) {
+                $alerts[] = ['label' => $label, 'count' => $count, 'detail' => 'active clients only'];
+            }
+        }
+        $orphans = (int) ($crm['orphanSubscriptions'] ?? 0);
+        if ($orphans > 0) {
+            $alerts[] = ['label' => 'Subscriptions not linked', 'count' => $orphans, 'detail' => 'no website assigned'];
         }
 
-        return ($crm['activeEmptyCompanyClients'] ?? []) !== []
-            || ($crm['activeNoHubspotClients'] ?? []) !== []
-            || ($crm['activeNoTeamworkClients'] ?? []) !== []
-            || (int) ($crm['orphanSubscriptions'] ?? 0) > 0;
+        return $alerts;
+    }
+
+    /** @param array{syncSources: array<string, array{stale: bool}>, crm: array<string, mixed>|null} $collected */
+    public static function needsAttention(array $collected): bool
+    {
+        return self::alerts($collected) !== [];
     }
 
     /** The cached verdict, recomputed once it is older than ALERT_TTL_SECONDS. */

@@ -35,6 +35,7 @@ final class DataController extends Controller
             ],
             'crmConfigured'    => $checks['crmConfigured'],
             'crm'              => $checks['crm'],
+            'alerts'           => StatusChecks::alerts($checks),
         ]);
     }
 
