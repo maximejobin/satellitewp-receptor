@@ -23,7 +23,7 @@
             . '<span class="mono">config/config.php</span> (<span class="mono">vulnerabilities.ignored</span>).') ?>
     <?php endif; ?>
     <div class="search-group">
-    <p class="search"><?= dt_search_box('wf-vulnerabilities') ?>
+    <p class="search">
         <?php if ($ignoredCount > 0): ?>
             <select id="wf-ignored-filter" aria-label="Ignored vulnerabilities">
                 <option value="">All vulnerabilities</option>
@@ -31,6 +31,9 @@
                 <option value="hide">Hide ignored</option>
             </select>
         <?php endif; ?>
+        <?= dt_search_box('wf-vulnerabilities') ?>
+        <?php // Nothing is in the URL here, so a reload is the reset. ?>
+        <a href="/data/vulnerabilities" class="search-reset">Reset filter</a>
     </p>
     <table id="wf-vulnerabilities" class="display" style="width:100%">
         <thead>
