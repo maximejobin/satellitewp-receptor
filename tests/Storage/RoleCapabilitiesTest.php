@@ -68,6 +68,10 @@ final class RoleCapabilitiesTest extends TestCase
         $this->assertFalse($roles->can('maintenance', 'user_add'));
         $this->assertTrue($roles->can('coordinator', 'extraction_view_technical'));
         $this->assertFalse($roles->can('coordinator', 'extraction_run'));
+        foreach (['admin', 'maintenance', 'coordinator'] as $role) {
+            $this->assertTrue($roles->can($role, 'extraction_observations_edit'), $role);
+        }
+        $this->assertFalse($roles->can('sale', 'extraction_observations_edit'));
         $this->assertTrue($roles->can('sale', 'catalog_view'));
         $this->assertFalse($roles->can('sale', 'extraction_view_technical'));
         $this->assertTrue($roles->can('sale', 'crm_view'));

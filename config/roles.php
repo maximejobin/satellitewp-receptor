@@ -9,6 +9,6 @@ return [
         'extraction_run', 'catalog_view', 'catalog_edit', 'extraction_view_technical',
         'extraction_observations_edit', 'data_view', 'crm_view', 'crm_subscription_edit',
     ],
-    'coordinator' => ['extraction_view_technical', 'catalog_view', 'data_view', 'crm_view'],
+    'coordinator' => ['extraction_view_technical', 'extraction_observations_edit', 'catalog_view', 'data_view', 'crm_view'],
     'sale'        => ['catalog_view', 'crm_view'],
 ];
