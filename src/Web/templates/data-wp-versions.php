@@ -29,15 +29,7 @@
             <tr>
                 <td class="mono"><?= e($r['version']) ?></td>
                 <td class="mono"><?= e($r['branch']) ?></td>
-                <td>
-                    <?php if ($r['status'] === 'unsecure'): ?>
-                        <span class="badge badge-error">Insecure</span>
-                    <?php elseif ($r['status'] === 'uptodate'): ?>
-                        <span class="badge badge-ok">Up to date</span>
-                    <?php else: ?>
-                        <span class="badge badge-warn">Outdated</span>
-                    <?php endif; ?>
-                </td>
+                <td><?= wp_version_status_badge($r['status']) ?></td>
                 <td class="muted"><?= e($r['branchReleased'] ?? '') ?></td>
             </tr>
         <?php endforeach; ?>

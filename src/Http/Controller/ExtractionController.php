@@ -53,6 +53,7 @@ final class ExtractionController extends Controller
             'probes'              => $store->readAllProbeResults($siteId, $extractionId),
             'row'                 => $row,
             'eol'                 => $this->app->endOfLife(),
+            'wpVersions'          => $this->app->wordPressVersions()->all(),
             'ignoredVulnerabilities' => $this->app->ignoredVulnerabilities(),
             'csrf'                => $this->csrfToken(),
             'blogVault'           => $awaiting ? $this->blogVaultPreflight($payload) : null,

@@ -4,6 +4,7 @@
  */
 use SatelliteWP\Manager\Catalog\SoftwareCatalog;
 use SatelliteWP\Manager\Rules\Pastille;
+use SatelliteWP\Manager\Reference\WordPressVersions;
 use SatelliteWP\Manager\Web\HardeningConstants;
 use SatelliteWP\Manager\Web\ObservationsCsv;
 
@@ -572,9 +573,10 @@ if ($status !== 'done'):
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
                 echo section('Core & settings',
                     field_raw('Version', e($p['wp_version'] ?? '') . eol_annotation($eolWp, $t), null, 'payload.wp_version')
-                    . field_raw('Known vulnerabilities', $coreVulns !== []
-                        ? '<span class="badge badge-error">' . count($coreVulns) . ' CVE</span> — see §Plugins &amp; themes'
-                        : '', null, 'derived.core_vulnerabilities')
+                    // wordpress.org's stable-check omits some point releases: those stay empty.
+                    . field_raw('Status', is_string($wpVersions[(string) ($p['wp_version'] ?? '')] ?? null)
+                        ? wp_version_status_badge(WordPressVersions::status($wpVersions[(string) $p['wp_version']]))
+                        : '', null, 'reference.wordpress_versions')
                     . field('WP_AUTO_UPDATE_CORE', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
                     . field('Auto-update minor releases', $p['core_update']['auto_update_minor'] ?? null, null, 'payload.core_update.auto_update_minor')
                     . field('Auto-update major releases', $p['core_update']['auto_update_major'] ?? null, null, 'payload.core_update.auto_update_major')

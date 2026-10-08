@@ -447,6 +447,7 @@ function src_note(string $path): string
         str_starts_with($path, 'probe.seranking.')     => "From the SE Ranking site audit Manager started for this extraction — a crawl of the site's pages by SE Ranking, fetched once it finished.",
         str_starts_with($path, 'catalog.')           => "Set by hand by an analyst in Manager's own software catalogue (/catalog) — not collected from the site at all.",
         str_starts_with($path, 'reference.eol.')       => 'From endoflife.date, cached locally and refreshed on a schedule — not measured on this site.',
+        str_starts_with($path, 'reference.wordpress_versions') => "wordpress.org's verdict on this version (/data/wp-versions), cached locally and refreshed on a schedule — today's verdict, not the one at extraction time.",
         str_starts_with($path, 'derived.')             => 'Computed by Manager from other fields on this same page — see the linked detail for the exact arithmetic.',
         default                                        => '',
     };
@@ -683,4 +684,14 @@ function json_details(string $label, mixed $data, bool $open = false): string
 
     return '<details' . ($open ? ' open' : '') . '><summary>' . e($label) . '</summary>'
         . '<pre>' . e($json) . '</pre></details>';
+}
+
+/** Badge for a WordPressVersions::status() value, as /data/wp-versions shows it. */
+function wp_version_status_badge(string $status): string
+{
+    return match ($status) {
+        'unsecure' => '<span class="badge badge-error">Insecure</span>',
+        'uptodate' => '<span class="badge badge-ok">Up to date</span>',
+        default    => '<span class="badge badge-warn">Outdated</span>',
+    };
 }
