@@ -180,7 +180,9 @@ optional calls need `try/catch`.
 plugin's `.github/validations-techniques.txt` letters; `W*` domain, `PS*`
 Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F10` merged
 vulnerabilities (BlogVault + Wordfence by CVE, `Rules\VulnerabilityMerge`,
-also used by the UI), `F12` auto-update policy, `F13` inactive plugins/themes.
+also used by the UI), `F12a/b/c` auto-updates (minor on, core major off, no
+plugin auto-updating; read from the policy the plugin resolves — constant,
+Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes.
 `F9` is reserved. Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges
@@ -191,7 +193,8 @@ also used by the UI), `F12` auto-update policy, `F13` inactive plugins/themes.
   `rules:reevaluate` to re-score. `/data/vulnerabilities` still lists them, with
   an "Ignored" tag, an ignored-only/hide filter and a banner.
 - Pastille = f(status, severity, `client_action`): red/orange fail, **purple**
-  = standing request for the client's input (W2/W3), blue info, green pass,
+  = standing request for the client's input (no rule uses it now: the default
+  observations do), blue info, green pass,
   grey n/a–unknown. `Rules\Pastille` is the only list of colours — every
   consumer iterates `Pastille::values()`/`isValid()`/`needsAttention()`.
 - Every rule has FR+EN `title`, `title_success`, `title_failure`, `fail`,
@@ -249,6 +252,10 @@ filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 Observations are added and edited in a native `<dialog>` (one form for both, prefilled from the row's `data-obs`); they can also be appended from a CSV (`Web\ObservationsCsv`: header
 `section,color,title,description,include`, comma or semicolon, UTF-8; one
 invalid row and nothing is imported, the errors are flashed per line).
+The contract's `default_observations` (`Web\DefaultObservations`) seed an
+extraction until its observations are first saved: a default line keeps a
+`template` key and renders in the report's language (`report` lang block)
+until its text is changed.
 
 **Errors.** `Support\ErrorLog` writes one JSON line per 500 into
 `logs/error-<date>.log` and returns a short `ref`; installed before boot by

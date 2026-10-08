@@ -477,16 +477,6 @@ return [
             return Check::graded($days, [[15, Severity::Critical], [(float) $rule->threshold, Severity::High]]);
         },
     ],
-    // W2/W3 are standing requests for the client's own confirmation, not
-    // checks of the site's data: always "pass", rendered purple.
-    [
-        'id' => 'W2', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info, 'client_action' => true,
-        'check' => static fn () => Check::pass(),
-    ],
-    [
-        'id' => 'W3', 'category' => Category::DOMAIN, 'source' => 'DATA', 'severity' => Severity::Info, 'client_action' => true,
-        'check' => static fn () => Check::pass(),
-    ],
 
     // ===================================================================
     //  PS. PERFORMANCE (Lighthouse / PageSpeed)                    [EXT]
@@ -703,31 +693,55 @@ return [
         },
     ],
     [
-        // Auto-update policy: informational — a maintained site may update manually on purpose.
-        'id' => 'F12', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Info,
+        // Minor releases carry WordPress's security fixes.
+        'id' => 'F12a', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) {
-            $constants = $c->get('payload.constants');
-            if (!is_array($constants)) {
+            $minor = $c->get('payload.core_update.auto_update_minor');
+            if (!is_bool($minor)) {
                 return Check::unknown();
             }
-            $data = [
-                'plugins_auto'  => count($c->list('payload.auto_update_plugins')),
-                'plugins_total' => count($c->list('payload.plugins')),
-            ];
             if ($c->constant('DISALLOW_FILE_MODS') === true) {
-                return Check::fail('file_mods', $data + ['variant' => 'file_mods']);
+                return Check::fail('file_mods', ['variant' => 'file_mods']);
             }
-            if ($c->constant('AUTOMATIC_UPDATER_DISABLED') === true) {
-                return Check::fail('all_disabled', $data + ['variant' => 'all_disabled']);
-            }
-            $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
-            if ($core === false || $core === 'false') {
-                return Check::fail('core_disabled', $data);
+            if ($c->get('payload.core_update.auto_updates_disabled') === true) {
+                return Check::fail('all_disabled', ['variant' => 'all_disabled']);
             }
 
-            return $core === true || $core === 'true'
-                ? Check::pass('all', $data + ['variant' => 'all'])
-                : Check::pass('minor', $data);
+            return $minor ? Check::pass('minor') : Check::fail('minor_disabled');
+        },
+    ],
+    [
+        // A major release is applied after checking the site, never unattended.
+        'id' => 'F12b', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) {
+            $major = $c->get('payload.core_update.auto_update_major');
+            if (!is_bool($major)) {
+                return Check::unknown();
+            }
+
+            return $major ? Check::fail('major_enabled') : Check::pass('major_disabled');
+        },
+    ],
+    [
+        // A plugin update is applied after checking the site, never unattended.
+        'id' => 'F12c', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) use ($nameList) {
+            $plugins = $c->get('payload.plugins');
+            if (!is_array($plugins)) {
+                return Check::unknown();
+            }
+            $auto = [];
+            foreach ($plugins as $plugin) {
+                // Sent by plugin releases that resolve the auto-update filters; older ones can't tell.
+                if (!is_array($plugin) || !is_bool($plugin['auto_update'] ?? null)) {
+                    return Check::unknown();
+                }
+                if ($plugin['auto_update']) {
+                    $auto[] = (string) ($plugin['name'] ?? '?');
+                }
+            }
+
+            return $auto === [] ? Check::pass(0) : Check::fail(count($auto), $nameList($auto));
         },
     ],
     [
@@ -837,7 +851,7 @@ return [
         },
     ],
     [
-        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 3000,
+        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 1000,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
     ],
     [

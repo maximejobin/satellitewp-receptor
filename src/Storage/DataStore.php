@@ -193,16 +193,18 @@ final class DataStore
 
     /**
      * Read-modify-write of observations.json under the extraction's lock:
-     * $fn gets the current item list (a list, [] when nothing is stored yet)
+     * $fn gets the current item list ($initial when nothing is stored yet)
      * and returns the new one, written back as {"items": [...]}, so
      * concurrent saves never drop an edit.
      *
      * @param callable(list<mixed>): list<mixed> $fn
+     * @param list<mixed>                        $initial
      */
-    public function mutateObservations(string $siteId, string $extractionId, callable $fn): void
+    public function mutateObservations(string $siteId, string $extractionId, callable $fn, array $initial = []): void
     {
-        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $fn): void {
-            $items = array_values((array) ($this->readObservations($siteId, $extractionId)['items'] ?? []));
+        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $fn, $initial): void {
+            $stored = $this->readObservations($siteId, $extractionId);
+            $items  = $stored === null ? $initial : array_values((array) ($stored['items'] ?? []));
             $this->writeObservations($siteId, $extractionId, ['items' => $fn($items)]);
         });
     }

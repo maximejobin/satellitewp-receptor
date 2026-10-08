@@ -562,7 +562,9 @@ if ($status !== 'done'):
                     . field_raw('Known vulnerabilities', $coreVulns !== []
                         ? '<span class="badge badge-error">' . count($coreVulns) . ' CVE</span> — see §Plugins &amp; themes'
                         : '<span class="badge badge-ok">—</span>', null, 'derived.core_vulnerabilities')
-                    . field('Auto-update core', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
+                    . field('WP_AUTO_UPDATE_CORE', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
+                    . field('Auto-update minor releases', $p['core_update']['auto_update_minor'] ?? null, null, 'payload.core_update.auto_update_minor')
+                    . field('Auto-update major releases', $p['core_update']['auto_update_major'] ?? null, null, 'payload.core_update.auto_update_major')
                     . field('Multisite', $p['is_multisite'] ?? null, null, 'payload.is_multisite')
                     . ($isMultisite ? field('Multisite type', $p['multisite_type'] ?? null, null, 'payload.multisite_type')
                         . field('Network sites', $p['multisite_count'] ?? null, null, 'payload.multisite_count')
@@ -621,7 +623,7 @@ if ($status !== 'done'):
                         <td style="white-space:nowrap"><?= $versionCell($str($pl['version'] ?? null), $hasUpdate, $str($pl['new_version'] ?? null)) ?></td>
                         <td><?= requirement_cell($str($pl['requires_wp'] ?? null), $str($pl['requires_php'] ?? null), $str($p['wp_version'] ?? null), $str($p['php']['version'] ?? null)) ?></td>
                         <?php $pluginLicense = (string) $str($licenseStatuses['plugin:' . $slug] ?? 'n_a'); ?>
-                        <td><?= $stateCell($inactive, $merged, $arr($wporg['plugins'][$slug] ?? null), in_array($file, $autoUpdatePlugins, true)) ?></td>
+                        <td><?= $stateCell($inactive, $merged, $arr($wporg['plugins'][$slug] ?? null), is_bool($pl['auto_update'] ?? null) ? $pl['auto_update'] : in_array($file, $autoUpdatePlugins, true)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'plugin', $slug, $pluginLicense, $csrf,
                             "/site/{$siteId}/extraction/{$extractionId}") ?></td>
                     </tr>

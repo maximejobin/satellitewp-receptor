@@ -332,25 +332,22 @@ final class ReportBuilder
     }
 
     /**
-     * Core auto-update policy from payload.constants, read exactly as rule F12
-     * does: an undefined WP_AUTO_UPDATE_CORE ("N/A") is WordPress's default,
-     * minor releases only; DISALLOW_FILE_MODS / AUTOMATIC_UPDATER_DISABLED stop all.
+     * Core auto-update policy from payload.core_update, as the plugin resolved
+     * it (constant, Dashboard options, filters) and rules F12a/F12b read it.
      */
-    private function autoUpdateCore(mixed $constants): string
+    private function autoUpdateCore(mixed $coreUpdate): string
     {
-        if (!is_array($constants)) {
+        $minor = is_array($coreUpdate) ? ($coreUpdate['auto_update_minor'] ?? null) : null;
+        $major = is_array($coreUpdate) ? ($coreUpdate['auto_update_major'] ?? null) : null;
+        if (!is_bool($minor) || !is_bool($major)) {
             return $this->unknown();
         }
-        $on = static fn (string $name): bool => !in_array($constants[$name] ?? null, [null, 'N/A'], true) && (bool) $constants[$name];
-        if ($on('DISALLOW_FILE_MODS') || $on('AUTOMATIC_UPDATER_DISABLED')) {
-            return $this->t->report('auto_update_off');
-        }
-        $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
 
         return $this->t->report(match (true) {
-            $core === false || $core === 'false' => 'auto_update_off',
-            $core === true || $core === 'true'   => 'auto_update_all',
-            default                              => 'auto_update_minor',
+            $minor && $major => 'auto_update_all',
+            $minor           => 'auto_update_minor',
+            $major           => 'auto_update_major',
+            default          => 'auto_update_off',
         });
     }
 

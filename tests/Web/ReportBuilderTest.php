@@ -928,30 +928,30 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('8.4.7', $this->value(['transform' => 'database_version'], '8.4.7')['value']);
     }
 
-    public function testCoreAutoUpdateFollowsTheConstantsLikeRuleF12(): void
+    public function testCoreAutoUpdateIsThePolicyThePluginResolved(): void
     {
-        $policy = fn (array $constants): string => $this->value(['transform' => 'auto_update_core'], $constants + [
-            'WP_AUTO_UPDATE_CORE' => 'N/A', 'AUTOMATIC_UPDATER_DISABLED' => 'N/A', 'DISALLOW_FILE_MODS' => 'N/A',
+        $policy = fn (?bool $minor, ?bool $major): string => $this->value(['transform' => 'auto_update_core'], [
+            'auto_update_core' => null, 'auto_update_minor' => $minor, 'auto_update_major' => $major,
         ])['value'];
 
-        self::assertSame('Désactivée', $policy(['WP_AUTO_UPDATE_CORE' => false]));
-        self::assertSame('Mineures seulement', $policy(['WP_AUTO_UPDATE_CORE' => 'minor']));
-        self::assertSame('Toutes', $policy(['WP_AUTO_UPDATE_CORE' => true]));
-        // Not defined: WordPress's default policy, minor releases only — never "unknown".
-        self::assertSame('Mineures seulement', $policy([]));
-        self::assertSame('Désactivée', $policy(['WP_AUTO_UPDATE_CORE' => true, 'AUTOMATIC_UPDATER_DISABLED' => true]));
-        self::assertSame('Désactivée', $policy(['DISALLOW_FILE_MODS' => true]));
+        self::assertSame('Désactivée', $policy(false, false));
+        self::assertSame('Mineures seulement', $policy(true, false));
+        self::assertSame('Toutes', $policy(true, true));
+        self::assertSame('Majeures seulement', $policy(false, true));
+        // A plugin release that doesn't resolve the policy: never guessed from the constant alone.
+        self::assertSame('Indéterminé', $policy(null, null));
         self::assertSame('Indéterminé', $this->value(['transform' => 'auto_update_core'], null)['value']);
     }
 
-    public function testShippedContractReadsCoreAutoUpdateFromTheConstants(): void
+    public function testShippedContractReadsCoreAutoUpdateFromCoreUpdate(): void
     {
         $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
-        $context  = ['payload' => ['constants' => ['WP_AUTO_UPDATE_CORE' => 'N/A'], 'core_update' => ['auto_update_core' => null]]];
+        // The constant says "minor", but the Dashboard option or a filter turned major releases on.
+        $context  = ['payload' => ['core_update' => ['auto_update_core' => 'minor', 'auto_update_minor' => true, 'auto_update_major' => true]]];
 
         $field = $this->builder('fr')->build(['fields' => ['x' => $contract['fields']['wp_core_auto_update']]], $context, [])['fields']['x'];
 
-        self::assertSame('Mineures seulement', $field['value']);
+        self::assertSame('Toutes', $field['value']);
     }
 
     public function testLighthouseScoreIsOutOfAHundredAndBanded(): void

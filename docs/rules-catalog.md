@@ -542,26 +542,6 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### W2 — Vérifier que la carte de crédit au dossier du registraire du domaine n'est pas expirée
-
-- **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Un renouvellement manqué peut interrompre votre site et vos courriels.
-- **Échec (FR) :** Le renouvellement du domaine mérite votre attention : la carte de crédit au dossier du registraire pourrait être expirée.
-
-```php
-        'check' => static fn () => Check::pass(),
-```
-
-### W3 — Vérifier que les informations du propriétaire du nom de domaine sont à jour
-
-- **Catégorie :** DOMAIN · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Des informations à jour évitent des complications en cas de problème avec le domaine.
-- **Échec (FR) :** La propriété du domaine mérite votre attention : les informations pourraient être désuètes.
-
-```php
-        'check' => static fn () => Check::pass(),
-```
-
 ## PS. Performance (Lighthouse/PageSpeed)
 
 ### PS1 — Performance sur ordinateur
@@ -845,36 +825,70 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12 — Mises à jour automatiques
+### F12a — Correctifs de sécurité de WordPress
 
-- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Les correctifs de sécurité de WordPress s'installent automatiquement. Extensions mises à jour automatiquement : {plugins_auto} sur {plugins_total}.
-- **Échec (FR) :** Les mises à jour automatiques de WordPress sont désactivées, y compris les correctifs de sécurité : ils doivent être appliqués manuellement. Extensions mises à jour automatiquement : {plugins_auto} sur {plugins_total}.
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Réussite (FR) :** Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, s'installent automatiquement.
+- **Échec (FR) :** Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, ne s'installent pas automatiquement : une faille corrigée reste ouverte sur votre site jusqu'à une intervention manuelle. Faites réactiver les mises à jour mineures automatiques.
 
 ```php
         'check' => static function (Context $c) {
-            $constants = $c->get('payload.constants');
-            if (!is_array($constants)) {
+            $minor = $c->get('payload.core_update.auto_update_minor');
+            if (!is_bool($minor)) {
                 return Check::unknown();
             }
-            $data = [
-                'plugins_auto'  => count($c->list('payload.auto_update_plugins')),
-                'plugins_total' => count($c->list('payload.plugins')),
-            ];
             if ($c->constant('DISALLOW_FILE_MODS') === true) {
-                return Check::fail('file_mods', $data + ['variant' => 'file_mods']);
+                return Check::fail('file_mods', ['variant' => 'file_mods']);
             }
-            if ($c->constant('AUTOMATIC_UPDATER_DISABLED') === true) {
-                return Check::fail('all_disabled', $data + ['variant' => 'all_disabled']);
-            }
-            $core = $constants['WP_AUTO_UPDATE_CORE'] ?? 'N/A';
-            if ($core === false || $core === 'false') {
-                return Check::fail('core_disabled', $data);
+            if ($c->get('payload.core_update.auto_updates_disabled') === true) {
+                return Check::fail('all_disabled', ['variant' => 'all_disabled']);
             }
 
-            return $core === true || $core === 'true'
-                ? Check::pass('all', $data + ['variant' => 'all'])
-                : Check::pass('minor', $data);
+            return $minor ? Check::pass('minor') : Check::fail('minor_disabled');
+        },
+```
+
+### F12b — Mises à jour majeures de WordPress
+
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Les nouvelles versions majeures de WordPress ne s'installent pas d'elles-mêmes : elles peuvent être appliquées après vérification.
+- **Échec (FR) :** Les nouvelles versions majeures de WordPress s'installent automatiquement : un changement important peut survenir sans vérification et briser une extension ou le thème. Faites désactiver les mises à jour majeures automatiques pour qu'elles soient appliquées après vérification.
+
+```php
+        'check' => static function (Context $c) {
+            $major = $c->get('payload.core_update.auto_update_major');
+            if (!is_bool($major)) {
+                return Check::unknown();
+            }
+
+            return $major ? Check::fail('major_enabled') : Check::pass('major_disabled');
+        },
+```
+
+### F12c — Mises à jour automatiques des extensions
+
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Aucune extension ne se met à jour automatiquement : chaque mise à jour peut être vérifiée avant son installation.
+- **Échec (FR) :** {observed} extensions se mettent à jour automatiquement : {names}. Une mise à jour installée sans vérification peut briser le site sans que personne ne s'en aperçoive. Faites désactiver ces mises à jour automatiques.
+
+```php
+        'check' => static function (Context $c) use ($nameList) {
+            $plugins = $c->get('payload.plugins');
+            if (!is_array($plugins)) {
+                return Check::unknown();
+            }
+            $auto = [];
+            foreach ($plugins as $plugin) {
+                // Sent by plugin releases that resolve the auto-update filters; older ones can't tell.
+                if (!is_array($plugin) || !is_bool($plugin['auto_update'] ?? null)) {
+                    return Check::unknown();
+                }
+                if ($plugin['auto_update']) {
+                    $auto[] = (string) ($plugin['name'] ?? '?');
+                }
+            }
+
+            return $auto === [] ? Check::pass(0) : Check::fail(count($auto), $nameList($auto));
         },
 ```
 
@@ -997,7 +1011,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### G4 — Nombre de champs par formulaire
 
-- **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 3000
+- **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 1000
 - **Réussite (FR) :** PHP accepte {observed} champs par formulaire, ce qui est suffisant.
 - **Échec (FR) :** PHP accepte au plus {observed} champs par formulaire (recommandé : au moins {threshold}) : l'enregistrement de menus ou de pages complexes peut perdre des données sans avertissement. Faites augmenter le réglage max_input_vars.
 

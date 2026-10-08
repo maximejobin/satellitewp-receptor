@@ -416,20 +416,50 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Pass->value, $all['status']);
     }
 
-    public function testF12ReportsTheAutoUpdatePolicy(): void
+    public function testF12aRequiresAutomaticMinorUpdates(): void
     {
-        $f12 = function (array $constants): array {
+        $f12a = function (array $coreUpdate, array $constants = []): array {
             $payload = $this->payload();
-            $payload['constants'] = $constants + $payload['constants'];
+            $payload['core_update'] = $coreUpdate + $payload['core_update'];
+            $payload['constants']   = $constants + $payload['constants'];
 
-            return $this->evaluate($payload)['F12'];
+            return $this->evaluate($payload)['F12a'];
         };
 
-        $this->assertSame(Status::Pass->value, $f12(['WP_AUTO_UPDATE_CORE' => 'minor'])['status']);
-        $this->assertSame(Status::Fail->value, $f12(['WP_AUTO_UPDATE_CORE' => false])['status']);
-        $this->assertSame('all_disabled', $f12(['AUTOMATIC_UPDATER_DISABLED' => true])['data']['variant']);
-        $this->assertSame('file_mods', $f12(['DISALLOW_FILE_MODS' => true])['data']['variant']);
-        $this->assertSame(Severity::Info->value, $f12(['WP_AUTO_UPDATE_CORE' => false])['severity']);
+        $this->assertSame(Status::Pass->value, $f12a(['auto_update_minor' => true])['status']);
+        $this->assertSame(Status::Fail->value, $f12a(['auto_update_minor' => false])['status']);
+        $this->assertSame('all_disabled', $f12a(['auto_update_minor' => false, 'auto_updates_disabled' => true])['data']['variant']);
+        $this->assertSame('file_mods', $f12a(['auto_update_minor' => false, 'auto_updates_disabled' => true], ['DISALLOW_FILE_MODS' => true])['data']['variant']);
+        $this->assertSame(Status::Unknown->value, $f12a(['auto_update_minor' => null])['status'], 'the constant alone ignores the Dashboard options and filters');
+    }
+
+    public function testF12bRefusesAutomaticMajorUpdates(): void
+    {
+        $f12b = function (?bool $major): string {
+            $payload = $this->payload();
+            $payload['core_update']['auto_update_major'] = $major;
+
+            return $this->evaluate($payload)['F12b']['status'];
+        };
+
+        $this->assertSame(Status::Pass->value, $f12b(false));
+        $this->assertSame(Status::Fail->value, $f12b(true));
+        $this->assertSame(Status::Unknown->value, $f12b(null));
+    }
+
+    public function testF12cListsPluginsThatUpdateThemselves(): void
+    {
+        $payload = $this->payload(); // akismet auto-updates, woocommerce doesn't
+        $fail    = $this->evaluate($payload)['F12c'];
+        $this->assertSame(Status::Fail->value, $fail['status']);
+        $this->assertSame(1, $fail['observed']);
+        $this->assertSame('Akismet Anti-spam', $fail['data']['names']);
+
+        $payload['plugins']['akismet/akismet.php']['auto_update'] = false;
+        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F12c']['status']);
+
+        unset($payload['plugins']['akismet/akismet.php']['auto_update']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F12c']['status'], 'a plugin release without the field cannot tell');
     }
 
     public function testF13ListsInactiveSoftwareButSparesTheParentThemeAndOneDefault(): void
@@ -506,9 +536,12 @@ final class RuleBehaviourTest extends TestCase
             $rules[$rule->id] = $rule->severity;
         }
 
-        foreach (['C1', 'I4', 'K3', 'F12'] as $id) {
+        foreach (['C1', 'I4', 'K3'] as $id) {
             $this->assertSame(Severity::Info, $rules[$id], $id);
         }
+        $this->assertSame(Severity::High, $rules['F12a']);
+        $this->assertSame(Severity::Medium, $rules['F12b']);
+        $this->assertSame(Severity::Medium, $rules['F12c']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
         $this->assertSame(Severity::High, $rules['B4']);
         foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a', 'H4'] as $id) {

@@ -82,9 +82,9 @@ return [
         // Manager's own wordpress.org cache — the site's self-report can be stale.
         'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version', 'default' => '—'],
         'wp_install_type'      => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type'],
-        // The same constants as rule F12: undefined WP_AUTO_UPDATE_CORE is WordPress's minor-only default.
-        'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.constants', 'transform' => 'auto_update_core'],
-        'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F12']],
+        // The policy the plugin resolved (constant, options, filters), as rules F12a/F12b read it.
+        'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.core_update', 'transform' => 'auto_update_core'],
+        'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F12a', 'F12b']],
 
         // Thèmes.
         'wp_theme'               => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme', 'default' => '—'],
@@ -97,7 +97,7 @@ return [
         'wp_plugins_list'         => ['type' => 'table', 'source' => 'plugins'],
         'wp_plugins_list_mu'      => ['type' => 'table', 'source' => 'mu_plugins'],
         'wp_plugins_list_dropins' => ['type' => 'table', 'source' => 'dropins'],
-        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F7', 'F8']],
+        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F7', 'F8', 'F12c']],
 
         // Sécurité et accès.
         'vulnerabilities'       => ['type' => 'table', 'source' => 'vulnerabilities'],
@@ -128,5 +128,13 @@ return [
         // Every finding, every colour. A manual observation joins only the one
         // field named in its 'section'; file it here to see it in the action plan.
         'all_observations' => ['type' => 'observations'],
+    ],
+
+    // Observations every extraction starts with, editable and removable like
+    // any other. Text from the 'report' lang block (observation_<key>_title,
+    // observation_<key>_description), in the report's language.
+    'default_observations' => [
+        ['key' => 'domain_renewal',   'section' => 'domain_observations', 'color' => 'purple'],
+        ['key' => 'domain_ownership', 'section' => 'domain_observations', 'color' => 'purple'],
     ],
 ];

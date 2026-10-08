@@ -8,6 +8,7 @@ use RuntimeException;
 use SatelliteWP\Manager\Http\ReportContext;
 use SatelliteWP\Manager\Http\ReportContract;
 use SatelliteWP\Manager\Storage\Index;
+use SatelliteWP\Manager\Web\DefaultObservations;
 use SatelliteWP\Manager\Web\ReportBuilder;
 
 /**
@@ -64,10 +65,14 @@ final class ReportController extends Controller
         );
 
         $findings     = ReportContext::translatedFindings($store->readFindings($siteId, $extractionId) ?? [], $t);
-        $observations = (array) ($store->readObservations($siteId, $extractionId)['items'] ?? []);
+        $contract     = ReportContract::load($this->app);
+        $observations = DefaultObservations::resolve(
+            DefaultObservations::items($store->readObservations($siteId, $extractionId), $contract),
+            $t
+        );
 
         $report = (new ReportBuilder($t, $this->baseUrl() . '/assets/report-icons', $this->app->ignoredVulnerabilities()))
-            ->build(ReportContract::load($this->app), $context, $findings, $observations);
+            ->build($contract, $context, $findings, $observations);
 
         $this->response->json([
             'site'          => $report['fields']['site']['value'] ?? $siteId,

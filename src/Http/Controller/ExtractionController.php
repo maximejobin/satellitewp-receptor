@@ -13,6 +13,7 @@ use SatelliteWP\Manager\Http\Session;
 use SatelliteWP\Manager\Probe\BlogVaultProbe;
 use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Support\HostGuard;
+use SatelliteWP\Manager\Web\DefaultObservations;
 use SatelliteWP\Manager\Web\ObservationsCsv;
 
 /** One extraction: its report page, raw files and every action on it. */
@@ -57,7 +58,10 @@ final class ExtractionController extends Controller
             'blogVault'           => $awaiting ? $this->blogVaultPreflight($payload) : null,
             'httpAuth'            => $awaiting ? $this->httpAuthPreflight($siteId, $payload) : null,
             'reportAssets'        => true,
-            'observations'        => (array) ($store->readObservations($siteId, $extractionId)['items'] ?? []),
+            'observations'        => DefaultObservations::resolve(
+                DefaultObservations::items($store->readObservations($siteId, $extractionId), ReportContract::load($this->app)),
+                $this->app->translator($this->locale())
+            ),
             'observationSections' => ReportContract::observationSections(ReportContract::load($this->app)),
             'canEditObservations' => $this->currentUserCan('extraction_observations_edit'),
             'observationsImport'  => $this->takeImportFlash("{$siteId}/{$extractionId}"),
@@ -256,14 +260,28 @@ final class ExtractionController extends Controller
             'include'     => isset($_POST['include']),
         ];
 
+        // The page may have shown the line in either language.
+        $translators = [$this->app->translator('fr'), $this->app->translator('en')];
+
         // Read-modify-write under the extraction's lock: concurrent saves must not drop an edit.
-        $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $items) use ($action, $id, $record): array {
+        $this->app->dataStore()->mutateObservations($siteId, $extractionId, static function (array $items) use ($action, $id, $record, $translators): array {
             if ($action === 'add') {
                 $items[] = $record(bin2hex(random_bytes(6)));
             } elseif ($action === 'edit') {
                 foreach ($items as $k => $item) {
                     if (is_array($item) && ($item['id'] ?? null) === $id) {
-                        $items[$k] = $record($id);
+                        $new = $record($id);
+                        // Text left as shown keeps following the report's language.
+                        foreach ($translators as $t) {
+                            $shown = DefaultObservations::resolve([$item], $t)[0];
+                            if (isset($item['template']) && is_array($shown)
+                                && $new['title'] === $shown['title'] && $new['description'] === $shown['description']
+                            ) {
+                                $new = ['title' => '', 'description' => '', 'template' => $item['template']] + $new;
+                                break;
+                            }
+                        }
+                        $items[$k] = $new;
                     }
                 }
             } elseif ($action === 'remove') {
@@ -271,7 +289,7 @@ final class ExtractionController extends Controller
             }
 
             return array_values($items);
-        });
+        }, DefaultObservations::defaults(ReportContract::load($this->app)));
 
         $this->redirect($page);
     }
@@ -313,7 +331,7 @@ final class ExtractionController extends Controller
                 }
 
                 return $existing;
-            });
+            }, DefaultObservations::defaults(ReportContract::load($this->app)));
         }
 
         Session::start();

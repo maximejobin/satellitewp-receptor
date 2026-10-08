@@ -157,6 +157,35 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function aDefaultObservationFollowsTheReportLanguageUntilItsTextIsChanged(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true]]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+        $en           = $app->translator('en');
+        $edit         = fn (string $title): RecordingResponse => $this->post($app, '/site/' . self::SITE . '/extraction/' . $extractionId . '/observations', [
+            'action'      => 'edit',
+            'id'          => 'default-domain_renewal',
+            'section'     => 'domain_observations',
+            'color'       => 'purple',
+            'title'       => $title,
+            'description' => $en->report('observation_domain_renewal_description'),
+        ]);
+
+        // Unchecking "In report" with the text as shown: still a template, other default untouched.
+        $edit($en->report('observation_domain_renewal_title'));
+        $items = array_column((array) $app->dataStore()->readObservations(self::SITE, $extractionId)['items'], null, 'id');
+        $this->assertSame('domain_renewal', $items['default-domain_renewal']['template']);
+        $this->assertSame('', $items['default-domain_renewal']['title']);
+        $this->assertFalse($items['default-domain_renewal']['include']);
+        $this->assertSame('domain_ownership', $items['default-domain_ownership']['template']);
+
+        $edit('Our own wording');
+        $items = array_column((array) $app->dataStore()->readObservations(self::SITE, $extractionId)['items'], null, 'id');
+        $this->assertArrayNotHasKey('template', $items['default-domain_renewal']);
+        $this->assertSame('Our own wording', $items['default-domain_renewal']['title']);
+    }
+
+    #[Test]
     public function anUnsafeReturnFallsBackToTheExtractionPage(): void
     {
         $app          = $this->app(['auth' => ['open_mode' => true]]);

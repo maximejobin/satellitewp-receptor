@@ -105,7 +105,10 @@
         "available_version": null,
         "status": "latest",
         "minor_update_version": null,
-        "auto_update_core": "minor"
+        "auto_update_core": "minor",
+        "auto_updates_disabled": false,
+        "auto_update_minor": true,
+        "auto_update_major": false
     },
     "plugins": {
         "woocommerce/woocommerce.php": {
@@ -116,7 +119,8 @@
             "requires_wp": "6.6",
             "requires_php": "7.4",
             "network_activated": false,
-            "active": true
+            "active": true,
+            "auto_update": false
         },
         "akismet/akismet.php": {
             "name": "Akismet Anti-spam",
@@ -126,7 +130,8 @@
             "requires_wp": "5.8",
             "requires_php": "5.6",
             "network_activated": false,
-            "active": false
+            "active": false,
+            "auto_update": true
         }
     },
     "active_plugins": ["woocommerce/woocommerce.php"],

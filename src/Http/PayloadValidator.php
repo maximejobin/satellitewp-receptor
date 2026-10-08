@@ -308,6 +308,9 @@ final class PayloadValidator
                 $this->optType($cu, $key, 'core_update', '?string', self::MAX_SHORT);
             }
             $this->optType($cu, 'auto_update_core', 'core_update', '?scalar', self::MAX_SHORT);
+            foreach (['auto_updates_disabled', 'auto_update_minor', 'auto_update_major'] as $key) {
+                $this->optType($cu, $key, 'core_update', 'bool');
+            }
         });
 
         $this->map($p, 'plugins', '', self::MAX_PLUGINS, function ($plugin, $file): void {
@@ -325,6 +328,7 @@ final class PayloadValidator
                 }
                 $this->optType($pl, 'network_activated', $path, 'bool');
                 $this->optType($pl, 'active', $path, 'bool');
+                $this->optType($pl, 'auto_update', $path, 'bool');
             });
         });
 

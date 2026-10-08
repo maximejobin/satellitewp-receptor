@@ -109,24 +109,6 @@ final class RuleCatalogTest extends TestCase
         $this->assertGreaterThan(0, $result['counts']['unknown']);
     }
 
-    public function testW2AndW3AreClientActionAdvisoriesRenderedPurple(): void
-    {
-        $findings = array_column(
-            $this->engine()->evaluate(new Context([]))['findings'],
-            null,
-            'id'
-        );
-
-        foreach (['W2', 'W3'] as $id) {
-            $this->assertSame(Status::Pass->value, $findings[$id]['status']);
-            $this->assertSame(
-                'purple',
-                $findings[$id]['pastille'],
-                "{$id} is a standing client-action advisory, not a plain Info blue"
-            );
-        }
-    }
-
     public function testHealthySiteFixturePassesTheDataRules(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
