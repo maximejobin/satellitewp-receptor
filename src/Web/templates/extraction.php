@@ -496,6 +496,7 @@ if ($status !== 'done'):
                     . field('Operating system', $p['os_name'] ?? ($p['os_family'] ?? null), null, 'payload.os_name')
                     . field_raw('IP address (A / AAAA)', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'), null, 'probe.dns.a')
                     . field('Document root', $p['document_root'] ?? null, null, 'payload.document_root')
+                    . field_raw('Free disk', fmt_bytes($p['filesystem']['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($p['filesystem']['disk_total_bytes'] ?? null), null, 'payload.filesystem.disk_free_bytes')
                     . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null, null, 'payload.php.max_execution_time')
                     . field('Post / upload max', ($p['php']['post_max_size'] ?? '?') . ' / ' . ($p['php']['upload_max_filesize'] ?? '?'), null, 'payload.php.post_max_size')
                     . field('Max input vars', $p['php']['max_input_vars'] ?? null, null, 'payload.php.max_input_vars')
@@ -894,13 +895,6 @@ if ($status !== 'done'):
                     . $protoRow('TLS 1.3', $proto['tls1_3'] ?? null, false, 'probe.tls.protocols.tls1_3')
                 );
                 ?>
-                <?php
-                $fs = $p['filesystem'] ?? [];
-                echo section('Filesystem',
-                    field_raw('Free disk', fmt_bytes($fs['disk_free_bytes'] ?? null) . ' / ' . fmt_bytes($fs['disk_total_bytes'] ?? null), null, 'payload.filesystem.disk_free_bytes')
-                    . field('Core writable', $fs['core_writable'] ?? null, ($fs['core_writable'] ?? false) ? 'warn' : 'ok', 'payload.filesystem.core_writable')
-                    . field('Uploads writable', $fs['uploads_writable'] ?? null, null, 'payload.filesystem.uploads_writable')
-                ); ?>
             </div>
             <?= json_details('Raw request & response headers — same request this probe made', [
                 'request'  => $http['request'] ?? null,
@@ -910,10 +904,11 @@ if ($status !== 'done'):
                 ],
             ]) ?>
             <?php
-            $perms = is_array($fs['permissions'] ?? null) ? $fs['permissions'] : [];
+            $perms = is_array($p['filesystem']['permissions'] ?? null) ? $p['filesystem']['permissions'] : [];
             if ($perms !== []):
                 $permLabels = [
                     'wp_config'   => 'wp-config.php',
+                    'htaccess'    => '.htaccess',
                     'root'        => 'Site root',
                     'index'       => 'index.php',
                     'content_dir' => 'wp-content',
