@@ -94,6 +94,7 @@ body { margin: 0; }
 .nav-label:first-child { padding-top: .35rem; }
 .nav-item { display: flex; align-items: center; gap: .6rem; padding: .5rem .65rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: .9rem; flex: none; }
 .nav-count { margin-left: auto; padding: .02rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--error); }
+.nav-dot { margin-left: auto; width: .55rem; height: .55rem; border-radius: 50%; background: #eab308; flex: none; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active { background: var(--bg-accent); color: var(--accent-2); font-weight: 600; }
 .nav-item-button { width: 100%; border: 0; background: none; font: inherit; font-weight: 500; font-size: .9rem; cursor: pointer; text-align: left; }

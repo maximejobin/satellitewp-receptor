@@ -66,7 +66,7 @@ $nav = $nav ?? 'sites';
     <aside class="side" id="sideNav">
         <a class="brand" href="/"><b>SatelliteWP</b> Manager</a>
 
-        <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status</a>
+        <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status<?php if (!empty($navStatusAlert)): ?> <span class="nav-count" title="Something on this page needs a look">Alert</span><?php endif; ?></a>
 
         <a class="nav-item <?= $nav === 'crm-clients' ? 'active' : '' ?>" href="/clients">Clients</a>
         <a class="nav-item <?= $nav === 'crm-websites' ? 'active' : '' ?>" href="/websites">Websites</a>
@@ -74,7 +74,7 @@ $nav = $nav ?? 'sites';
         <a class="nav-item <?= $nav === 'crm-products' ? 'active' : '' ?>" href="/products">Products</a>
 
         <div class="nav-label">Extractor</div>
-        <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?></a>
+        <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?><?php if (!empty($navPending)): ?> <span class="nav-dot" title="Extractions waiting for analysis"></span><?php endif; ?></a>
         <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue<?php if (($navUnclassified ?? 0) > 0): ?> <span class="nav-count" title="Not yet classified"><?= (int) $navUnclassified ?></span><?php endif; ?></a>
 
         <div class="nav-label">Data</div>

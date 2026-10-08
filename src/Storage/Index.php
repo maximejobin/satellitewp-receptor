@@ -320,6 +320,14 @@ final class Index
         return ['pending' => $pending, 'running' => $running, 'done_24h' => $done24h, 'error' => $error];
     }
 
+    /** Extractions waiting for an analyst to press Run analysis (the menu's yellow dot). */
+    public function countPending(): int
+    {
+        return (int) $this->pdo()->query(
+            "SELECT COUNT(*) FROM extractions WHERE status = 'pending'"
+        )->fetchColumn();
+    }
+
     /** @return list<array<string, mixed>> */
     public function listSites(?string $search = null): array
     {

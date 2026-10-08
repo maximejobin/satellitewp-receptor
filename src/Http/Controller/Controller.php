@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager\Http\Controller;
 use SatelliteWP\Manager\App;
 use SatelliteWP\Manager\Http\Response;
 use SatelliteWP\Manager\Http\Session;
+use SatelliteWP\Manager\Web\StatusChecks;
 
 /**
  * Shared request plumbing for the admin UI controllers: identity,
@@ -200,7 +201,9 @@ abstract class Controller
             ?? (!$this->app->googleAuth()->isConfigured()
                 || ($vars['currentUser'] !== null && $this->app->userStore()->isAdmin($vars['currentUser'])));
 
-        $vars['navUnclassified'] = $this->app->softwareCatalog()->unclassifiedCount();
+        $vars['navUnclassified'] = $this->currentUserCan('catalog_view') ? $this->app->softwareCatalog()->unclassifiedCount() : 0;
+        $vars['navPending']      = $this->currentUserCan('extraction_view_technical') && $this->app->index()->countPending() > 0;
+        $vars['navStatusAlert']  = $this->currentUserCan('data_view') && (new StatusChecks($this->app))->alert();
 
         extract($vars, EXTR_SKIP);
         $templateFile = dirname(__DIR__, 2) . '/Web/templates/' . $template . '.php';

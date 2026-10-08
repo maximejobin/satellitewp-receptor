@@ -6,6 +6,7 @@ namespace SatelliteWP\Manager\Http\Controller;
 
 use SatelliteWP\Manager\Reference\EndOfLife;
 use SatelliteWP\Manager\Reference\WordPressVersions;
+use SatelliteWP\Manager\Web\StatusChecks;
 
 /** /status and the cross-site reference data pages under /data. */
 final class DataController extends Controller
@@ -17,49 +18,9 @@ final class DataController extends Controller
             return;
         }
 
-        $config        = $this->app->config;
-        $eolFreshness  = (int) $config->get('data_sync_freshness.endoflife_seconds', 2 * 3600);
-        $eol           = $this->app->endOfLife();
-        $syncSources   = [
-            'endoflife: wordpress'   => self::syncEntry($eol->refreshedAt('wordpress'), $eolFreshness),
-            'endoflife: php'         => self::syncEntry($eol->refreshedAt('php'), $eolFreshness),
-            'endoflife: mysql'       => self::syncEntry($eol->refreshedAt('mysql'), $eolFreshness),
-            'endoflife: mariadb'     => self::syncEntry($eol->refreshedAt('mariadb'), $eolFreshness),
-            'wordpress.org versions' => self::syncEntry(
-                $this->app->wordPressVersions()->refreshedAt(),
-                (int) $config->get('data_sync_freshness.wordpress_versions_seconds', 2 * 3600)
-            ),
-            'wordfence intelligence' => self::syncEntry(
-                $this->app->wordfenceIndex()->refreshedAt(),
-                (int) $config->get('data_sync_freshness.wordfence_seconds', 36 * 3600)
-            ),
-        ];
-
-        $crmRepo = $this->app->crmRepository();
-        $crm     = null;
-        if ($crmRepo !== null) {
-            try {
-                $defaultFreshness = (int) $config->get('crm_sync_freshness.default_seconds', 86400);
-                $overrides        = (array) $config->get('crm_sync_freshness.overrides', []);
-
-                foreach ($crmRepo->lastSyncByTable() as $table => $syncedAt) {
-                    $syncSources[$table] = self::syncEntry($syncedAt, (int) ($overrides[$table] ?? $defaultFreshness));
-                }
-
-                $crm = [
-                    'unpaidClients'             => $crmRepo->clientsWithUnpaidSubscriptions(),
-                    'emptyCompanyClients'       => $crmRepo->clientsWithEmptyCompany(),
-                    'activeEmptyCompanyClients' => $crmRepo->clientsActiveWithEmptyCompany(),
-                    'activeNoHubspotClients'    => $crmRepo->clientsActiveWithoutHubspotId(),
-                    'activeNoTeamworkClients'   => $crmRepo->clientsActiveWithoutTeamworkId(),
-                    'orphanSubscriptions'       => $crmRepo->countOrphanSubscriptions(),
-                ];
-            } catch (\PDOException $e) {
-                $crm = ['error' => $this->app->errorLog()->recordThrowable('crm_db', $e)];
-            }
-        }
-
-        $staleCount = count(array_filter($syncSources, static fn (array $s): bool => $s['stale']));
+        $checks      = (new StatusChecks($this->app))->collect();
+        $syncSources = $checks['syncSources'];
+        $staleCount  = count(array_filter($syncSources, static fn (array $s): bool => $s['stale']));
 
         $this->render('status', [
             'title'            => 'Status',
@@ -72,8 +33,8 @@ final class DataController extends Controller
                 'upToDate' => count($syncSources) - $staleCount,
                 'stale'    => $staleCount,
             ],
-            'crmConfigured'    => $crmRepo !== null,
-            'crm'              => $crm,
+            'crmConfigured'    => $checks['crmConfigured'],
+            'crm'              => $checks['crm'],
         ]);
     }
 
@@ -263,25 +224,16 @@ final class DataController extends Controller
                     . '<div class="muted mono" style="font-size:.8rem">' . e($row['slug'] ?? '') . '</div>',
                 e($row['slug'] ?? ''),
                 '<span class="badge badge-muted" title="' . e($typeLabel) . '">' . e($abbr) . '</span>',
-                e($row['cve_id'] ?? '—'),
+                e($row['cve_id'] ?? ''),
                 e($row['title'] ?? ''),
-                $published !== '' ? e(substr($published, 0, 10)) : '—',
-                is_numeric($row['cvss_score'] ?? null) ? cvss_badge($row['cvss_score'], $rating) : '—',
+                $published !== '' ? e(substr($published, 0, 10)) : '',
+                is_numeric($row['cvss_score'] ?? null) ? cvss_badge($row['cvss_score'], $rating) : '',
                 e($rating),
-                !empty($row['patched']) && $patched !== '' ? e($patched) : '—',
+                !empty($row['patched']) && $patched !== '' ? e($patched) : '',
                 $row,
                 null,
             ];
         }, $rows);
     }
 
-    /** @return array{synced_at: string|null, threshold_seconds: int, stale: bool} */
-    private static function syncEntry(?string $syncedAt, int $thresholdSeconds): array
-    {
-        return [
-            'synced_at'         => $syncedAt,
-            'threshold_seconds' => $thresholdSeconds,
-            'stale'             => $syncedAt === null || time() - (int) strtotime($syncedAt) > $thresholdSeconds,
-        ];
-    }
 }
