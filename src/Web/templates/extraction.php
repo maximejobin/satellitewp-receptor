@@ -567,7 +567,7 @@ if ($status !== 'done'):
         </header>
         <div class="xt-subsection">
             <div class="xt-subsection-head"><?= report_icon('wordpress') ?><h3>Core, constants, cron &amp; cache</h3></div>
-            <div class="cards">
+            <div class="cards cards-full">
                 <?php
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
                 echo section('Core & settings',
