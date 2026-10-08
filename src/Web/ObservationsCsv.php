@@ -117,6 +117,38 @@ final class ObservationsCsv
     }
 
     /**
+     * Observations as a CSV that parse() reads back unchanged: same header,
+     * comma-separated, UTF-8 with a BOM so Excel opens it as UTF-8.
+     *
+     * @param list<mixed> $items observation records (templates already resolved)
+     */
+    public static function export(array $items): string
+    {
+        $stream = fopen('php://temp', 'r+');
+        if ($stream === false) {
+            throw new \RuntimeException('php://temp could not be opened');
+        }
+        fputcsv($stream, self::COLUMNS, ',', '"', '');
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            fputcsv($stream, [
+                (string) ($item['section'] ?? ''),
+                (string) ($item['color'] ?? ''),
+                (string) ($item['title'] ?? ''),
+                (string) ($item['description'] ?? ''),
+                empty($item['include']) ? '0' : '1',
+            ], ',', '"', '');
+        }
+        rewind($stream);
+        $csv = (string) stream_get_contents($stream);
+        fclose($stream);
+
+        return "\u{FEFF}" . $csv;
+    }
+
+    /**
      * What is wrong with one observation — shared by the CSV import and the
      * add/edit form so both accept exactly the same records.
      *

@@ -84,4 +84,17 @@ final class ObservationsCsvTest extends TestCase
         $this->assertSame([], $result['items']);
         $this->assertSame(['More than 500 observations: split the file.'], $result['errors']);
     }
+
+    public function testAnExportImportsBackUnchanged(): void
+    {
+        $items = [
+            ['section' => 'security_observations', 'color' => 'red', 'title' => 'Shared "admin", account', 'description' => "Line one\nline two; with **bold**", 'include' => true],
+            ['section' => 'performance_observations', 'color' => 'purple', 'title' => 'Réglage à confirmer', 'description' => '', 'include' => false],
+        ];
+
+        $csv = ObservationsCsv::export([['id' => 'x', 'template' => 'ignored'] + $items[0], $items[1]]);
+
+        $this->assertStringStartsWith("\u{FEFF}section,color,title,description,include\n", $csv);
+        $this->assertSame(['items' => $items, 'errors' => []], ObservationsCsv::parse($csv, self::SECTIONS));
+    }
 }

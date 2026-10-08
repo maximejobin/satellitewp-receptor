@@ -253,7 +253,8 @@ filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `debugging_tools` (config, dev only) adds a re-run panel on done extractions.
 Observations are added and edited in a native `<dialog>` (one form for both, prefilled from the row's `data-obs`); they can also be appended from a CSV (`Web\ObservationsCsv`: header
 `section,color,title,description,include`, comma or semicolon, UTF-8; one
-invalid row and nothing is imported, the errors are flashed per line).
+invalid row and nothing is imported, the errors are flashed per line) and
+exported in the same format (`…/observations.csv`, page language, reimports unchanged).
 The contract's `default_observations` (`Web\DefaultObservations`) seed an
 extraction until its observations are first saved: a default line keeps a
 `template` key and renders in the report's language (`report` lang block)

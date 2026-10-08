@@ -186,6 +186,22 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function observationsExportAsACsvInThePagesLanguage(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true]]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+
+        $_GET     = ['lang' => 'fr'];
+        $response = $this->get($app, '/site/' . self::SITE . '/extraction/' . $extractionId . '/observations.csv');
+
+        $this->assertSame(200, $response->status);
+        $this->assertContains('Content-Type: text/csv; charset=utf-8', $response->headers);
+        $this->assertContains('Content-Disposition: attachment; filename="observations-' . $extractionId . '.csv"', $response->headers);
+        $this->assertStringContainsString($app->translator('fr')->report('observation_domain_renewal_title'), $response->body);
+        $this->assertSame(404, $this->get($app, '/site/' . self::SITE . '/extraction/20260101T000000Z/observations.csv')->status);
+    }
+
+    #[Test]
     public function anUnsafeReturnFallsBackToTheExtractionPage(): void
     {
         $app          = $this->app(['auth' => ['open_mode' => true]]);

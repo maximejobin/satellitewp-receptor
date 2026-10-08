@@ -1052,10 +1052,15 @@ if ($status !== 'done'):
             // "wp_core_observations" → "WordPress core": the field name stays visible as a hint.
             $sectionLabel = static fn (string $s): string => ucfirst(str_replace(['wp_', '_'], ['WordPress ', ' '], preg_replace('/_observations$/', '', $s) ?? $s));
             ?>
-            <?php if ($canEditObservations): ?>
+            <?php if ($canEditObservations || $observations !== []): ?>
             <div class="obs-toolbar">
+                <?php if ($observations !== []): ?>
+                <a class="btn btn-secondary" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/observations.csv<?= isset($_GET['lang']) && in_array($_GET['lang'], ['fr', 'en'], true) ? '?lang=' . e($_GET['lang']) : '' ?>" download>Export as CSV</a>
+                <?php endif; ?>
+                <?php if ($canEditObservations): ?>
                 <button type="button" class="btn btn-secondary obs-import-open">Import a CSV</button>
                 <button type="button" class="btn obs-open" data-obs="">+ Add an observation</button>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
             <?php if ($observations === []): ?>

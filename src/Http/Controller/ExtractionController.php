@@ -100,6 +100,37 @@ final class ExtractionController extends Controller
     }
 
     /**
+     * GET …/observations.csv — the extraction's observations (defaults
+     * included, in the page's language) in the import format, so they can be
+     * edited in a spreadsheet or carried to another extraction.
+     *
+     * @param array<string, string> $params
+     */
+    public function exportObservations(array $params): void
+    {
+        if (!$this->requireCapability('extraction_view_technical')) {
+            return;
+        }
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
+        $store = $this->app->dataStore();
+        if ($store->readExtractionPayload($siteId, $extractionId) === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $items = DefaultObservations::resolve(
+            DefaultObservations::items($store->readObservations($siteId, $extractionId), ReportContract::load($this->app)),
+            $this->app->translator($this->locale())
+        );
+
+        $this->response->header('Content-Type: text/csv; charset=utf-8');
+        $this->response->header('Content-Disposition: attachment; filename="observations-' . $extractionId . '.csv"');
+        $this->response->header('X-Content-Type-Options: nosniff');
+        $this->response->write(ObservationsCsv::export($items));
+    }
+
+    /**
      * POST …/run — queue for the cron worker; the web request only flips a
      * status, so nothing here can time out. A done extraction is a frozen
      * snapshot: only pending and error runs can be (re)queued.

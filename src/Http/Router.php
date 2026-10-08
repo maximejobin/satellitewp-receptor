@@ -30,6 +30,7 @@ final class Router
         'site'                        => [SiteController::class, 'show'],
         'extraction'                  => [ExtractionController::class, 'show'],
         'raw'                         => [ExtractionController::class, 'raw'],
+        'extraction_observations_csv' => [ExtractionController::class, 'exportObservations'],
         'extraction_report_json'      => [ReportController::class, 'json'],
         'extraction_report_script'    => [ReportController::class, 'script'],
         'status'                      => [DataController::class, 'status'],
@@ -188,6 +189,9 @@ final class Router
             }
             if ($count === 5 && $segments[4] === 'report.json') {
                 return ['route' => 'extraction_report_json', 'params' => $extraction];
+            }
+            if ($count === 5 && $segments[4] === 'observations.csv') {
+                return ['route' => 'extraction_observations_csv', 'params' => $extraction];
             }
             if ($count === 5 && $segments[4] === 'report-script.json') {
                 return ['route' => 'extraction_report_script', 'params' => $extraction];
