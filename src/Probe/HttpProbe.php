@@ -51,6 +51,8 @@ final class HttpProbe extends AbstractProbe
     ];
 
     /** Only the start of a sensitive file is read — enough for its signature, never a multi-GB dump. */
+    private const string XMLRPC_LIST_METHODS = '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName><params></params></methodCall>';
+
     private const int SENSITIVE_HEAD_BYTES = 4096;
     private const int SENSITIVE_MAX_BYTES  = 1_048_576;
 
@@ -705,7 +707,7 @@ final class HttpProbe extends AbstractProbe
         $origin = $this->origin($finalUrl);
 
         $xmlrpcUrl = $origin . '/xmlrpc.php';
-        $xmlrpc    = $this->probeExposure($client, $xmlrpcUrl);
+        $xmlrpc    = $this->probeXmlrpc($client, $xmlrpcUrl);
 
         $restUrl   = $origin . '/wp-json/wp/v2/users';
         $restUsers = $this->probeExposure($client, $restUrl);
@@ -751,7 +753,7 @@ final class HttpProbe extends AbstractProbe
             'trace_enabled'         => $trace['enabled'],
             'auth_required'         => false,
             'evidence'              => [
-                'xmlrpc'            => ['url' => $xmlrpcUrl, 'status' => $xmlrpc['status'] ?? null],
+                'xmlrpc'            => ['url' => $xmlrpcUrl, 'status' => $xmlrpc['status'] ?? null, 'methods' => $xmlrpc !== null ? self::xmlrpcMethodCount($xmlrpc['body']) : null],
                 'rest_users'        => ['url' => $restUrl, 'status' => $restUsers['status'] ?? null, 'usernames' => $restUsers !== null ? self::extractUsernames($restUsers['body']) : []],
                 'author'            => ['url' => $authorUrl, 'status' => $author['status'] ?? null, 'location' => $author['location'] ?? null],
                 'directory_listing' => $uploadsEvidence,
@@ -918,10 +920,40 @@ final class HttpProbe extends AbstractProbe
         return ['enabled' => $status === 200, 'status' => $status];
     }
 
-    /** GET xmlrpc.php answers 200 with this exact line — extremely stable across WP versions. */
+    /**
+     * POST system.listMethods, as an attacker would: a GET answer says
+     * nothing, servers often refuse GET (405) while still serving POST.
+     *
+     * @return array{status: int, body: string}|null
+     */
+    private function probeXmlrpc(Client $client, string $url): ?array
+    {
+        try {
+            $response = $client->post($url, [
+                'headers' => ['Content-Type' => 'text/xml'],
+                'body'    => self::XMLRPC_LIST_METHODS,
+            ]);
+        } catch (GuzzleException) {
+            return null;
+        }
+
+        return ['status' => $response->getStatusCode(), 'body' => (string) $response->getBody()];
+    }
+
+    /** Enabled = a 200 methodResponse (not a fault) that lists at least one method. */
     public static function isXmlrpcEnabled(int $status, string $body): bool
     {
-        return $status === 200 && str_contains($body, 'XML-RPC server accepts POST requests only.');
+        return $status === 200 && self::xmlrpcMethodCount($body) > 0;
+    }
+
+    /** Methods listed in a system.listMethods response; 0 for a fault or anything else. */
+    public static function xmlrpcMethodCount(string $body): int
+    {
+        if (!str_contains($body, '<methodResponse') || str_contains($body, '<fault>')) {
+            return 0;
+        }
+
+        return (int) preg_match_all('~<string>[^<]+</string>~', $body);
     }
 
     /** A 200 JSON array of user objects (keyed by `slug`) discloses every author's username. */

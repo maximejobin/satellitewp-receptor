@@ -562,10 +562,10 @@ if ($status !== 'done'):
     <section class="xt-group" id="wordpress" data-nav-target="wordpress" style="--group-color:var(--group-wordpress)">
         <header class="xt-group-head">
             <span class="xt-icon-badge"><?= report_icon('wordpress') ?></span>
-            <div><h2>WordPress</h2><p class="muted">Core settings, cache, what is installed, what is published and who can sign in.</p></div>
+            <div><h2>WordPress</h2><p class="muted">Core settings, constants, cache, what is installed, what is published and who can sign in.</p></div>
         </header>
         <div class="xt-subsection">
-            <div class="xt-subsection-head"><?= report_icon('wordpress') ?><h3>Core, cron &amp; cache</h3></div>
+            <div class="xt-subsection-head"><?= report_icon('wordpress') ?><h3>Core, constants, cron &amp; cache</h3></div>
             <div class="cards">
                 <?php
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
@@ -597,6 +597,13 @@ if ($status !== 'done'):
                     . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn', 'payload.object_cache.external')
                     . field('Page cache drop-in', ($p['object_cache']['page_cache'] ?? false) ? 'present' : 'absent', null, 'payload.object_cache.page_cache')
                 ); ?>
+                <?php
+                $constRows = '';
+                foreach (HardeningConstants::rows(is_array($p['constants'] ?? null) ? $p['constants'] : []) as $row) {
+                    $constRows .= field_raw($row['name'], e($row['display']), $row['flagged'] ? 'error' : null, 'payload.constants.' . $row['name']);
+                }
+                echo section('Constants', $constRows ?: field('constants', null), class: 'card-full');
+                ?>
             </div>
         </div>
 
@@ -799,17 +806,10 @@ if ($status !== 'done'):
     <section class="xt-group" id="security" data-nav-target="security" style="--group-color:var(--group-security)">
         <header class="xt-group-head">
             <span class="xt-icon-badge"><?= report_icon('security') ?></span>
-            <div><h2>Security</h2><p class="muted">Hardening, response headers, what an anonymous visitor can reach, TLS and file permissions.</p></div>
+            <div><h2>Security</h2><p class="muted">Response headers, what an anonymous visitor can reach, TLS and file permissions.</p></div>
         </header>
         <div class="xt-subsection">
             <div class="cards cards-2">
-                <?php
-                $constRows = '';
-                foreach (HardeningConstants::rows(is_array($p['constants'] ?? null) ? $p['constants'] : []) as $row) {
-                    $constRows .= field_raw($row['name'], e($row['display']), $row['flagged'] ? 'error' : null, 'payload.constants.' . $row['name']);
-                }
-                echo section('Hardening (constants)', $constRows ?: field('constants', null), class: 'card-full');
-                ?>
                 <?php
                 $sec = $http['security_headers'] ?? [];
                 echo section('Security headers',
@@ -853,7 +853,8 @@ if ($status !== 'done'):
                         . 'its page to let these checks actually run.</div></div></div>';
                 } else {
                 echo section('Exposure',
-                    $exposureRow('xmlrpc.php', $exp['xmlrpc_enabled'] ?? null, 'exposed', 'blocked', $evNote($evidence['xmlrpc'] ?? null))
+                    $exposureRow('xmlrpc.php', $exp['xmlrpc_enabled'] ?? null, 'exposed', 'blocked',
+                        $evNote($evidence['xmlrpc'] ?? null, 'POST system.listMethods' . (is_int($evidence['xmlrpc']['methods'] ?? null) && $evidence['xmlrpc']['methods'] > 0 ? ' — ' . $evidence['xmlrpc']['methods'] . ' methods listed' : '')))
                     . $exposureRow('REST user enumeration', $exp['rest_user_enumeration'] ?? null, 'exposed', 'blocked',
                         $evNote($evidence['rest_users'] ?? null, $restUsernames !== [] ? 'usernames: ' . implode(', ', $restUsernames) : null))
                     . $exposureRow('Author enumeration (?author=1)', $exp['author_enumeration'] ?? null, 'exposed', 'blocked',

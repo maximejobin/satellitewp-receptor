@@ -165,17 +165,26 @@ final class HttpProbeTest extends TestCase
 
     // ---------- exposure detection (pure, unit-testable without network) ----------
 
-    public function testXmlrpcEnabledDetectsTheExactWordPressResponse(): void
+    public function testXmlrpcEnabledWhenListMethodsAnswersAMethodList(): void
     {
-        $this->assertTrue(HttpProbe::isXmlrpcEnabled(200, 'XML-RPC server accepts POST requests only.'));
+        $body = '<?xml version="1.0" encoding="UTF-8"?><methodResponse><params><param><value><array><data>'
+            . '<value><string>system.multicall</string></value><value><string>wp.getUsersBlogs</string></value>'
+            . '</data></array></value></param></params></methodResponse>';
+
+        $this->assertTrue(HttpProbe::isXmlrpcEnabled(200, $body));
+        $this->assertSame(2, HttpProbe::xmlrpcMethodCount($body));
     }
 
-    public function testXmlrpcEnabledIsFalseWhenBlockedOrMissing(): void
+    public function testXmlrpcEnabledIsFalseWhenBlockedFaultedOrMissing(): void
     {
         $this->assertFalse(HttpProbe::isXmlrpcEnabled(403, ''));
+        $this->assertFalse(HttpProbe::isXmlrpcEnabled(405, ''));
         $this->assertFalse(HttpProbe::isXmlrpcEnabled(404, 'Not Found'));
-        // A soft-404 catch-all answers 200 with unrelated content — must not
-        // be mistaken for the real xmlrpc.php response.
+        // The GET banner is not an answer to the POST call.
+        $this->assertFalse(HttpProbe::isXmlrpcEnabled(200, 'XML-RPC server accepts POST requests only.'));
+        $this->assertFalse(HttpProbe::isXmlrpcEnabled(200, '<methodResponse><fault><value><struct><member><name>faultString</name>'
+            . '<value><string>XML-RPC services are disabled on this site.</string></value></member></struct></value></fault></methodResponse>'));
+        // A soft-404 catch-all answers 200 with unrelated content.
         $this->assertFalse(HttpProbe::isXmlrpcEnabled(200, '<html>Page not found</html>'));
     }
 
