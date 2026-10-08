@@ -48,6 +48,7 @@ final class PayloadValidator
     public const int MAX_LIST = 10_000;
     /** The plugin's queue holds 200 events; a little headroom, no more. */
     public const int MAX_EVENTS = 500;
+    public const int MAX_COLLECTOR_ERRORS = 100;
     public const int MAX_EVENT_STRING = 16_384;
     public const int MAX_INTEGRITY_FILES = 50_000;
 
@@ -208,11 +209,14 @@ final class PayloadValidator
     /** @param array<string, mixed> $p */
     private function extraction(array $p): void
     {
-        // An extraction is complete or it is not sent: a missing section would
-        // read as "nothing there" to the rules.
-        if (!empty($p['collector_errors'])) {
-            throw new InvalidArgumentException('Partial extraction: collector_errors is not empty');
-        }
+        // A collector or connector that failed left its section out: accepted
+        // (one broken part must not block the analysis) and shown as incomplete.
+        $this->list($p, 'collector_errors', '', self::MAX_COLLECTOR_ERRORS, function ($error, int $i): void {
+            $this->object($error, "collector_errors.{$i}", function (array $e, string $path): void {
+                $this->scalar($e['source'] ?? null, $path . '.source', 'string', self::MAX_SHORT);
+                $this->scalar($e['message'] ?? null, $path . '.message', 'string', 1_024);
+            });
+        });
 
         foreach (['site_url', 'home_url'] as $key) {
             if (!is_string($p[$key] ?? null) || !self::isSiteUrl($p[$key])) {

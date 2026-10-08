@@ -52,9 +52,11 @@ framework.
 ## Flow
 
 Plugin `POST` → `public/receptor/index.php` (**Extractor**: HMAC over
-`timestamp . '.' . body`, timestamp window ±300 s, replay cache, a non-empty
-`collector_errors` refused with 422 (the plugin aborts on any collector or
-connector failure), store, index as `pending`) → analyst presses **Run analysis** (→ `queued`) → cron
+`timestamp . '.' . body`, timestamp window ±300 s, replay cache, store, index
+as `pending`; a collector or connector that failed on the site leaves its
+section out and is listed in `collector_errors` (`{source, message}`): the
+extraction is still accepted, counted in the index (`collector_errors`) and
+flagged *incomplete* in the lists and on its page) → analyst presses **Run analysis** (→ `queued`) → cron
 `ingest:process` runs **Pipeline** on queued extractions only: probes `dns`,
 `rdap`, `tls`, `http`, `pagespeed`, `blogvault`, `wordfence`, `wporg`, `mail`, `crm`, `seranking` write
 `probes/*.json`, plugin/theme slugs go to the **SoftwareCatalog**, then
@@ -297,7 +299,7 @@ file-integrity checksums (BlogVault does it), ASN/hosting-provider lookup
 (Cloudflare hides it), a computed SSL grade, analytics tags, an SMTP rule
 (php.ini `SMTP` is Windows-only; the payload can't tell authenticated SMTP),
 BlogVault scanner/firewall/backup status and care-plan data (operational
-state, not configuration), per-collector `_errors` (an extraction is complete
-or it is not sent).
+state, not configuration), refusing an incomplete extraction (one broken
+collector must not block the analysis: it is accepted and flagged).
 
 Open: rules/UI for the CRM snapshot beyond the report fields.

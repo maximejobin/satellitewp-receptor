@@ -22,7 +22,7 @@ final class Index
     public const string STATUS_ABORTED = 'aborted';
 
     /** Bumped whenever an upgrade step is added to migrate(); stored in PRAGMA user_version. */
-    public const int SCHEMA_VERSION = 2;
+    public const int SCHEMA_VERSION = 3;
 
     /** Worker claims of one queued extraction before a run that keeps dying is set to error. */
     public const int MAX_ATTEMPTS = 3;
@@ -79,6 +79,7 @@ final class Index
                 processed_at     TEXT,
                 attempts         INTEGER NOT NULL DEFAULT 0,
                 previous_status  TEXT,
+                collector_errors INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (site_id, id)
             );
             CREATE TABLE IF NOT EXISTS probe_runs (
@@ -94,13 +95,14 @@ final class Index
             CREATE INDEX IF NOT EXISTS idx_extractions_site ON extractions(site_id, received_at DESC);
             SQL);
 
-        // Versions 1–2: bring an index created by an older build to today's columns.
+        // Versions 1–3: bring an index created by an older build to today's columns.
         $columns = array_column($pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
         $added   = [
             'database_type'    => 'TEXT',
             'database_version' => 'TEXT',
             'attempts'         => 'INTEGER NOT NULL DEFAULT 0',
             'previous_status'  => 'TEXT',
+            'collector_errors' => 'INTEGER NOT NULL DEFAULT 0',
         ];
         foreach ($added as $column => $definition) {
             if (!in_array($column, $columns, true)) {
@@ -143,8 +145,8 @@ final class Index
     ): void {
         $this->pdo()->prepare(<<<'SQL'
             INSERT OR REPLACE INTO extractions
-                (id, site_id, received_at, schema_version, wp_version, php_version, database_type, database_version, status)
-            VALUES (:id, :site_id, :received_at, :schema_version, :wp_version, :php_version, :database_type, :database_version, :status)
+                (id, site_id, received_at, schema_version, wp_version, php_version, database_type, database_version, status, collector_errors)
+            VALUES (:id, :site_id, :received_at, :schema_version, :wp_version, :php_version, :database_type, :database_version, :status, :collector_errors)
             SQL)->execute([
             'id'                => $extractionId,
             'site_id'           => $siteId,
@@ -155,6 +157,8 @@ final class Index
             'database_type'     => $payload['database_type'] ?? null,
             'database_version'  => $payload['database_version'] ?? null,
             'status'            => $status,
+            // Failed collectors/connectors: their sections are missing from the payload.
+            'collector_errors'  => is_array($payload['collector_errors'] ?? null) ? count($payload['collector_errors']) : 0,
         ]);
     }
 
@@ -327,6 +331,8 @@ final class Index
                      WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_status,
                    (SELECT e.received_at FROM extractions e
                      WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_received_at,
+                   (SELECT e.collector_errors FROM extractions e
+                     WHERE e.site_id = s.site_id ORDER BY e.received_at DESC LIMIT 1) AS last_extraction_collector_errors,
                    (SELECT COUNT(*) FROM extractions e WHERE e.site_id = s.site_id) AS extraction_count
             FROM sites s
             SQL;

@@ -46,7 +46,7 @@
                 <td><?= e($extraction['received_at']) ?></td>
                 <td><?= e($extraction['wp_version']) ?></td>
                 <td><?= e($extraction['php_version']) ?></td>
-                <td><?= badge($extraction['status']) ?></td>
+                <td><?= badge($extraction['status']) ?><?= incomplete_badge($extraction['collector_errors'] ?? 0) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

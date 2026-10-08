@@ -158,6 +158,17 @@ echo match ($notice) {
     'rerun-failed' => notice('critical', 'The re-run failed' . ($noticeRef !== '' ? ' (log ref <span class="mono">' . e($noticeRef) . '</span>)' : '') . '.'),
     default        => '',
 };
+// Sections the plugin could not read are missing: their rules say "unknown", never a verdict.
+$collectorErrors = is_array($payload['collector_errors'] ?? null) ? array_values(array_filter($payload['collector_errors'], 'is_array')) : [];
+if ($collectorErrors !== []) {
+    $ceItems = '';
+    foreach ($collectorErrors as $ce) {
+        $ceItems .= '<li><span class="mono">' . e($ce['source'] ?? '?') . '</span> — ' . e($ce['message'] ?? '') . '</li>';
+    }
+    echo notice('critical', '<strong>Incomplete extraction.</strong> The plugin could not read every part of the site; '
+        . 'the data below is missing these sections and the rules that need them report unknown.'
+        . '<ul style="margin:.4rem 0 0">' . $ceItems . '</ul>');
+}
 if ($status !== 'done'):
     $bvFound = ($blogVault['found'] ?? false) === true;
 ?>
@@ -173,6 +184,7 @@ if ($status !== 'done'):
         <?php if (!in_array($status, ['queued', 'running'], true)): ?>
             · <?= badge($row['status'] ?? null) ?>
         <?php endif; ?>
+        <?= incomplete_badge($row['collector_errors'] ?? 0) ?>
     </p>
     <!-- Nothing below renders before status "done": partial data must never read as a report. -->
     <section class="section">
@@ -302,7 +314,7 @@ if ($status !== 'done'):
                         <?= link_or_text($site['site_url'] ?? null, (string) $str($site['site_url'] ?? '')) ?>
                         · <?= e($t->ui('received')) ?> <?= e($meta['received_at'] ?? '?') ?>
                         · signature <?= !empty($meta['signature_valid']) ? 'valid' : 'absent/unverified' ?>
-                        · <?= badge($row['status'] ?? null) ?>
+                        · <?= badge($row['status'] ?? null) ?><?= incomplete_badge($row['collector_errors'] ?? 0) ?>
                     </div>
                 </div>
             </div>

@@ -88,14 +88,34 @@ final class PayloadValidatorTest extends TestCase
         $this->validator->validate($body, 'bogus', self::SITE);
     }
 
-    public function testPartialExtractionRejected(): void
+    public function testPartialExtractionIsAccepted(): void
     {
-        $payload                     = $this->fixtureArray('extraction-valid.json');
-        $payload['collector_errors'] = ['plugins' => 'host forbids this'];
+        $payload = $this->fixtureArray('extraction-valid.json');
+        unset($payload['plugins']);
+        $payload['collector_errors'] = [['source' => 'collector:plugins', 'message' => 'RuntimeException: host forbids this']];
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('collector_errors');
-        $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+        $result = $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+        $this->assertSame(self::SITE, $result['site_id']);
+    }
+
+    public function testCollectorErrorsMustBeAListOfSourceAndMessage(): void
+    {
+        foreach ([
+            ['plugins' => 'host forbids this'],
+            [['source' => 'collector:plugins']],
+            [['source' => ['x'], 'message' => 'm']],
+            [['source' => 'collector:plugins', 'message' => str_repeat('x', 1_025)]],
+            array_fill(0, PayloadValidator::MAX_COLLECTOR_ERRORS + 1, ['source' => 's', 'message' => 'm']),
+        ] as $i => $errors) {
+            $payload                     = $this->fixtureArray('extraction-valid.json');
+            $payload['collector_errors'] = $errors;
+            try {
+                $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+                $this->fail("case {$i} should be refused");
+            } catch (InvalidArgumentException $e) {
+                $this->assertStringContainsString('collector_errors', $e->getMessage(), "case {$i}");
+            }
+        }
     }
 
     public function testEmptyCollectorErrorsTolerated(): void

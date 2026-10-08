@@ -90,6 +90,16 @@ function badge(?string $status): string
     return '<span class="badge ' . $class . '">' . e($status) . '</span>';
 }
 
+/** Next to an extraction's status when collectors or connectors failed: the payload is missing their sections. */
+function incomplete_badge(mixed $collectorErrors): string
+{
+    $n = (int) $collectorErrors;
+
+    return $n > 0
+        ? ' <span class="badge badge-error" title="' . $n . ' collector/connector failure' . ($n > 1 ? 's' : '') . ' on the site: data missing">incomplete</span>'
+        : '';
+}
+
 function status_dot(?string $status): string
 {
     $status = $status ?? 'unknown';

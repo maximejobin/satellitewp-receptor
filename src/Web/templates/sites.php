@@ -58,7 +58,7 @@ if (isset($notices[$notice ?? ''])):
                     <div class="muted mono"><?= e($site['site_id']) ?></div>
                 </td>
                 <td><?= e($site['last_extraction_received_at'] ?? '—') ?></td>
-                <td><?= badge($site['last_extraction_status']) ?></td>
+                <td><?= badge($site['last_extraction_status']) ?><?= incomplete_badge($site['last_extraction_collector_errors'] ?? 0) ?></td>
                 <td><?= e($site['extraction_count']) ?></td>
             </tr>
         <?php endforeach; ?>

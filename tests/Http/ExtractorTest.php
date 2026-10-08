@@ -134,16 +134,19 @@ final class ExtractorTest extends TestCase
         $this->assertSame(422, $result['status']);
     }
 
-    public function testPartialExtractionIsRejectedAndNothingStored(): void
+    public function testPartialExtractionIsStoredAndFlagged(): void
     {
-        $payload                     = $this->fixtureArray('extraction-valid.json');
-        $payload['collector_errors'] = ['connector:woocommerce' => 'class not found'];
+        $payload = $this->fixtureArray('extraction-valid.json');
+        unset($payload['connectors']);
+        $payload['collector_errors'] = [['source' => 'connector:woocommerce', 'message' => 'Error: class not found']];
         $body                        = (string) json_encode($payload);
 
         $result = $this->extractor->handle($this->headers('extraction', $body), $body);
 
-        $this->assertSame(422, $result['status']);
-        $this->assertDirectoryDoesNotExist($this->tmpDir . '/sites/' . self::SITE_ID . '/extractions');
+        $this->assertLessThan(300, $result['status']);
+        $rows = $this->index->listExtractions(self::SITE_ID);
+        $this->assertCount(1, $rows);
+        $this->assertSame(1, (int) $rows[0]['collector_errors']);
     }
 
     public function testUnknownTypeIsRejected(): void
