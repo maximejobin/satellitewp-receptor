@@ -941,17 +941,33 @@ if ($status !== 'done'):
         <div class="xt-subsection">
             <div class="xt-subsection-head"><?= report_icon('performance') ?><h3>Performance</h3></div>
             <?php if ($ps !== []): ?>
+                <?php
+                // Lighthouse lab metrics (simulated run), formatted from the raw value: 'display' is in the PageSpeed locale.
+                $labMetrics = ['lcp' => 'LCP', 'fcp' => 'FCP', 'cls' => 'CLS', 'tbt' => 'TBT', 'speed_index' => 'Speed Index'];
+                $labValue   = static function (string $key, mixed $value): string {
+                    if (!is_numeric($value)) {
+                        return '—';
+                    }
+                    $v = (float) $value;
+                    if ($key === 'cls') {
+                        return rtrim(rtrim(number_format($v, 3, '.', ''), '0'), '.');
+                    }
+
+                    // TBT stays in ms, as Lighthouse shows it.
+                    return $key !== 'tbt' && $v >= 1000 ? number_format($v / 1000, 1) . ' s' : number_format($v) . ' ms';
+                };
+                ?>
                 <table><thead><tr><th>Strategy</th>
                     <?php foreach (array_keys(($mobilePs['scores'] ?? [])) as $c): ?><th><?= e(ucfirst(str_replace('-', ' ', $c))) ?></th><?php endforeach; ?>
-                    <th>LCP</th><th>CLS</th><th title="Real-world Chrome usage data (CrUX) for this page, not the simulated Lighthouse run in the columns to the left">Field data (CrUX)</th></tr></thead><tbody>
+                    <?php foreach ($labMetrics as $label): ?><th><?= e($label) ?></th><?php endforeach; ?></tr></thead><tbody>
                 <?php foreach ($ps as $strat => $r): if (!is_array($r)) { continue; } ?>
                     <tr><td><strong><?= e($strat) ?></strong></td>
                         <?php foreach (($mobilePs['scores'] ?? []) as $c => $_): $sc = $r['scores'][$c] ?? null; ?>
                             <td><?= $sc === null ? '—' : badge_score((int) $sc) ?></td>
                         <?php endforeach; ?>
-                        <td class="num"><?= isset($r['lab']['lcp']['value']) ? e(round((float) $r['lab']['lcp']['value'])) . ' ms' : '—' ?></td>
-                        <td class="num"><?= e($r['lab']['cls']['display'] ?? '—') ?></td>
-                        <td><?php $fc = $r['field']['overall_category'] ?? null; ?><?= $fc ? e(ucfirst(strtolower((string) $fc))) : '<span class="val-muted">no field data</span>' ?></td></tr>
+                        <?php foreach (array_keys($labMetrics) as $key): ?>
+                            <td class="num" style="white-space:nowrap"><?= e($labValue($key, $r['lab'][$key]['value'] ?? null)) ?></td>
+                        <?php endforeach; ?></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>
