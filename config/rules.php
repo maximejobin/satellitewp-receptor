@@ -949,8 +949,10 @@ return [
     //  J. CRON                                                    [DATA]
     // ===================================================================
     [
-        'id' => 'J2', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::High,
-        'check' => static function (Context $c) {
+        // Graded on how late the oldest overdue task is, not on the count: a task
+        // a few minutes late is only waiting for the next visit (WP-Cron runs on traffic).
+        'id' => 'J2', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 30,
+        'check' => static function (Context $c, Rule $rule) {
             $overdue = $c->number('payload.cron.overdue_events');
             if ($overdue === null) {
                 return Check::unknown();
@@ -958,13 +960,21 @@ return [
             if ($overdue <= 0) {
                 return Check::pass(0);
             }
-            // overdue_minutes is often absent: grade on the count alone then.
             $minutes = $c->number('payload.cron.overdue_minutes');
-            $mild    = $overdue <= 10 && ($minutes === null || $minutes <= 15);
+            if ($minutes === null) {
+                return Check::unknown();
+            }
+            $minutes = (int) $minutes;
+            if ($minutes <= (float) $rule->threshold) {
+                return Check::pass($minutes);
+            }
+            $data = ['events' => (int) $overdue];
 
-            return $mild
-                ? Check::fail((int) $overdue, ['variant' => 'mild'], Severity::Medium)
-                : Check::fail((int) $overdue);
+            return match (true) {
+                $minutes >= 1440 => Check::fail($minutes, $data + ['variant' => 'stopped', 'days' => intdiv($minutes, 1440)], Severity::High),
+                $minutes >= 120  => Check::fail($minutes, $data + ['variant' => 'hours', 'hours' => intdiv($minutes, 60)]),
+                default          => Check::fail($minutes, $data + ['minutes' => $minutes]),
+            };
         },
     ],
     [

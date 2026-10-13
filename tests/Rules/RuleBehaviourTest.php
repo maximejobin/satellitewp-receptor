@@ -491,7 +491,7 @@ final class RuleBehaviourTest extends TestCase
         $this->assertStringContainsString('et 3 autres', (string) (new Translator('fr', self::LANG))->message($f4));
     }
 
-    public function testJ2GradesOnTheCountWhenOverdueMinutesIsMissing(): void
+    public function testJ2GradesOnHowLateTheOldestTaskIs(): void
     {
         $j2 = function (int $overdue, ?int $minutes): array {
             $payload = $this->payload();
@@ -501,9 +501,18 @@ final class RuleBehaviourTest extends TestCase
             return $this->evaluate($payload)['J2'];
         };
 
-        $this->assertSame(Severity::Medium->value, $j2(4, null)['severity']);
-        $this->assertSame(Severity::High->value, $j2(31, null)['severity']);
-        $this->assertSame(Severity::High->value, $j2(4, 600)['severity']);
+        $this->assertSame(Status::Pass->value, $j2(0, null)['status']);
+        $this->assertSame(Status::Pass->value, $j2(40, 30)['status'], 'many tasks, but within 30 minutes');
+        $this->assertSame(Status::Unknown->value, $j2(4, null)['status'], 'lateness unknown');
+
+        $late = $j2(2, 45);
+        $this->assertSame(Severity::Medium->value, $late['severity']);
+        $this->assertSame(45, $late['data']['minutes']);
+        $this->assertSame('hours', $j2(2, 300)['data']['variant']);
+
+        $stopped = $j2(9, 3 * 1440 + 10);
+        $this->assertSame(Severity::High->value, $stopped['severity']);
+        $this->assertStringContainsString("3\u{a0}jours", (string) (new Translator('fr', self::LANG))->message($stopped));
     }
 
     public function testK3FailsOnlyWhenTheDefaultLogIsActuallyReachable(): void

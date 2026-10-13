@@ -621,8 +621,9 @@ return [
             'title' => 'Scheduled tasks run on time',
             'title_success' => 'Scheduled tasks up to date',
             'title_failure' => 'Scheduled tasks overdue',
-            'fail' => '{observed} WordPress scheduled tasks (scheduled posts, backups, cleanups) are overdue: the task system is probably no longer running. Have a cron job set up on the server.',
-            'fail_mild' => '{observed} WordPress scheduled {observed|task is|tasks are} slightly late. If it persists, have a cron job set up on the server.',
+            'fail' => '{events} WordPress scheduled {events|task|tasks} (scheduled posts, backups, cleanups) {events|is|are} overdue, the oldest by {minutes} minutes. Have the task trigger checked, ideally with a cron job on the server.',
+            'fail_hours' => '{events} WordPress scheduled {events|task|tasks} (scheduled posts, backups, cleanups) {events|is|are} overdue, the oldest by {hours} hours. Have the task trigger checked, ideally with a cron job on the server.',
+            'fail_stopped' => 'WordPress scheduled tasks no longer run: {events} {events|task is|tasks are} overdue, the oldest by {days} {days|day|days}. Scheduled posts, backups and update checks no longer happen. Have a cron job set up on the server.',
             'pass' => 'WordPress scheduled tasks run on time.',
         ],
         'J3' => [

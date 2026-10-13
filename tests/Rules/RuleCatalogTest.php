@@ -151,6 +151,7 @@ final class RuleCatalogTest extends TestCase
         $payload['constants']['WP_DEBUG']    = true;   // K1
         $payload['autoload']['total_bytes']  = 2_000_000; // I1
         $payload['cron']['overdue_events']   = 7;      // J2
+        $payload['cron']['overdue_minutes']  = 90;
         $payload['administrators']           = [['id' => 1, 'login' => 'admin']]; // M2
         $payload['filesystem']['disk_free_bytes'] = 1_000_000; // L1, ~1%
         $payload['posts_count']['trash']     = 50;  // N2 (threshold 20)

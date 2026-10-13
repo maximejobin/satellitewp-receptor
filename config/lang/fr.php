@@ -619,8 +619,9 @@ return [
             'title' => 'Tâches planifiées exécutées à temps',
             'title_success' => 'Tâches planifiées à jour',
             'title_failure' => 'Tâches planifiées en retard',
-            'fail' => '{observed} tâches planifiées de WordPress (publications programmées, sauvegardes, nettoyages) sont en retard : le système de tâches ne s\'exécute probablement plus. Faites configurer une tâche cron sur le serveur.',
-            'fail_mild' => '{observed} {observed|tâche planifiée de WordPress a|tâches planifiées de WordPress ont} un léger retard. Si cela persiste, faites configurer une tâche cron sur le serveur.',
+            'fail' => '{events} {events|tâche planifiée|tâches planifiées} de WordPress (publications programmées, sauvegardes, nettoyages) {events|est|sont} en retard, la plus ancienne depuis {minutes} minutes. Faites vérifier que les tâches se déclenchent bien, idéalement par une tâche cron sur le serveur.',
+            'fail_hours' => '{events} {events|tâche planifiée|tâches planifiées} de WordPress (publications programmées, sauvegardes, nettoyages) {events|est|sont} en retard, la plus ancienne depuis {hours} heures. Faites vérifier que les tâches se déclenchent bien, idéalement par une tâche cron sur le serveur.',
+            'fail_stopped' => 'Les tâches planifiées de WordPress ne s\'exécutent plus : {events} {events|tâche est|tâches sont} en retard, la plus ancienne depuis {days} {days|jour|jours}. Publications programmées, sauvegardes et vérifications de mises à jour ne se font plus. Faites configurer une tâche cron sur le serveur.',
             'pass' => 'Les tâches planifiées de WordPress s\'exécutent à temps.',
         ],
         'J3' => [

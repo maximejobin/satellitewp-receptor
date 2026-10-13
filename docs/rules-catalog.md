@@ -1144,12 +1144,12 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### J2 — Tâches planifiées exécutées à temps
 
-- **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 30
 - **Réussite (FR) :** Les tâches planifiées de WordPress s'exécutent à temps.
-- **Échec (FR) :** {observed} tâches planifiées de WordPress (publications programmées, sauvegardes, nettoyages) sont en retard : le système de tâches ne s'exécute probablement plus. Faites configurer une tâche cron sur le serveur.
+- **Échec (FR) :** {events} tâches planifiées de WordPress (publications programmées, sauvegardes, nettoyages) sont en retard, la plus ancienne depuis {minutes} minutes. Faites vérifier que les tâches se déclenchent bien, idéalement par une tâche cron sur le serveur.
 
 ```php
-        'check' => static function (Context $c) {
+        'check' => static function (Context $c, Rule $rule) {
             $overdue = $c->number('payload.cron.overdue_events');
             if ($overdue === null) {
                 return Check::unknown();
@@ -1157,13 +1157,21 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if ($overdue <= 0) {
                 return Check::pass(0);
             }
-            // overdue_minutes is often absent: grade on the count alone then.
             $minutes = $c->number('payload.cron.overdue_minutes');
-            $mild    = $overdue <= 10 && ($minutes === null || $minutes <= 15);
+            if ($minutes === null) {
+                return Check::unknown();
+            }
+            $minutes = (int) $minutes;
+            if ($minutes <= (float) $rule->threshold) {
+                return Check::pass($minutes);
+            }
+            $data = ['events' => (int) $overdue];
 
-            return $mild
-                ? Check::fail((int) $overdue, ['variant' => 'mild'], Severity::Medium)
-                : Check::fail((int) $overdue);
+            return match (true) {
+                $minutes >= 1440 => Check::fail($minutes, $data + ['variant' => 'stopped', 'days' => intdiv($minutes, 1440)], Severity::High),
+                $minutes >= 120  => Check::fail($minutes, $data + ['variant' => 'hours', 'hours' => intdiv($minutes, 60)]),
+                default          => Check::fail($minutes, $data + ['minutes' => $minutes]),
+            };
         },
 ```
 
