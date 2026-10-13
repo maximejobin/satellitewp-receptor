@@ -544,10 +544,11 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Severity::Medium, $rules['F12c']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
         $this->assertSame(Severity::High, $rules['B4']);
-        foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a', 'H4'] as $id) {
+        foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
         $this->assertArrayNotHasKey('X6', $rules);
+        $this->assertArrayNotHasKey('H4', $rules);
         $this->assertArrayNotHasKey('BV2', $rules);
         $this->assertArrayNotHasKey('WF1', $rules);
         $this->assertArrayNotHasKey('PS2a', $rules);

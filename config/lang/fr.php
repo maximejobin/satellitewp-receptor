@@ -594,14 +594,6 @@ return [
             'pass' => 'Votre base de données ({observed}) reçoit des correctifs de sécurité jusqu\'au {eol_date}.',
             'pass_no_date' => 'Votre base de données ({observed}) reçoit encore des correctifs de sécurité.',
         ],
-        'H4' => [
-            'title' => 'Espace récupérable dans la base de données',
-            'title_success' => 'Base de données peu fragmentée',
-            'title_failure' => 'Espace récupérable important',
-            'fail' => 'Environ {overhead_mb} Mo ({percent} % de la base) pourraient être récupérés en optimisant les tables. C\'est un entretien facultatif.',
-            'fail_no_total' => 'Environ {overhead_mb} Mo pourraient être récupérés en optimisant les tables. C\'est un entretien facultatif.',
-            'pass' => 'L\'espace récupérable en optimisant les tables ({overhead_mb} Mo) reste faible par rapport à la taille de la base.',
-        ],
         'H5' => [
             'title' => 'Données temporaires expirées',
             'title_success' => 'Peu de données temporaires expirées',

@@ -596,14 +596,6 @@ return [
             'pass' => 'Your database ({observed}) receives security fixes until {eol_date}.',
             'pass_no_date' => 'Your database ({observed}) still receives security fixes.',
         ],
-        'H4' => [
-            'title' => 'Reclaimable database space',
-            'title_success' => 'Database barely fragmented',
-            'title_failure' => 'Significant reclaimable space',
-            'fail' => 'About {overhead_mb} MB ({percent}% of the database) could be reclaimed by optimizing tables. This is optional housekeeping.',
-            'fail_no_total' => 'About {overhead_mb} MB could be reclaimed by optimizing tables. This is optional housekeeping.',
-            'pass' => 'The space optimizing tables would reclaim ({overhead_mb} MB) is small compared with the database size.',
-        ],
         'H5' => [
             'title' => 'Expired temporary data',
             'title_success' => 'Little expired temporary data',

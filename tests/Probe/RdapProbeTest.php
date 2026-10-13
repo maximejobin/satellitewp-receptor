@@ -40,7 +40,7 @@ final class RdapProbeTest extends TestCase
         $this->assertSame('2010-05-01T00:00:00Z', $data['created_at']);
         $this->assertSame('2027-05-01T00:00:00Z', $data['expires_at']);
         $this->assertSame('2025-03-15T00:00:00Z', $data['updated_at']);
-        $this->assertGreaterThan(200, $data['days_to_expiry']);
+        $this->assertSame((int) floor((strtotime('2027-05-01T00:00:00Z') - time()) / 86400), $data['days_to_expiry']);
         $this->assertSame(['client transfer prohibited'], $data['statuses']);
         $this->assertSame(['ns1.example.net', 'ns2.example.net'], $data['nameservers']);
     }

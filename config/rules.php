@@ -916,29 +916,6 @@ return [
         },
     ],
     [
-        // InnoDB's data_free is mostly reusable tablespace, not harmful
-        // fragmentation: informational housekeeping only.
-        'id' => 'H4', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 10485760,
-        'check' => static function (Context $c, Rule $rule) {
-            $tables = $c->list('payload.database.tables');
-            if ($tables === []) {
-                return Check::unknown();
-            }
-            $overhead = array_sum(array_map(static fn ($t): float => is_array($t) ? (float) ($t['overhead_bytes'] ?? 0) : 0.0, $tables));
-            $total    = $c->number('payload.database.total_bytes');
-            $data     = ['overhead_mb' => round($overhead / 1048576, 1)];
-            if ($total !== null && $total > 0) {
-                $data['percent'] = (int) round($overhead / $total * 100);
-            } else {
-                $data['variant'] = 'no_total';
-            }
-
-            $significant = $overhead >= (float) $rule->threshold && ($data['percent'] ?? 100) >= 20;
-
-            return $significant ? Check::fail($overhead, $data) : Check::pass($overhead, $data);
-        },
-    ],
-    [
         'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
     ],

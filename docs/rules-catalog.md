@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
-79 règles, 17 groupes.
+78 règles, 17 groupes.
 
 ## A. TLS / SSL
 
@@ -1093,33 +1093,6 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             $branch = $label . ' ' . EndOfLife::branch($version);
 
             return $isEol ? Check::fail($branch, $data) : Check::pass($branch, $data);
-        },
-```
-
-### H4 — Espace récupérable dans la base de données
-
-- **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 10485760
-- **Réussite (FR) :** L'espace récupérable en optimisant les tables ({overhead_mb} Mo) reste faible par rapport à la taille de la base.
-- **Échec (FR) :** Environ {overhead_mb} Mo ({percent} % de la base) pourraient être récupérés en optimisant les tables. C'est un entretien facultatif.
-
-```php
-        'check' => static function (Context $c, Rule $rule) {
-            $tables = $c->list('payload.database.tables');
-            if ($tables === []) {
-                return Check::unknown();
-            }
-            $overhead = array_sum(array_map(static fn ($t): float => is_array($t) ? (float) ($t['overhead_bytes'] ?? 0) : 0.0, $tables));
-            $total    = $c->number('payload.database.total_bytes');
-            $data     = ['overhead_mb' => round($overhead / 1048576, 1)];
-            if ($total !== null && $total > 0) {
-                $data['percent'] = (int) round($overhead / $total * 100);
-            } else {
-                $data['variant'] = 'no_total';
-            }
-
-            $significant = $overhead >= (float) $rule->threshold && ($data['percent'] ?? 100) >= 20;
-
-            return $significant ? Check::fail($overhead, $data) : Check::pass($overhead, $data);
         },
 ```
 
