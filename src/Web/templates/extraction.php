@@ -170,6 +170,18 @@ if ($collectorErrors !== []) {
         . 'the data below is missing these sections and the rules that need them report unknown.'
         . '<ul style="margin:.4rem 0 0">' . $ceItems . '</ul>');
 }
+// A probe request that failed leaves its checks unknown: say which, and why.
+$probeErrorItems = '';
+foreach ($status === 'done' ? $probes : [] as $probeName => $probe) {
+    foreach (is_array($probe) ? (array) ($probe['errors'] ?? []) : [] as $probeError) {
+        $probeErrorItems .= '<li><span class="mono">' . e((string) $probeName) . '</span> — ' . e(is_string($probeError) ? $probeError : (string) json_encode($probeError)) . '</li>';
+    }
+}
+if ($probeErrorItems !== '') {
+    echo notice('warning', '<strong>Some checks did not complete.</strong> The rules that need them report unknown; '
+        . 're-run the probe to retry.'
+        . '<ul style="margin:.4rem 0 0">' . $probeErrorItems . '</ul>');
+}
 if ($status !== 'done'):
     $bvFound = ($blogVault['found'] ?? false) === true;
 ?>

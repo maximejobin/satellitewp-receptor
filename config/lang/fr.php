@@ -704,20 +704,6 @@ return [
             'fail' => 'Un compte administrateur utilise l\'identifiant « admin », le premier que testent les robots d\'attaque. Remplacez-le par un identifiant unique.',
             'pass' => 'Aucun compte administrateur n\'utilise l\'identifiant « admin ».',
         ],
-        'N2' => [
-            'title' => 'Corbeille des articles',
-            'title_success' => 'Corbeille des articles maîtrisée',
-            'title_failure' => 'Corbeille des articles encombrée',
-            'fail' => '{observed} articles attendent dans la corbeille (seuil : {threshold}) : la vider allège la base de données.',
-            'pass' => 'La corbeille des articles contient {observed} {observed|élément|éléments}.',
-        ],
-        'N4' => [
-            'title' => 'Brouillons en attente',
-            'title_success' => 'Peu de brouillons en attente',
-            'title_failure' => 'Nombreux brouillons en attente',
-            'fail' => '{observed} % des articles sont des brouillons (seuil : {threshold} %) : publiez ou supprimez ceux qui sont abandonnés.',
-            'pass' => 'Seulement {observed} % des articles sont des brouillons.',
-        ],
         'BV1' => [
             'title' => 'Site exempt de piratage',
             'title_success' => 'Aucun piratage détecté',

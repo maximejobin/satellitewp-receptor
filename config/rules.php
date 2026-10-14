@@ -385,7 +385,11 @@ return [
                 return Check::unknown();
             }
 
-            return ($robots['present'] ?? false) === true ? Check::pass('present') : Check::fail('absent');
+            if (!is_bool($robots['present'] ?? null)) {
+                return Check::unknown();
+            }
+
+            return $robots['present'] ? Check::pass('present') : Check::fail('absent');
         },
     ],
     [
@@ -395,7 +399,10 @@ return [
             if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
-            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+            if (!is_array($robots) || !is_bool($robots['present'] ?? null)) {
+                return Check::unknown();
+            }
+            if (!$robots['present']) {
                 return Check::na();
             }
 
@@ -410,6 +417,10 @@ return [
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
+            // A sitemap request that failed proves neither presence nor absence.
+            if ($sitemaps === [] ? ($robots['sitemap_unverified'] ?? false) === true : ($robots['sitemap_reachable'] ?? null) === null) {
+                return Check::unknown();
+            }
             if ($sitemaps === [] || ($robots['sitemap_reachable'] ?? null) === false) {
                 return Check::fail(count($sitemaps), [], Severity::Info);
             }
@@ -1119,38 +1130,6 @@ return [
             }
 
             return Check::pass('none');
-        },
-    ],
-
-    // ===================================================================
-    //  N. CONTENT                                                 [DATA]
-    // ===================================================================
-    [
-        // posts_count is the only full per-status breakdown; page_count is a bare integer.
-        'id' => 'N2', 'category' => Category::CONTENT, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 20,
-        'check' => static function (Context $c, Rule $rule) {
-            $posts = $c->get('payload.posts_count');
-            if (!is_array($posts)) {
-                return Check::unknown();
-            }
-
-            return Check::atMost((float) ($posts['trash'] ?? 0), (float) $rule->threshold);
-        },
-    ],
-    [
-        'id' => 'N4', 'category' => Category::CONTENT, 'source' => 'DATA', 'severity' => Severity::Info, 'threshold' => 30,
-        'check' => static function (Context $c, Rule $rule) {
-            $posts = $c->get('payload.posts_count');
-            if (!is_array($posts)) {
-                return Check::unknown();
-            }
-            $published = (int) ($posts['publish'] ?? 0);
-            $draft     = (int) ($posts['draft'] ?? 0);
-            if ($published + $draft === 0) {
-                return Check::unknown();
-            }
-
-            return Check::atMost(round($draft / ($published + $draft) * 100, 1), (float) $rule->threshold);
         },
     ],
 

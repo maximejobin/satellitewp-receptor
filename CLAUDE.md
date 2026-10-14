@@ -178,13 +178,13 @@ optional calls need `try/catch`.
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
 
-**Rules (`src/Rules`, `config/rules.php`).** 78 active rules. Ids follow the
+**Rules (`src/Rules`, `config/rules.php`).** 76 active rules. Ids follow the
 plugin's `.github/validations-techniques.txt` letters; `W*` domain, `PS*`
 Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F10` merged
 vulnerabilities (BlogVault + Wordfence by CVE, `Rules\VulnerabilityMerge`,
 also used by the UI), `F12a/b/c` auto-updates (minor on, core major off, no
 plugin auto-updating; read from the policy the plugin resolves — constant,
-Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes. `H4` (table overhead) is retired: InnoDB `DATA_FREE` is preallocated, reusable space that OPTIMIZE does not reclaim.
+Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes. `H4` (table overhead) is retired: InnoDB `DATA_FREE` is preallocated, reusable space that OPTIMIZE does not reclaim. `N2` (trash) and `N4` (drafts) are retired: WordPress empties the trash itself and drafts are editorial, not site health.
 `F9` is reserved. Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges

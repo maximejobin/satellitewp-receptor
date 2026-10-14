@@ -186,6 +186,22 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('blue', $without['C1']['pastille']);
     }
 
+    public function testRobotsAndSitemapAreUnknownWhenTheirRequestFailed(): void
+    {
+        $http = fn (array $robots): array => $this->evaluate($this->payload(), ['http' => [
+            'status_code' => 200, 'auth' => ['required' => false], 'soft_404' => ['checked' => true, 'is_soft_404' => false], 'robots' => $robots,
+        ]]);
+
+        $failed = $http(['present' => null, 'error' => 'cURL error 28']);
+        foreach (['C9', 'C9a'] as $id) {
+            $this->assertSame(Status::Unknown->value, $failed[$id]['status'], $id);
+        }
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => true])['C10']['status']);
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => null])['C10']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => false])['C10']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => false])['C9']['status']);
+    }
+
     public function testMailAuthRulesFollowTheReceiversVerdicts(): void
     {
         $evaluate = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail]);
@@ -565,6 +581,8 @@ final class RuleBehaviourTest extends TestCase
         }
         $this->assertArrayNotHasKey('X6', $rules);
         $this->assertArrayNotHasKey('H4', $rules);
+        $this->assertArrayNotHasKey('N2', $rules);
+        $this->assertArrayNotHasKey('N4', $rules);
         $this->assertArrayNotHasKey('BV2', $rules);
         $this->assertArrayNotHasKey('WF1', $rules);
         $this->assertArrayNotHasKey('PS2a', $rules);

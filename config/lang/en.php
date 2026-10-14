@@ -706,20 +706,6 @@ return [
             'fail' => 'An administrator account uses the "admin" login, the first one attack bots try. Replace it with a unique login.',
             'pass' => 'No administrator account uses the "admin" login.',
         ],
-        'N2' => [
-            'title' => 'Post trash',
-            'title_success' => 'Post trash under control',
-            'title_failure' => 'Post trash piling up',
-            'fail' => '{observed} posts are waiting in the trash (threshold: {threshold}): emptying it lightens the database.',
-            'pass' => 'The post trash holds {observed} {observed|item|items}.',
-        ],
-        'N4' => [
-            'title' => 'Pending drafts',
-            'title_success' => 'Few pending drafts',
-            'title_failure' => 'Many pending drafts',
-            'fail' => '{observed}% of posts are drafts (threshold: {threshold}%): publish or delete the abandoned ones.',
-            'pass' => 'Only {observed}% of posts are drafts.',
-        ],
         'BV1' => [
             'title' => 'Site free of hacking',
             'title_success' => 'No hacking detected',

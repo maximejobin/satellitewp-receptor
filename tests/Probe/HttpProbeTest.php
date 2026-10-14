@@ -6,6 +6,7 @@ namespace SatelliteWP\Manager\Tests\Probe;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SatelliteWP\Manager\Domain\SiteContext;
 use SatelliteWP\Manager\Probe\HttpProbe;
 
 final class HttpProbeTest extends TestCase
@@ -314,7 +315,24 @@ final class HttpProbeTest extends TestCase
         $this->assertFalse($called, 'the request must never reach the handler');
     }
 
-    private function followRedirects(\GuzzleHttp\Client $client, string $url): array
+    public function testASubCheckThatCouldNotCompleteIsUnknownAndListedInErrors(): void
+    {
+        $handler = static function (\Psr\Http\Message\RequestInterface $request) {
+            if ($request->getHeaderLine('Accept-Encoding') === 'br') {
+                return \GuzzleHttp\Promise\Create::rejectionFor(new \GuzzleHttp\Exception\ConnectException('cURL error 28: timed out', $request));
+            }
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(200, ['Content-Type' => 'text/html'], '<html></html>'));
+        };
+        $probe = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+
+        $result = $probe->run(new SiteContext('s', 'https://example.com/', 'https://example.com/', 'example.com', 'example.com'));
+
+        $this->assertNull($result->data['compression']['brotli']);
+        $this->assertContains('Compression (brotli): cURL error 28: timed out', $result->errors);
+    }
+
+        private function followRedirects(\GuzzleHttp\Client $client, string $url): array
     {
         $probe  = new HttpProbe(5, 10, 'test-agent', null, static fn (string $h): string => '93.184.216.34');
         $method = new \ReflectionMethod(HttpProbe::class, 'followRedirects');

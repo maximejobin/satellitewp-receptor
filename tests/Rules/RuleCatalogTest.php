@@ -136,7 +136,7 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['G1', 'G3', 'G4', 'G5', 'G6', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'M1', 'M2', 'F1', 'F4', 'N2', 'N4'] as $id) {
+        foreach (['G1', 'G3', 'G4', 'G5', 'G6', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'M1', 'M2', 'F1', 'F4'] as $id) {
             $this->assertSame(
                 Status::Pass->value,
                 $findings[$id]['status'],
@@ -154,8 +154,6 @@ final class RuleCatalogTest extends TestCase
         $payload['cron']['overdue_minutes']  = 90;
         $payload['administrators']           = [['id' => 1, 'login' => 'admin']]; // M2
         $payload['filesystem']['disk_free_bytes'] = 1_000_000; // L1, ~1%
-        $payload['posts_count']['trash']     = 50;  // N2 (threshold 20)
-        $payload['posts_count']['draft']     = 500; // N4: 500/(500+100) = 83% (threshold 30%)
         $payload['posts_count']['publish']   = 100;
 
         $findings = array_column(
@@ -164,7 +162,7 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['K1', 'I1', 'J2', 'M2', 'L1', 'N2', 'N4'] as $id) {
+        foreach (['K1', 'I1', 'J2', 'M2', 'L1'] as $id) {
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
             // Findings are neutral: they carry the raw observed value, not prose.
             $this->assertArrayHasKey('observed', $findings[$id]);
@@ -477,37 +475,5 @@ final class RuleCatalogTest extends TestCase
         foreach (['A1', 'A10', 'B1', 'C5', 'D1', 'W1'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} without probes");
         }
-    }
-
-    /** N2/N4 read posts_count only (page_count is a bare integer) and stay unknown without it. */
-    public function testN2AndN4AreUnknownWithoutPostsCount(): void
-    {
-        $payload = $this->fixtureArray('extraction-valid.json');
-        unset($payload['posts_count']);
-
-        $findings = array_column(
-            $this->engine()->evaluate(new Context($payload))['findings'],
-            null,
-            'id'
-        );
-
-        $this->assertSame(Status::Unknown->value, $findings['N2']['status']);
-        $this->assertSame(Status::Unknown->value, $findings['N4']['status']);
-    }
-
-    public function testN4IsTheDraftShareNotTheDraftToPublishedRatio(): void
-    {
-        $payload = $this->fixtureArray('extraction-valid.json');
-        $payload['posts_count']['publish'] = '3';
-        $payload['posts_count']['draft']   = '1';
-
-        $findings = array_column(
-            $this->engine()->evaluate(new Context($payload))['findings'],
-            null,
-            'id'
-        );
-
-        // 1 draft among 4 total (3 published + 1 draft) = 25%, not 1/3 = 33%.
-        $this->assertSame(25.0, $findings['N4']['observed']);
     }
 }

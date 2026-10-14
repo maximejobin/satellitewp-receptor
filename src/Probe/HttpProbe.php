@@ -58,6 +58,9 @@ final class HttpProbe extends AbstractProbe
 
     private readonly Closure $resolveIp;
 
+    /** @var list<string> sub-checks that could not complete in the current run */
+    private array $inconclusive = [];
+
     /**
      * @param Closure|null $handler   Guzzle handler override (tests)
      * @param Closure|null $resolveIp host => vetted public IP or null (default HostGuard::publicIpFor)
@@ -79,7 +82,7 @@ final class HttpProbe extends AbstractProbe
 
     public function version(): string
     {
-        return '1.1';
+        return '1.2';
     }
 
     protected function collect(SiteContext $site): array
@@ -116,7 +119,8 @@ final class HttpProbe extends AbstractProbe
         $clientOptions['handler'] = $stack;
         $client = new Client($clientOptions);
 
-        $errors = [];
+        $errors             = [];
+        $this->inconclusive = [];
 
         // 1. The http:// chain answers only "does the site force HTTPS" (A10).
         // Its landing URL is never reused: a plain-HTTP vhost can be broken
@@ -161,13 +165,19 @@ final class HttpProbe extends AbstractProbe
             ],
         ] + $main;
 
+        foreach (['Soft-404 check' => $soft404, 'Asset check' => $asset, 'robots.txt' => $robots] as $check => $result) {
+            if (isset($result['error']) && !isset($result['status'])) {
+                $errors[] = "{$check}: {$result['error']}";
+            }
+        }
+
         // Every homepage-based field depends on the main request alone.
         return [
             'data'   => $data,
             'status' => $main === []
                 ? ProbeResult::STATUS_ERROR
                 : $this->assess($data),
-            'errors' => $errors,
+            'errors' => [...$errors, ...$this->inconclusive],
         ];
     }
 
@@ -394,20 +404,20 @@ final class HttpProbe extends AbstractProbe
     private function compressionSupportCheck(Client $client, string $url): array
     {
         return [
-            'gzip'   => $this->offeredEncodingIsHonoured($client, $url, 'gzip', 'gzip'),
-            'brotli' => $this->offeredEncodingIsHonoured($client, $url, 'br', 'br'),
+            'gzip'   => $this->offeredEncodingIsHonoured($client, $url, 'gzip', 'gzip', 'Compression (gzip)'),
+            'brotli' => $this->offeredEncodingIsHonoured($client, $url, 'br', 'br', 'Compression (brotli)'),
         ];
     }
 
-    private function offeredEncodingIsHonoured(Client $client, string $url, string $offer, string $expect): ?bool
+    private function offeredEncodingIsHonoured(Client $client, string $url, string $offer, string $expect, string $check): ?bool
     {
         try {
             $response = $client->get($url, [
                 'headers'        => ['Accept-Encoding' => $offer],
                 'decode_content' => false,
             ]);
-        } catch (GuzzleException) {
-            return null; // inconclusive, not a "no"
+        } catch (GuzzleException $e) {
+            return $this->inconclusive($check, $e); // inconclusive, not a "no"
         }
 
         return strtolower($response->getHeaderLine('Content-Encoding')) === $expect;
@@ -434,8 +444,8 @@ final class HttpProbe extends AbstractProbe
                 },
             ]);
             $http1_1 = (int) ($stats['http_version'] ?? 0) === CURL_HTTP_VERSION_1_1;
-        } catch (GuzzleException) {
-            // inconclusive: leave null
+        } catch (GuzzleException $e) {
+            $this->inconclusive('HTTP/1.1 support', $e);
         }
 
         return [
@@ -591,7 +601,8 @@ final class HttpProbe extends AbstractProbe
         try {
             $response = $client->get($robotsUrl, ['decode_content' => true]);
         } catch (GuzzleException $e) {
-            return ['present' => false, 'error' => $e->getMessage()];
+            // A failed request proves nothing about the file: unknown, not absent.
+            return ['present' => null, 'error' => $e->getMessage()];
         }
 
         if ($response->getStatusCode() !== 200) {
@@ -617,21 +628,26 @@ final class HttpProbe extends AbstractProbe
                 $sitemap = $client->head($parsed['sitemaps'][0]);
                 $parsed['sitemap_reachable'] = $sitemap->getStatusCode() >= 200
                     && $sitemap->getStatusCode() < 400;
-            } catch (GuzzleException) {
-                $parsed['sitemap_reachable'] = false;
+            } catch (GuzzleException $e) {
+                $parsed['sitemap_reachable'] = $this->inconclusive('Sitemap', $e);
             }
         } else {
             // Core never declares its sitemap in robots.txt: try the conventional URLs.
+            $parsed['sitemap_unverified'] = false;
             foreach (['/wp-sitemap.xml', '/sitemap.xml', '/sitemap_index.xml'] as $path) {
                 try {
                     $candidate = $client->head($origin . $path);
-                } catch (GuzzleException) {
+                } catch (GuzzleException $e) {
+                    // "No sitemap" holds only if every candidate answered.
+                    $parsed['sitemap_unverified'] = true;
+                    $this->inconclusive('Sitemap ' . $path, $e);
                     continue;
                 }
                 if ($candidate->getStatusCode() >= 200 && $candidate->getStatusCode() < 400) {
                     $parsed['sitemaps']          = [$origin . $path];
                     $parsed['sitemap_reachable'] = true;
                     $parsed['sitemap_source']    = 'convention';
+                    $parsed['sitemap_unverified'] = false;
                     break;
                 }
             }
@@ -841,8 +857,8 @@ final class HttpProbe extends AbstractProbe
                 'headers' => ['Range' => 'bytes=0-' . (self::SENSITIVE_HEAD_BYTES - 1)],
                 'curl'    => [\CURLOPT_MAXFILESIZE => self::SENSITIVE_MAX_BYTES],
             ]);
-        } catch (GuzzleException) {
-            return null;
+        } catch (GuzzleException $e) {
+            return $this->inconclusive('Exposure ' . self::pathOf($url), $e);
         }
 
         return [
@@ -890,8 +906,8 @@ final class HttpProbe extends AbstractProbe
     {
         try {
             $response = $client->get($url);
-        } catch (GuzzleException) {
-            return null;
+        } catch (GuzzleException $e) {
+            return $this->inconclusive('Exposure ' . self::pathOf($url), $e);
         }
 
         return [
@@ -911,7 +927,9 @@ final class HttpProbe extends AbstractProbe
     {
         try {
             $response = $client->request('TRACE', $url);
-        } catch (GuzzleException) {
+        } catch (GuzzleException $e) {
+            $this->inconclusive('TRACE method', $e);
+
             return ['enabled' => null, 'status' => null];
         }
 
@@ -933,11 +951,30 @@ final class HttpProbe extends AbstractProbe
                 'headers' => ['Content-Type' => 'text/xml'],
                 'body'    => self::XMLRPC_LIST_METHODS,
             ]);
-        } catch (GuzzleException) {
-            return null;
+        } catch (GuzzleException $e) {
+            return $this->inconclusive('XML-RPC', $e);
         }
 
         return ['status' => $response->getStatusCode(), 'body' => (string) $response->getBody()];
+    }
+
+    /**
+     * Records a sub-check that could not complete, so an unknown verdict can
+     * be traced to its cause. Always null: the check's own "not known".
+     */
+    private function inconclusive(string $check, GuzzleException $e): null
+    {
+        $this->inconclusive[] = "{$check}: {$e->getMessage()}";
+
+        return null;
+    }
+
+    private static function pathOf(string $url): string
+    {
+        $path  = (string) parse_url($url, PHP_URL_PATH);
+        $query = (string) parse_url($url, PHP_URL_QUERY);
+
+        return ($path === '' ? '/' : $path) . ($query !== '' ? '?' . $query : '');
     }
 
     /** Enabled = a 200 methodResponse (not a fault) that lists at least one method. */

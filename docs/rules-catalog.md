@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
-78 règles, 17 groupes.
+76 règles, 16 groupes.
 
 ## A. TLS / SSL
 
@@ -412,7 +412,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
 
-            return ($robots['present'] ?? false) === true ? Check::pass('present') : Check::fail('absent');
+            if (!is_bool($robots['present'] ?? null)) {
+                return Check::unknown();
+            }
+
+            return $robots['present'] ? Check::pass('present') : Check::fail('absent');
         },
 ```
 
@@ -428,7 +432,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if (!$homepageReadable($c)) {
                 return Check::unknown();
             }
-            if (!is_array($robots) || ($robots['present'] ?? false) !== true) {
+            if (!is_array($robots) || !is_bool($robots['present'] ?? null)) {
+                return Check::unknown();
+            }
+            if (!$robots['present']) {
                 return Check::na();
             }
 
@@ -449,6 +456,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
+            // A sitemap request that failed proves neither presence nor absence.
+            if ($sitemaps === [] ? ($robots['sitemap_unverified'] ?? false) === true : ($robots['sitemap_reachable'] ?? null) === null) {
+                return Check::unknown();
+            }
             if ($sitemaps === [] || ($robots['sitemap_reachable'] ?? null) === false) {
                 return Check::fail(count($sitemaps), [], Severity::Info);
             }
@@ -1361,47 +1372,6 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
 
             return Check::pass('none');
-        },
-```
-
-## N. N
-
-### N2 — Corbeille des articles
-
-- **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 20
-- **Réussite (FR) :** La corbeille des articles contient {observed} éléments.
-- **Échec (FR) :** {observed} articles attendent dans la corbeille (seuil : {threshold}) : la vider allège la base de données.
-
-```php
-        'check' => static function (Context $c, Rule $rule) {
-            $posts = $c->get('payload.posts_count');
-            if (!is_array($posts)) {
-                return Check::unknown();
-            }
-
-            return Check::atMost((float) ($posts['trash'] ?? 0), (float) $rule->threshold);
-        },
-```
-
-### N4 — Brouillons en attente
-
-- **Catégorie :** CONTENT · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** 30
-- **Réussite (FR) :** Seulement {observed} % des articles sont des brouillons.
-- **Échec (FR) :** {observed} % des articles sont des brouillons (seuil : {threshold} %) : publiez ou supprimez ceux qui sont abandonnés.
-
-```php
-        'check' => static function (Context $c, Rule $rule) {
-            $posts = $c->get('payload.posts_count');
-            if (!is_array($posts)) {
-                return Check::unknown();
-            }
-            $published = (int) ($posts['publish'] ?? 0);
-            $draft     = (int) ($posts['draft'] ?? 0);
-            if ($published + $draft === 0) {
-                return Check::unknown();
-            }
-
-            return Check::atMost(round($draft / ($published + $draft) * 100, 1), (float) $rule->threshold);
         },
 ```
 
