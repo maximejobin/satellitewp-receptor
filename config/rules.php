@@ -322,14 +322,15 @@ return [
     //  C. DNS & AVAILABILITY                                       [EXT]
     // ===================================================================
     [
-        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Info,
+        // Green when present; missing is an optional improvement, so it stays informational (blue).
+        'id' => 'C1', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($dnsKnown) {
             if (!$dnsKnown($c, 'aaaa')) {
                 return Check::unknown();
             }
             $aaaa = $c->list('probe.dns.aaaa');
 
-            return $aaaa !== [] ? Check::pass(count($aaaa)) : Check::fail(0);
+            return $aaaa !== [] ? Check::pass(count($aaaa)) : Check::fail(0, [], Severity::Info);
         },
     ],
     [
@@ -940,8 +941,7 @@ return [
         },
     ],
     [
-        // Worth it for busy or transactional sites, optional on a brochure site.
-        'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Info,
+        'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),
     ],
 

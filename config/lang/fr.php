@@ -612,7 +612,7 @@ return [
             'title' => 'Cache objet persistant',
             'title_success' => 'Cache objet persistant actif',
             'title_failure' => 'Aucun cache objet persistant',
-            'fail' => 'Aucun cache objet persistant (Redis ou Memcached) n\'est configuré. C\'est une optimisation utile pour un site très fréquenté ou transactionnel, facultative pour un site vitrine.',
+            'fail' => 'Aucun cache objet persistant (Redis ou Memcached) n\'est configuré. Il est à considérer pour accélérer le site : il évite de refaire les mêmes requêtes à la base de données à chaque page.',
             'pass' => 'Un cache objet persistant (Redis ou Memcached) accélère le site.',
         ],
         'J2' => [

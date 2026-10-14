@@ -316,7 +316,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### C1 — Accessibilité en IPv6
 
-- **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le site est accessible en IPv6 ({observed} adresses).
 - **Échec (FR) :** Le site n'a pas d'adresse IPv6 ; il reste accessible à tous en IPv4. C'est une amélioration facultative.
 
@@ -327,7 +327,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
             $aaaa = $c->list('probe.dns.aaaa');
 
-            return $aaaa !== [] ? Check::pass(count($aaaa)) : Check::fail(0);
+            return $aaaa !== [] ? Check::pass(count($aaaa)) : Check::fail(0, [], Severity::Info);
         },
 ```
 
@@ -1132,9 +1132,9 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### I4 — Cache objet persistant
 
-- **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
+- **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Un cache objet persistant (Redis ou Memcached) accélère le site.
-- **Échec (FR) :** Aucun cache objet persistant (Redis ou Memcached) n'est configuré. C'est une optimisation utile pour un site très fréquenté ou transactionnel, facultative pour un site vitrine.
+- **Échec (FR) :** Aucun cache objet persistant (Redis ou Memcached) n'est configuré. Il est à considérer pour accélérer le site : il évite de refaire les mêmes requêtes à la base de données à chaque page.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),

@@ -614,7 +614,7 @@ return [
             'title' => 'Persistent object cache',
             'title_success' => 'Persistent object cache enabled',
             'title_failure' => 'No persistent object cache',
-            'fail' => 'No persistent object cache (Redis or Memcached) is configured. It is a useful optimization for a busy or transactional site, optional for a brochure site.',
+            'fail' => 'No persistent object cache (Redis or Memcached) is configured. It should be considered to speed up the site: it saves repeating the same database queries on every page.',
             'pass' => 'A persistent object cache (Redis or Memcached) speeds up the site.',
         ],
         'J2' => [

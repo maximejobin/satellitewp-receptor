@@ -177,6 +177,15 @@ final class RuleBehaviourTest extends TestCase
         }
     }
 
+    public function testIpv6IsGreenWhenPresentAndInformationalWhenMissing(): void
+    {
+        $with    = $this->evaluate($this->payload(), ['dns' => ['aaaa' => ['2001:db8::1']]]);
+        $without = $this->evaluate($this->payload(), ['dns' => ['aaaa' => []]]);
+
+        $this->assertSame('green', $with['C1']['pastille']);
+        $this->assertSame('blue', $without['C1']['pastille']);
+    }
+
     public function testMailAuthRulesFollowTheReceiversVerdicts(): void
     {
         $evaluate = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail]);
@@ -545,15 +554,13 @@ final class RuleBehaviourTest extends TestCase
             $rules[$rule->id] = $rule->severity;
         }
 
-        foreach (['C1', 'I4', 'K3'] as $id) {
-            $this->assertSame(Severity::Info, $rules[$id], $id);
-        }
+        $this->assertSame(Severity::Info, $rules['K3']);
         $this->assertSame(Severity::High, $rules['F12a']);
         $this->assertSame(Severity::Medium, $rules['F12b']);
         $this->assertSame(Severity::Medium, $rules['F12c']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
         $this->assertSame(Severity::High, $rules['B4']);
-        foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a'] as $id) {
+        foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a', 'C1', 'I4'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
         $this->assertArrayNotHasKey('X6', $rules);
