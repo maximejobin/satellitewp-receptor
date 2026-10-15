@@ -88,12 +88,13 @@ final class WordfenceIndex
     }
 
     /**
-     * Download both feed variants and rebuild the local index. A failing
-     * variant (the API is strictly rate-limited) keeps its previous entries;
-     * when every variant fails nothing is written, so refreshedAt() never
-     * claims a refresh that did not happen.
+     * Download the production feed and rebuild the local index. Only that one:
+     * the API refuses a second feed request right after the first (rate
+     * limit), and the scanner feed carries no CVE ids for F8 to merge on.
+     * A failed download writes nothing, so refreshedAt() never claims a
+     * refresh that did not happen.
      *
-     * @return array{production: int, scanner: int, index_entries: int, errors: list<string>}
+     * @return array{production: int, index_entries: int, errors: list<string>}
      */
     public function refresh(): array
     {
@@ -106,44 +107,21 @@ final class WordfenceIndex
             throw new RuntimeException("Cannot create reference cache dir: {$dir}");
         }
 
-        $counts    = ['production' => 0, 'scanner' => 0];
-        $errors    = [];
-        $index     = [];
-        $succeeded = false;
-
-        foreach ([WordfenceClient::VARIANT_PRODUCTION, WordfenceClient::VARIANT_SCANNER] as $variant) {
-            try {
-                $raw = $this->client->fetch($variant);
-            } catch (WordfenceException $e) {
-                $errors[] = "{$variant}: {$e->getMessage()}";
-                // Only this variant's old entries: the whole old cache would
-                // duplicate the other variant's fresh ones.
-                $index = self::mergeVariant($index, self::entriesFrom($this->readAll(), $variant), $variant);
-                continue;
-            }
-
-            $counts[$variant] = count($raw);
-            $index     = self::mergeVariant($index, self::buildIndex($raw, $variant), $variant);
-            $succeeded = true;
+        $variant = WordfenceClient::VARIANT_PRODUCTION;
+        try {
+            $raw = $this->client->fetch($variant);
+        } catch (WordfenceException $e) {
+            return ['production' => 0, 'index_entries' => 0, 'errors' => ["{$variant}: {$e->getMessage()}"]];
         }
 
-        if (!$succeeded) {
-            return [
-                'production'    => 0,
-                'scanner'       => 0,
-                'index_entries' => 0,
-                'errors'        => $errors,
-            ];
-        }
-
+        $index = self::buildIndex($raw, $variant);
         self::write($this->cacheFile, $index);
         $this->loaded = $index;
 
         return [
-            'production'    => $counts['production'],
-            'scanner'       => $counts['scanner'],
+            'production'    => count($raw),
             'index_entries' => array_sum(array_map('count', $index)),
-            'errors'        => $errors,
+            'errors'        => [],
         ];
     }
 
@@ -227,34 +205,6 @@ final class WordfenceIndex
     }
 
     /**
-     * The whole cache as one map. Only for refresh(), which must merge
-     * variants — a site scan must never call this.
-     *
-     * @return array<string, list<array<string, mixed>>>
-     */
-    private function readAll(): array
-    {
-        if (!is_file($this->cacheFile)) {
-            return [];
-        }
-
-        $index  = [];
-        $handle = @fopen($this->cacheFile, 'rb');
-        if ($handle === false) {
-            return [];
-        }
-        while (($line = fgets($handle)) !== false) {
-            $row = json_decode($line, true);
-            if (is_array($row) && isset($row['k'], $row['v'])) {
-                $index[(string) $row['k']] = (array) $row['v'];
-            }
-        }
-        fclose($handle);
-
-        return $index;
-    }
-
-    /**
      * Reduces one raw feed (id => record, each with software[]) into
      * "type:slug" => list of compact vulnerability entries. Deliberately
      * drops "description"/"researchers"/"cwe"/"copyrights" to keep the cache
@@ -296,60 +246,6 @@ final class WordfenceIndex
         }
 
         return $index;
-    }
-
-    /**
-     * Every entry belonging to one variant, keyed as in the source index.
-     * Used to carry a failed variant's previous data forward without dragging
-     * the other variant's stale entries along with it.
-     *
-     * @param array<string, list<array<string, mixed>>> $index
-     * @return array<string, list<array<string, mixed>>>
-     */
-    private static function entriesFrom(array $index, string $variant): array
-    {
-        $only = [];
-        foreach ($index as $key => $entries) {
-            $matching = array_values(array_filter(
-                (array) $entries,
-                static fn (array $v): bool => ($v['source'] ?? null) === $variant
-            ));
-            if ($matching !== []) {
-                $only[$key] = $matching;
-            }
-        }
-
-        return $only;
-    }
-
-    /**
-     * Merges one freshly-fetched variant's contribution into $base, replacing
-     * only that variant's previous entries per slug (so a failed refresh of
-     * the other variant is untouched). $fresh must contain only $variant's
-     * entries — see entriesFrom().
-     *
-     * @param array<string, list<array<string, mixed>>> $base
-     * @param array<string, list<array<string, mixed>>> $fresh
-     * @return array<string, list<array<string, mixed>>>
-     */
-    private static function mergeVariant(array $base, array $fresh, string $variant): array
-    {
-        $keys = array_unique(array_merge(array_keys($base), array_keys($fresh)));
-
-        $merged = [];
-        foreach ($keys as $key) {
-            $kept = array_values(array_filter(
-                (array) ($base[$key] ?? []),
-                static fn (array $v): bool => ($v['source'] ?? null) !== $variant
-            ));
-            $incoming = (array) ($fresh[$key] ?? []);
-            $entries  = [...$kept, ...$incoming];
-            if ($entries !== []) {
-                $merged[$key] = $entries;
-            }
-        }
-
-        return $merged;
     }
 
     /**

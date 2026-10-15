@@ -243,43 +243,10 @@ final class WordfenceIndexTest extends TestCase
 
         $result = $index->refresh();
 
-        $this->assertCount(2, $result['errors']);
+        $this->assertCount(1, $result['errors']);
         $this->assertSame(0, $result['index_entries']);
         $this->assertFalse($index->isAvailable(), 'no cache file should be written');
         $this->assertFileDoesNotExist($this->cacheFile());
-    }
-
-    /** Only the failing variant's old entries are carried forward, never the successful variant's. */
-    public function testPartialFailureDoesNotDuplicateTheSuccessfulVariant(): void
-    {
-        $sample = $this->samples()['single_plugin_wildcard'];
-        $raw    = [$sample['id'] => $sample];
-
-        // Yesterday: both variants succeeded.
-        mkdir(dirname($this->cacheFile()), 0775, true);
-        WordfenceIndex::write($this->cacheFile(), array_merge_recursive(
-            WordfenceIndex::buildIndex($raw, 'production'),
-            WordfenceIndex::buildIndex($raw, 'scanner')
-        ));
-
-        // Today: production succeeds, scanner is rate limited.
-        $mock = new MockHandler([
-            new Response(200, [], (string) json_encode($raw)),
-            new Response(429, [], (string) json_encode(['error' => 'rate limited'])),
-        ]);
-        $http   = new Client(['handler' => HandlerStack::create($mock), 'http_errors' => false]);
-        $client = WordfenceClient::fromConfig(
-            ['base_url' => 'https://www.wordfence.test/api/intelligence/v3', 'api_key' => 'k'],
-            $http
-        );
-
-        (new WordfenceIndex($this->cacheFile(), $client))->refresh();
-
-        $entries  = $this->readCache()['plugin:opening-hours'];
-        $bySource = array_count_values(array_column($entries, 'source'));
-
-        $this->assertSame(1, $bySource['production'], 'fresh production must not be duplicated');
-        $this->assertSame(1, $bySource['scanner'], 'stale scanner entry must be preserved');
     }
 
     public function testATotalFailureNeverRewritesAnExistingCache(): void
@@ -302,29 +269,29 @@ final class WordfenceIndexTest extends TestCase
         $result = (new WordfenceIndex($this->cacheFile(), $client))->refresh();
 
         clearstatcache();
-        $this->assertCount(2, $result['errors']);
+        $this->assertCount(1, $result['errors']);
         $this->assertSame($before, [(string) file_get_contents($this->cacheFile()), filemtime($this->cacheFile())]);
     }
 
-    public function testPartialFailureStillWritesTheSuccessfulVariant(): void
+    /** The API refuses a second feed right after the first: only production is requested. */
+    public function testARefreshRequestsTheProductionFeedOnly(): void
     {
-        $sample = $this->samples()['single_plugin_wildcard'];
-        $mock   = new MockHandler([
-            new Response(200, [], (string) json_encode([$sample['id'] => $sample])), // production
-            new Response(429, [], (string) json_encode(['error' => 'rate limited'])), // scanner
-        ]);
-        $http   = new Client(['handler' => HandlerStack::create($mock), 'http_errors' => false]);
+        $sample  = $this->samples()['single_plugin_wildcard'];
+        $mock    = new MockHandler([new Response(200, [], (string) json_encode([$sample['id'] => $sample]))]);
+        $history = [];
+        $stack   = HandlerStack::create($mock);
+        $stack->push(\GuzzleHttp\Middleware::history($history));
         $client = WordfenceClient::fromConfig(
             ['base_url' => 'https://www.wordfence.test/api/intelligence/v3', 'api_key' => 'k'],
-            $http
+            new Client(['handler' => $stack, 'http_errors' => false])
         );
         $index = new WordfenceIndex($this->cacheFile(), $client);
 
         $result = $index->refresh();
 
-        $this->assertCount(1, $result['errors']);
-        $this->assertGreaterThan(0, $result['index_entries']);
-        $this->assertTrue($index->isAvailable());
+        $this->assertCount(1, $history);
+        $this->assertStringContainsString('production', (string) $history[0]['request']->getUri());
+        $this->assertSame([], $result['errors']);
         $this->assertNotEmpty($index->vulnerabilitiesFor('plugin', 'opening-hours', '1.0'));
     }
 

@@ -45,7 +45,6 @@ final class WordfenceRefreshCommand extends Command
         }
 
         $output->writeln("<info>production</info> : {$result['production']} vulnérabilités reçues.");
-        $output->writeln("<info>scanner</info>    : {$result['scanner']} vulnérabilités reçues.");
         $output->writeln("<info>index</info>      : {$result['index_entries']} entrées (plugin/thème/core).");
 
         foreach ($result['errors'] as $error) {
