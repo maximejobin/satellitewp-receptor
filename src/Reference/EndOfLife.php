@@ -11,8 +11,8 @@ use SatelliteWP\Manager\Support\AtomicFile;
 
 /**
  * End-of-life reference data sourced from endoflife.date and cached locally
- * under data/reference/<product>.json. This is server-side reference data
- * (SOURCE 14): refreshed on a schedule by `reference:refresh`, read offline by
+ * under data/reference/<product>.json. Server-side reference data, refreshed
+ * on a schedule by `reference:refresh`, read offline by
  * the rule engine — evaluation never hits the network.
  */
 final class EndOfLife

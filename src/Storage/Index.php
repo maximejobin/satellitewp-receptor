@@ -95,7 +95,7 @@ final class Index
             CREATE INDEX IF NOT EXISTS idx_extractions_site ON extractions(site_id, received_at DESC);
             SQL);
 
-        // Versions 1–3: bring an index created by an older build to today's columns.
+        // Each schema version adds its columns to an existing index in place.
         $columns = array_column($pdo->query('PRAGMA table_info(extractions)')->fetchAll(), 'name');
         $added   = [
             'database_type'    => 'TEXT',

@@ -45,7 +45,8 @@ final class CatalogSuggestCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function isOnWporg(Client $http, string $type, string $slug): bool
+    /** null when wp.org could not answer: a network error or a 5xx is not "premium". */
+    private function isOnWporg(Client $http, string $type, string $slug): ?bool
     {
         $url = $type === 'theme'
             ? 'https://api.wordpress.org/themes/info/1.1/?action=theme_information&request[slug]=' . rawurlencode($slug)
@@ -54,11 +55,12 @@ final class CatalogSuggestCommand extends Command
         try {
             $response = $http->get($url);
         } catch (GuzzleException) {
-            return false;
+            return null;
         }
 
-        if ($response->getStatusCode() !== 200) {
-            return false;
+        $status = $response->getStatusCode();
+        if ($status !== 200) {
+            return $status === 404 ? false : null;
         }
 
         $decoded = json_decode((string) $response->getBody(), true);

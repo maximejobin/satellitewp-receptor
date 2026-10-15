@@ -10,8 +10,7 @@ use SatelliteWP\Manager\Integration\BlogVaultClient;
 use SatelliteWP\Manager\Integration\BlogVaultException;
 
 /**
- * BlogVault v6 — the single agreed source for vulnerabilities, malware/hacked
- * status and backup state (SOURCE 12).
+ * BlogVault v6: vulnerabilities and the malware scanner's verdict.
  *
  * Our site ids are UUIDs and BlogVault's are 32-hex strings with nothing in
  * common, so the site is matched on host. A site that is simply absent from the

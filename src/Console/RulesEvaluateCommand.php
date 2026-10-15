@@ -67,7 +67,10 @@ final class RulesEvaluateCommand extends Command
         $findings['site_id']       = $siteId;
         $findings['extraction_id'] = $extractionId;
 
-        $store->writeFindings($siteId, $extractionId, $findings);
+        // findings.json marks an analysed snapshot (index:rebuild reads it as done): only a done one is rewritten.
+        if (($this->app->index()->getExtraction($siteId, $extractionId)['status'] ?? null) === 'done') {
+            $store->writeFindings($siteId, $extractionId, $findings);
+        }
 
         if ($input->getOption('json')) {
             $output->writeln((string) json_encode(

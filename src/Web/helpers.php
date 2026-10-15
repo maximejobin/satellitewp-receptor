@@ -562,22 +562,18 @@ function cvss_badge(mixed $score, ?string $rating): string
     return '<span class="badge ' . $cls . '" title="' . e($title) . '">' . e($score) . '</span>';
 }
 
-/** Multisite sites tallied by status; accepts status strings or objects with a `status` key. */
-function fmt_status_tally(mixed $items): string
+/** Multisite site counts per status, as the plugin sends them: {all, public, archived, …: count}. */
+function fmt_status_tally(mixed $counts): string
 {
-    if (!is_array($items) || $items === []) {
+    if (!is_array($counts) || $counts === []) {
         return '';
     }
 
-    $tally = [];
-    foreach ($items as $item) {
-        $status = is_array($item) ? (string) ($item['status'] ?? 'unknown') : (string) $item;
-        $tally[$status] = ($tally[$status] ?? 0) + 1;
-    }
-
     $parts = [];
-    foreach ($tally as $status => $count) {
-        $parts[] = e($status) . ' <span class="val-muted">' . $count . '</span>';
+    foreach ($counts as $status => $count) {
+        if (is_int($count) || (is_string($count) && ctype_digit($count))) {
+            $parts[] = e((string) $status) . ' <span class="val-muted">' . (int) $count . '</span>';
+        }
     }
 
     return implode(' · ', $parts);

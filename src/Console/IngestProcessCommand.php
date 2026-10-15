@@ -37,8 +37,14 @@ final class IngestProcessCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $lock = fopen($this->app->config->get('data_dir') . '/ingest.lock', 'c');
-        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+        $lock = @fopen($this->app->config->get('data_dir') . '/ingest.lock', 'c');
+        // An unwritable lock is a broken install, not "another run": cron must report it.
+        if ($lock === false) {
+            $output->writeln('<error>Cannot open data/ingest.lock — check the data directory permissions.</error>');
+
+            return Command::FAILURE;
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
             $output->writeln('Another ingest:process is running — nothing to do.');
 
             return Command::SUCCESS;

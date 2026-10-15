@@ -12,7 +12,6 @@ use SatelliteWP\Manager\Domain\SiteContext;
 use SatelliteWP\Manager\Integration\ImapClient;
 use SatelliteWP\Manager\Integration\ImapException;
 use SatelliteWP\Manager\Support\Secret;
-use Throwable;
 
 /**
  * Reads the site's SPF / DKIM / DMARC verdicts off its most recent test email.

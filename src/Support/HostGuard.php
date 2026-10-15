@@ -57,7 +57,12 @@ final class HostGuard
             return self::$resolved[$key];
         }
 
-        $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+        // A function listed in disable_functions throws an Error, which @ does not suppress.
+        try {
+            $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+        } catch (\Error) {
+            $records = false;
+        }
         $ips     = [];
         foreach (is_array($records) ? $records : [] as $record) {
             $ip    = $record['ip'] ?? $record['ipv6'] ?? null;

@@ -15,7 +15,7 @@ use Throwable;
 /**
  * Refresh server-side reference data (EOL tables) from endoflife.date.
  * Run on a schedule — the data changes rarely, and rule evaluation reads the
- * cache offline. Suggested crontab: weekly.
+ * cache offline. Crontab: hourly.
  */
 #[AsCommand(name: 'reference:refresh', description: 'Refresh EOL reference data from endoflife.date')]
 final class ReferenceRefreshCommand extends Command

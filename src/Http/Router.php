@@ -82,7 +82,7 @@ final class Router
         'licenses'            => 'extraction_licenses',
     ];
 
-    /** Single-segment POST targets with no GET page of their own (except users/profile). */
+    /** Single-segment POST targets; users, profile and catalog also have a GET page. */
     private const array FLAT_POST_ROUTES = ['users', 'profile', 'keys', 'catalog', 'subscriptions'];
 
     private readonly Response $response;

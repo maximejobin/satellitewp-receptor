@@ -102,7 +102,8 @@ final class ReportBuilder
         $transform = $spec['transform'] ?? null;
         $value     = is_string($transform) ? $this->transform($transform, $raw) : $raw;
         if ($value === null || $value === '' || $value === []) {
-            $value = isset($spec['default_label'])
+            // "None" is a fact about a source that was read; a missing source is unknown.
+            $value = isset($spec['default_label']) && $raw !== null
                 ? $this->t->report((string) $spec['default_label'])
                 : ($spec['default'] ?? '');
         }
@@ -220,7 +221,7 @@ final class ReportBuilder
             'active_theme'           => (string) (self::activeTheme($v)['name'] ?? ''),
             'active_theme_version'   => (string) (self::activeTheme($v)['version'] ?? ''),
             'active_theme_parent'    => self::activeThemeParent($v),
-            'install_type'           => $this->installType((array) $v),
+            'install_type'           => is_bool(((array) $v)[0] ?? null) ? $this->installType((array) $v) : '',
             'yes_no'                 => $this->yesNo($v),
             'enabled_label'          => $v === null ? $this->unknown() : $this->t->report($v ? 'label_enabled' : 'label_disabled'),
             'eol_status_label'       => $this->eolStatus($v, ''),
@@ -231,7 +232,7 @@ final class ReportBuilder
             'wordpress_status_label' => $this->wordpressStatus($v),
             'auto_update_core'       => $this->autoUpdateCore($v),
             'score_100'              => is_numeric($v) ? ((int) round((float) $v)) . '/100' : '',
-            'count'                  => (string) count((array) $v),
+            'count'                  => is_array($v) ? (string) count($v) : '',
             'php_size'               => $this->phpSize($v),
             default                  => $v,
         };
@@ -661,7 +662,10 @@ final class ReportBuilder
         $p    = (array) ($context['payload'] ?? []);
         $rows = [
             [self::cell($this->t->report('setting_admin_email')), self::cell((string) ($p['website_administrator_email'] ?? '—'))],
-            [self::cell($this->t->report('setting_permalinks')), self::cell((string) ($p['permalink_structure'] ?? '') ?: $this->t->report('permalinks_plain'))],
+            // An empty structure is WordPress's "Plain" setting; a missing field is unknown.
+            [self::cell($this->t->report('setting_permalinks')), self::cell(is_string($p['permalink_structure'] ?? null)
+                ? ($p['permalink_structure'] !== '' ? $p['permalink_structure'] : $this->t->report('permalinks_plain'))
+                : '')],
         ];
 
         $multilingual = Multilingual::fromPayload($p);
@@ -705,10 +709,11 @@ final class ReportBuilder
         foreach (array_slice($tables, 0, 10) as $table) {
             $overhead = (int) ($table['overhead_bytes'] ?? 0);
             $rows[] = [
-                self::cell((string) ($table['name'] ?? '?')),
+                self::cell((string) ($table['name'] ?? '')),
                 self::cell($this->formatBytes((int) ($table['size_bytes'] ?? 0))),
                 self::cell($this->formatNumber((int) ($table['row_count'] ?? 0))),
-                self::cell($this->formatBytes($overhead), $overhead > 0 ? 'orange' : null),
+                // InnoDB reports preallocated, reusable space here: shown, never flagged.
+                self::cell($this->formatBytes($overhead)),
             ];
         }
 

@@ -112,8 +112,12 @@ final class RdapProbe extends AbstractProbe
         $expiresAt = null;
         $updatedAt = null;
         foreach ((array) ($rdap['events'] ?? []) as $event) {
+            // Registry answers are untrusted: a malformed event is skipped, never fatal.
+            if (!is_array($event)) {
+                continue;
+            }
             $action = $event['eventAction'] ?? '';
-            $date   = $event['eventDate'] ?? null;
+            $date   = is_string($event['eventDate'] ?? null) ? $event['eventDate'] : null;
             if ($action === 'registration') {
                 $createdAt = $date;
             } elseif ($action === 'expiration') {

@@ -21,8 +21,7 @@ use SatelliteWP\Manager\Support\Secret;
  *   $bv->post('sites/scan', ['site_url' => $url]);
  *
  * Base URL, authentication scheme and any always-present parameters come from
- * configuration, so wiring the real v6 endpoints later needs no code change —
- * only config. Every call returns the decoded JSON array; failures raise a
+ * configuration. Every call returns the decoded JSON array; failures raise a
  * BlogVaultException carrying the status code and the API's own error body.
  */
 final class BlogVaultClient

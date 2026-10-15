@@ -31,8 +31,13 @@ final class SeRankingPollCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         // Same lock as ingest:process, so a cron run never polls the same audit concurrently.
-        $lock = fopen($this->app->config->get('data_dir') . '/ingest.lock', 'c');
-        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+        $lock = @fopen($this->app->config->get('data_dir') . '/ingest.lock', 'c');
+        if ($lock === false) {
+            $output->writeln('<error>Cannot open data/ingest.lock — check the data directory permissions.</error>');
+
+            return Command::FAILURE;
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
             $output->writeln('ingest:process is running — try again in a moment.');
 
             return Command::FAILURE;

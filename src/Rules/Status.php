@@ -17,14 +17,4 @@ enum Status: string
     case Fail          = 'fail';
     case NotApplicable = 'na';
     case Unknown       = 'unknown';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Pass          => 'Conforme',
-            self::Fail          => 'À corriger',
-            self::NotApplicable => 'Non applicable',
-            self::Unknown       => 'Indéterminé',
-        };
-    }
 }

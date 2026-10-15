@@ -66,7 +66,7 @@ final class StatusChecks
                     'activeNoTeamworkClients'   => $crmRepo->clientsActiveWithoutTeamworkId(),
                     'orphanSubscriptions'       => $crmRepo->countOrphanSubscriptions(),
                 ];
-            } catch (\PDOException $e) {
+            } catch (\Throwable $e) {
                 $crm = ['error' => $this->app->errorLog()->recordThrowable('crm_db', $e)];
             }
         }

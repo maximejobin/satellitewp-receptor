@@ -25,7 +25,7 @@ final class CatalogSetCommand extends Command
         $this
             ->addArgument('type', InputArgument::REQUIRED, 'plugin | theme')
             ->addArgument('slug', InputArgument::REQUIRED, 'wp.org-style slug')
-            ->addArgument('license', InputArgument::REQUIRED, 'free | premium | mixed | unknown');
+            ->addArgument('license', InputArgument::REQUIRED, implode(' | ', SoftwareCatalog::LICENSES));
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

@@ -42,9 +42,15 @@ final class AuditPoller
                 continue;
             }
 
-            $updated = $this->probe->poll($envelope, $now);
-            $this->store->writeProbeResult($siteId, $extractionId, $this->probe->name(), $updated);
-            $this->record($siteId, $extractionId, $updated, $row);
+            // One audit that keeps failing must not block the others on every run.
+            try {
+                $updated = $this->probe->poll($envelope, $now);
+                $this->store->writeProbeResult($siteId, $extractionId, $this->probe->name(), $updated);
+                $this->record($siteId, $extractionId, $updated, $row);
+            } catch (\Throwable $e) {
+                $lines[] = "{$siteId}/{$extractionId} failed: " . get_class($e);
+                continue;
+            }
 
             $lines[] = "{$siteId}/{$extractionId} {$updated['status']} (" . ($updated['data']['state'] ?? '?') . ')';
         }

@@ -86,7 +86,7 @@ final class App
         );
     }
 
-    /** Failed-Basic-Auth-attempt tracker for the admin UI (Router::authenticate()). */
+    /** Failed-Basic-Auth-attempt tracker for the admin UI (AuthController::authenticate()). */
     public function loginLockout(): LoginLockout
     {
         return $this->services[LoginLockout::class] ??= new LoginLockout(
@@ -241,7 +241,7 @@ final class App
         );
     }
 
-    /** Role -> capability lookup (config/roles.php), checked by Router::requireCapability()/currentUserCan(). */
+    /** Role -> capability lookup (config/roles.php), checked by Controller::requireCapability()/currentUserCan(). */
     public function roleCapabilities(): RoleCapabilities
     {
         return $this->services[RoleCapabilities::class] ??= RoleCapabilities::load(

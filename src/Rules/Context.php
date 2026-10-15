@@ -77,9 +77,8 @@ final readonly class Context
      * A wp-config constant, read from payload.constants.*.
      *
      * The plugin's ConstantsCollector emits the string "N/A" for a constant
-     * that is not defined, and (bool) "N/A" is true — which silently turned
-     * "no hardening at all" into a green pastille on K4/K5. In WordPress an
-     * undefined boolean constant behaves as false, so "N/A" reads as false.
+     * that is not defined, and (bool) "N/A" is true. In WordPress an undefined
+     * boolean constant behaves as false, so "N/A" reads as false.
      *
      * Null is reserved for "we never received the constants at all", so a
      * missing extraction still reports unknown instead of inventing failures.
@@ -153,12 +152,6 @@ final readonly class Context
             'T'     => 1024 ** 4,
             default => 1,
         };
-    }
-
-    /** @return array<string, mixed> */
-    public function payload(): array
-    {
-        return $this->payload;
     }
 
     /** A named bag of server-side reference data (e.g. an EndOfLife instance). */

@@ -22,7 +22,7 @@ final class RulesDocCommand extends Command
         'A'  => 'TLS / SSL',
         'B'  => 'En-têtes HTTP & réseau',
         'C'  => 'DNS & disponibilité',
-        'D'  => 'Délivrabilité e-mail (DNS)',
+        'D'  => 'Délivrabilité e-mail',
         'W'  => 'Domaine (WHOIS/RDAP)',
         'PS' => 'Performance (Lighthouse/PageSpeed)',
         'F'  => 'Versions, mises à jour & fin de vie',
@@ -33,8 +33,7 @@ final class RulesDocCommand extends Command
         'K'  => 'Configuration & durcissement',
         'L'  => 'Système de fichiers',
         'M'  => 'Utilisateurs & accès',
-        'BV' => 'BlogVault',
-        'WF' => 'Wordfence Intelligence',
+        'BV' => 'BlogVault (antivirus)',
         'X'  => 'Exposition (sondes passives)',
     ];
 

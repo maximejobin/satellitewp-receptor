@@ -399,7 +399,7 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['Table', 'Size', 'Rows', 'Overhead'], $report['fields']['x']['headers']);
         self::assertSame(['wp_big', 'wp_medium', 'wp_small'], array_column(array_column($rows, 0), 'text'));
         self::assertSame('5 MB', $rows[0][1]['text']);
-        self::assertSame(['text' => '1 MB', 'color' => 'orange'], $rows[0][3]); // wp_big has overhead — worth attention
+        self::assertSame(['text' => '1 MB', 'color' => null], $rows[0][3]); // preallocated InnoDB space: shown, never flagged
         self::assertSame(['text' => '0 B', 'color' => null], $rows[1][3]); // wp_medium has none
     }
 
@@ -979,7 +979,10 @@ final class ReportBuilderTest extends TestCase
     {
         self::assertSame('Aucune', $this->value(['transform' => 'join_lines', 'default_label' => 'none_f'], [])['value']);
         self::assertSame('2', $this->value(['transform' => 'count'], [['login' => 'a'], ['login' => 'b']])['value']);
-        self::assertSame('0', $this->value(['transform' => 'count'], null)['value']);
+        self::assertSame('0', $this->value(['transform' => 'count'], [])['value']);
+        // A source that was never read is unknown, not "0" nor "None".
+        self::assertSame('', $this->value(['transform' => 'count'], null)['value']);
+        self::assertSame('', $this->value(['transform' => 'join_lines', 'default_label' => 'none_f'], null)['value']);
     }
 
     public function testNumbersAndBytesFollowTheLocale(): void

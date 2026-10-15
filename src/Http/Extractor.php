@@ -198,8 +198,8 @@ final class Extractor
             return null;
         }
 
-        // home_url is a validated, non-empty URL: an empty claim can no longer
-        // slip past the binding and point the probes at another host.
+        // home_url is a validated, non-empty URL: an empty claim cannot slip
+        // past the binding and point the probes at another host.
         $claimed = PayloadValidator::normalizeOrigin((string) $payload['home_url']);
 
         $bound = $this->keys->getOrigin($siteId);
@@ -218,7 +218,7 @@ final class Extractor
             409,
             "This site is registered as {$bound} but reported from {$claimed}. "
             . 'Refusing it so a restored copy cannot report over the original. '
-            . "Run 'manager keys:rebind' if the site really moved."
+            . "Run 'bin/swpmgr keys:rebind' if the site really moved."
         );
     }
 

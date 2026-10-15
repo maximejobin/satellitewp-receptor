@@ -130,7 +130,7 @@ final class SoftwareCatalog
      * the wp.org repository. Suggestion: on the repo → free (may be refined to
      * mixed by an analyst); absent → premium.
      *
-     * @param callable(string, string): bool $isOnWporg
+     * @param callable(string, string): ?bool $isOnWporg null when wp.org could not answer: the entry is left as is
      * @return int number of entries updated
      */
     public function suggest(callable $isOnWporg, bool $recheck = false): int
@@ -143,7 +143,10 @@ final class SoftwareCatalog
             if (!$recheck && ($entry['source'] ?? 'unknown') !== 'unknown') {
                 continue;
             }
-            $results[$key] = (bool) $isOnWporg($entry['type'], $entry['slug']);
+            $onRepo = $isOnWporg($entry['type'], $entry['slug']);
+            if ($onRepo !== null) {
+                $results[$key] = $onRepo;
+            }
         }
         if ($results === []) {
             return 0;

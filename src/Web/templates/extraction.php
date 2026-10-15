@@ -265,7 +265,7 @@ if ($status !== 'done'):
                 <p><span class="badge badge-error">Not on BlogVault</span>
                    <span class="mono"><?= e($blogVault['host'] ?? '') ?></span> is not in the account —
                    this site is probably not under a maintenance plan.
-                   Rules <span class="mono">BV1</span>–<span class="mono">BV6</span> will stay indeterminate.</p>
+                   Rule <span class="mono">BV1</span> and the BlogVault part of <span class="mono">F8</span> will stay indeterminate.</p>
             <?php endif; ?>
 
             <?php
@@ -829,14 +829,21 @@ if ($status !== 'done'):
             <div class="cards cards-full">
                 <?php
                 $sec = $http['security_headers'] ?? [];
-                echo section('Security headers',
-                    field('X-Content-Type-Options', $sec['x-content-type-options'] ?? 'missing', ($sec['x-content-type-options'] ?? null) ? null : 'warn', 'probe.http.security_headers.x-content-type-options')
-                    . field('X-Frame-Options', $sec['x-frame-options'] ?? 'missing', ($sec['x-frame-options'] ?? null) ? null : 'warn', 'probe.http.security_headers.x-frame-options')
-                    . field('Content-Security-Policy', $sec['content-security-policy'] ?? 'missing', ($sec['content-security-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.content-security-policy')
-                    . field('Referrer-Policy', $sec['referrer-policy'] ?? 'missing', ($sec['referrer-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.referrer-policy')
-                    . field('Permissions-Policy', $sec['permissions-policy'] ?? 'missing', ($sec['permissions-policy'] ?? null) ? null : 'warn', 'probe.http.security_headers.permissions-policy')
-                    . field('HSTS', $sec['strict-transport-security'] ?? 'missing', ($sec['strict-transport-security'] ?? null) ? null : 'warn', 'probe.http.security_headers.strict-transport-security')
-                ); ?>
+                // Headers read from an auth gate, challenge or error page are not the site's: show nothing.
+                $code    = $http['status_code'] ?? null;
+                $readable = is_int($code) && $code >= 200 && $code < 300 && ($http['auth']['required'] ?? false) !== true;
+                $headerRows = '';
+                foreach ([
+                    'X-Content-Type-Options' => 'x-content-type-options', 'X-Frame-Options' => 'x-frame-options',
+                    'Content-Security-Policy' => 'content-security-policy', 'Referrer-Policy' => 'referrer-policy',
+                    'Permissions-Policy' => 'permissions-policy', 'HSTS' => 'strict-transport-security',
+                ] as $headerLabel => $headerKey) {
+                    $headerValue = $sec[$headerKey] ?? null;
+                    $headerRows .= $readable
+                        ? field($headerLabel, $headerValue ?? 'missing', $headerValue ? null : 'warn', 'probe.http.security_headers.' . $headerKey)
+                        : field($headerLabel, null, null, 'probe.http.security_headers.' . $headerKey);
+                }
+                echo section('Security headers', $headerRows); ?>
                 <?php
                 // Passive checks an anonymous visitor could run; each row shows its evidence (URL + status).
                 $exp      = $http['exposure'] ?? [];
