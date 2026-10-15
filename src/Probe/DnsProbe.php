@@ -8,7 +8,7 @@ use SatelliteWP\Manager\Domain\ProbeResult;
 use SatelliteWP\Manager\Domain\SiteContext;
 
 /**
- * DNS records of the site: NS, A/AAAA, MX, TXT (SPF), DMARC, CAA.
+ * DNS records of the site: NS, A/AAAA, MX, TXT (SPF), DMARC.
  *
  * A lookup that failed (timeout, SERVFAIL) is reported as null, never as an
  * empty list: "no SPF record" is a finding, "couldn't ask" is not.
@@ -39,7 +39,6 @@ final class DnsProbe extends AbstractProbe
             'aaaa'  => [$site->host, DNS_AAAA],
             'mx'    => [$domain, DNS_MX],
             'txt'   => [$domain, DNS_TXT],
-            'caa'   => [$domain, DNS_CAA],
             'dmarc' => ['_dmarc.' . $domain, DNS_TXT],
         ];
 
@@ -85,7 +84,7 @@ final class DnsProbe extends AbstractProbe
     public static function parseRecords(array $records): array
     {
         // A missing key means "not queried" (empty); only an explicit null is a failed lookup.
-        $records += array_fill_keys(['ns', 'a', 'aaaa', 'mx', 'txt', 'caa', 'dmarc'], []);
+        $records += array_fill_keys(['ns', 'a', 'aaaa', 'mx', 'txt', 'dmarc'], []);
 
         $txt = self::map($records['txt'], static fn (array $r): string => (string) ($r['txt'] ?? ''));
         $txt = $txt === null ? null : array_values(array_filter($txt, static fn (string $v): bool => $v !== ''));
@@ -129,11 +128,6 @@ final class DnsProbe extends AbstractProbe
             'txt'   => $txt,
             'spf'   => $spf,
             'dmarc' => $dmarc,
-            'caa'   => self::map($records['caa'], static fn (array $r): array => [
-                'flags' => (int) ($r['flags'] ?? 0),
-                'tag'   => (string) ($r['tag'] ?? ''),
-                'value' => (string) ($r['value'] ?? ''),
-            ]),
             'dnssec' => null,
         ];
     }

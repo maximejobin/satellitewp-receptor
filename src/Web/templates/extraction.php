@@ -353,7 +353,9 @@ if ($status !== 'done'):
                 <?php endforeach; ?>
             </div>
             <div class="xt-hero-tally">
-                <?php foreach (Pastille::values() as $c): ?>
+                <?php foreach (Pastille::values() as $c):
+                    // Purple is a standing request for the client's input: only observations carry it.
+                    if ($c === Pastille::Purple->value) { continue; } ?>
                     <span class="chip"><span class="dot dot-<?= $c ?>"></span><?= e($t->pastille($c)) ?> <b><?= e($byPast[$c] ?? 0) ?></b></span>
                 <?php endforeach; ?>
             </div>
@@ -390,9 +392,6 @@ if ($status !== 'done'):
             <div class="xt-stat<?= (($rdap['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= report_icon('domain') ?>
                 <div><div class="xt-stat-k">Domain expiry</div><div class="xt-stat-v"><?= isset($rdap['days_to_expiry']) ? e($rdap['days_to_expiry']) . ' d' : '' ?></div>
                     <div class="xt-stat-s<?= (($rdap['days_to_expiry'] ?? 999) < 30) ? ' warn' : '' ?>"><?= (($rdap['days_to_expiry'] ?? 999) < 30) ? 'renew soon' : '' ?></div></div></div>
-            <div class="xt-stat"><?= report_icon('performance') ?>
-                <div><div class="xt-stat-k">HTTP</div><div class="xt-stat-v">HTTP/<?= e($http['http_version'] ?? '?') ?></div>
-                    <div class="xt-stat-s"><?= isset($http['content_encoding']) ? e($http['content_encoding']) : '' ?></div></div></div>
         </section>
 
         <div class="xt-subsection">
@@ -899,8 +898,6 @@ if ($status !== 'done'):
                     . field('Subject (CN)', $tls['subject_cn'] ?? null, null, 'probe.tls.subject_cn')
                     . field_raw('Expires', e($tls['not_after'] ?? '') . (isset($tls['days_to_expiry']) ? ' (' . e($tls['days_to_expiry']) . ' d)' : ''), null, 'probe.tls.not_after')
                     . field_raw('SAN', fmt_list($tls['san'] ?? []), null, 'probe.tls.san')
-                    // CAA restricts which CAs may issue for the domain: a certificate fact.
-                    . field_raw('CAA', fmt_list(array_map(static fn ($c) => $c['value'] ?? '', $dns['caa'] ?? [])), null, 'probe.dns.caa')
                     . field('Chain valid', $tls['chain_valid'] ?? null, ($tls['chain_valid'] ?? true) ? 'ok' : 'error', 'probe.tls.chain_valid')
                     . field('Hostname covered', $tls['hostname_covered'] ?? null, ($tls['hostname_covered'] ?? true) ? 'ok' : 'error', 'probe.tls.hostname_covered')
                     . field('Self-signed', $tls['self_signed'] ?? null, ($tls['self_signed'] ?? false) ? 'error' : 'ok', 'probe.tls.self_signed')

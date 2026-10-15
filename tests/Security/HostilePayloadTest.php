@@ -544,7 +544,6 @@ final class HostilePayloadTest extends TestCase
             'mx'    => [['target' => $x, 'pri' => 10]],
             'ns'    => [['target' => $x]],
             'a'     => [['ip' => $x]],
-            'caa'   => [['value' => $x, 'tag' => $x]],
             'dmarc' => [['txt' => 'v=DMARC1; rua=' . self::JS_URL]],
         ]);
 

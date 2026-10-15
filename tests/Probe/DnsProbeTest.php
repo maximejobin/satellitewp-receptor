@@ -21,7 +21,6 @@ final class DnsProbeTest extends TestCase
                 ['txt' => 'google-site-verification=abc'],
             ],
             'dmarc' => [['txt' => 'v=DMARC1; p=quarantine; rua=mailto:d@example.com']],
-            'caa'   => [['flags' => 0, 'tag' => 'issue', 'value' => 'letsencrypt.org']],
         ]);
 
         $this->assertSame(['ns1.example.net', 'ns2.example.net'], $data['nameservers']);
@@ -32,7 +31,6 @@ final class DnsProbeTest extends TestCase
         $this->assertSame('v=spf1 include:_spf.example.com ~all', $data['spf']['record']);
         $this->assertTrue($data['dmarc']['present']);
         $this->assertSame('quarantine', $data['dmarc']['policy']);
-        $this->assertSame('letsencrypt.org', $data['caa'][0]['value']);
         $this->assertNull($data['dnssec']);
     }
 
@@ -56,14 +54,12 @@ final class DnsProbeTest extends TestCase
             'txt'   => null,
             'dmarc' => null,
             'mx'    => null,
-            'caa'   => null,
         ]);
 
         $this->assertNull($data['txt']);
         $this->assertNull($data['spf']);
         $this->assertNull($data['dmarc']);
         $this->assertNull($data['mx']);
-        $this->assertNull($data['caa']);
         $this->assertSame(['192.0.2.10'], $data['a']);
     }
 

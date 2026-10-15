@@ -328,13 +328,6 @@ return [
             'pass' => 'The site is reachable over IPv6 ({observed} {observed|address|addresses}).',
         ],
         'C2' => [
-            'title' => 'Authorities allowed to issue a certificate (CAA)',
-            'title_success' => 'Certificate authorities restricted (CAA)',
-            'title_failure' => 'Certificate authorities not restricted',
-            'fail' => 'No DNS CAA record states which authorities may issue a certificate for your domain. This is an optional extra protection.',
-            'pass' => 'A DNS CAA record restricts which authorities may issue a certificate for your domain.',
-        ],
-        'C3' => [
             'title' => 'Number of redirects',
             'title_success' => 'Few redirects',
             'title_failure' => 'Too many redirects',
@@ -342,35 +335,35 @@ return [
             'fail_loop' => 'Reaching your home page loops through redirects: the site may be unreachable. Have the redirects fixed without delay.',
             'pass' => 'Redirects before reaching your home page: {observed}, which is reasonable.',
         ],
-        'C4' => [
+        'C3' => [
             'title' => 'Site availability',
             'title_success' => 'Site available',
             'title_failure' => 'Site unavailable',
             'fail' => 'Your home page answers with an error (HTTP code {observed}): your visitors cannot view it. Check the site without delay.',
             'pass' => 'Your home page answers normally (HTTP code {observed}).',
         ],
-        'C5' => [
+        'C4' => [
             'title' => 'Missing pages correctly reported',
             'title_success' => 'Missing pages correctly reported',
             'title_failure' => 'Missing pages not reported',
             'fail' => 'An address that does not exist shows a normal page instead of a "404" error: search engines may index empty pages. Have the site configuration fixed.',
             'pass' => 'An address that does not exist correctly returns a "404" error.',
         ],
-        'C6' => [
+        'C5' => [
             'title' => 'robots.txt file',
             'title_success' => 'robots.txt file present',
             'title_failure' => 'robots.txt file missing',
             'fail' => 'The robots.txt file, which guides search engines, is missing. Have one published that points to your sitemap.',
             'pass' => 'The robots.txt file, which guides search engines, is present.',
         ],
-        'C7' => [
+        'C6' => [
             'title' => 'Site crawling allowed',
             'title_success' => 'Site crawling allowed',
             'title_failure' => 'Site crawling blocked',
             'fail' => 'The robots.txt file forbids search engines from crawling the whole site: it will not appear in Google. If that is not intended (staging site), remove the "Disallow: /" rule.',
             'pass' => 'The robots.txt file does not prevent the site from being crawled.',
         ],
-        'C8' => [
+        'C7' => [
             'title' => 'Sitemap',
             'title_success' => 'Sitemap declared',
             'title_failure' => 'Sitemap missing or unreachable',

@@ -326,13 +326,6 @@ return [
             'pass' => 'Le site est accessible en IPv6 ({observed} {observed|adresse|adresses}).',
         ],
         'C2' => [
-            'title' => 'Autorités autorisées à émettre un certificat (CAA)',
-            'title_success' => 'Autorités de certification restreintes (CAA)',
-            'title_failure' => 'Autorités de certification non restreintes',
-            'fail' => 'Aucun enregistrement DNS CAA ne précise quelles autorités peuvent émettre un certificat pour votre domaine. C\'est une protection supplémentaire facultative.',
-            'pass' => 'Un enregistrement DNS CAA limite les autorités pouvant émettre un certificat pour votre domaine.',
-        ],
-        'C3' => [
             'title' => 'Nombre de redirections',
             'title_success' => 'Redirections limitées',
             'title_failure' => 'Trop de redirections',
@@ -340,35 +333,35 @@ return [
             'fail_loop' => 'L\'accès à votre page d\'accueil tourne en boucle de redirections : le site peut être inaccessible. Faites corriger les redirections sans délai.',
             'pass' => 'Redirections avant d\'atteindre votre page d\'accueil : {observed}, ce qui est raisonnable.',
         ],
-        'C4' => [
+        'C3' => [
             'title' => 'Disponibilité du site',
             'title_success' => 'Site disponible',
             'title_failure' => 'Site indisponible',
             'fail' => 'Votre page d\'accueil répond par une erreur (code HTTP {observed}) : vos visiteurs ne peuvent pas la consulter. Vérifiez le site sans délai.',
             'pass' => 'Votre page d\'accueil répond normalement (code HTTP {observed}).',
         ],
-        'C5' => [
+        'C4' => [
             'title' => 'Pages introuvables correctement signalées',
             'title_success' => 'Pages introuvables correctement signalées',
             'title_failure' => 'Pages introuvables mal signalées',
             'fail' => 'Une adresse qui n\'existe pas affiche une page normale au lieu d\'une erreur « 404 » : les moteurs de recherche peuvent indexer des pages vides. Faites corriger la configuration du site.',
             'pass' => 'Une adresse qui n\'existe pas renvoie bien une erreur « 404 ».',
         ],
-        'C6' => [
+        'C5' => [
             'title' => 'Fichier robots.txt',
             'title_success' => 'Fichier robots.txt présent',
             'title_failure' => 'Fichier robots.txt absent',
             'fail' => 'Le fichier robots.txt, qui guide les moteurs de recherche, est absent. Faites-en publier un qui indique l\'adresse de votre plan du site.',
             'pass' => 'Le fichier robots.txt, qui guide les moteurs de recherche, est présent.',
         ],
-        'C7' => [
+        'C6' => [
             'title' => 'Exploration du site autorisée',
             'title_success' => 'Exploration du site autorisée',
             'title_failure' => 'Exploration du site bloquée',
             'fail' => 'Le fichier robots.txt interdit aux moteurs de recherche d\'explorer tout le site : il n\'apparaîtra pas dans Google. Si ce n\'est pas voulu (site de test), retirez la règle « Disallow: / ».',
             'pass' => 'Le fichier robots.txt n\'empêche pas l\'exploration du site.',
         ],
-        'C8' => [
+        'C7' => [
             'title' => 'Plan du site',
             'title_success' => 'Plan du site déclaré',
             'title_failure' => 'Plan du site absent ou inaccessible',

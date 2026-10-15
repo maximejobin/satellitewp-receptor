@@ -134,16 +134,16 @@ final class RuleBehaviourTest extends TestCase
         $http = ['auth' => ['required' => true], 'status_code' => 401, 'robots' => ['present' => false], 'soft_404' => ['checked' => true, 'is_soft_404' => false]];
         $findings = $this->evaluate($this->payload(), ['http' => $http]);
 
-        foreach (['C4', 'C5', 'C6', 'C7', 'C8'] as $id) {
+        foreach (['C3', 'C4', 'C5', 'C6', 'C7'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
         }
 
         // Probe data predating the auth flag only carries the bare 401.
         unset($http['auth']);
-        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => $http])['C4']['status']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => $http])['C3']['status']);
 
         $http['status_code'] = 500;
-        $this->assertSame(Status::Fail->value, $this->evaluate($this->payload(), ['http' => $http])['C4']['status']);
+        $this->assertSame(Status::Fail->value, $this->evaluate($this->payload(), ['http' => $http])['C3']['status']);
     }
 
     public function testNoClientTextFallsBackToAParenthesisedPlural(): void
@@ -169,10 +169,10 @@ final class RuleBehaviourTest extends TestCase
 
     public function testDnsRulesAreUnknownWhenTheLookupFailed(): void
     {
-        $dns = ['spf' => null, 'dmarc' => null, 'mx' => null, 'caa' => null, 'a' => null, 'aaaa' => null];
+        $dns = ['spf' => null, 'dmarc' => null, 'mx' => null, 'a' => null, 'aaaa' => null];
         $findings = $this->evaluate($this->payload(), ['dns' => $dns]);
 
-        foreach (['C1', 'C2', 'D4'] as $id) {
+        foreach (['C1', 'D4'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
         }
     }
@@ -193,13 +193,13 @@ final class RuleBehaviourTest extends TestCase
         ]]);
 
         $failed = $http(['present' => null, 'error' => 'cURL error 28']);
-        foreach (['C6', 'C7'] as $id) {
+        foreach (['C5', 'C6'] as $id) {
             $this->assertSame(Status::Unknown->value, $failed[$id]['status'], $id);
         }
-        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => true])['C8']['status']);
-        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => null])['C8']['status']);
-        $this->assertSame(Status::Fail->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => false])['C8']['status']);
-        $this->assertSame(Status::Fail->value, $http(['present' => false])['C6']['status']);
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => true])['C7']['status']);
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => null])['C7']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => false])['C7']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => false])['C5']['status']);
     }
 
     public function testOpenRegistrationIsGradedOnWhatTheDefaultRoleCanDo(): void
@@ -595,7 +595,7 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Severity::Medium, $rules['F10']);
         $this->assertSame(Severity::Medium, $rules['F11']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
-        foreach (['B3', 'B4', 'B5', 'B10', 'B11', 'C7', 'C1', 'I2'] as $id) {
+        foreach (['B3', 'B4', 'B5', 'B10', 'B11', 'C6', 'C1', 'I2'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
         $this->assertArrayNotHasKey('X6', $rules);

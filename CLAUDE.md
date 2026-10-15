@@ -178,7 +178,7 @@ optional calls need `try/catch`.
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
 
-**Rules (`src/Rules`, `config/rules.php`).** 76 active rules. Ids are the
+**Rules (`src/Rules`, `config/rules.php`).** 75 active rules. Ids are the
 category letter of the plugin's `.github/validations-techniques.txt` plus a
 number, sequential within each letter, no suffixes (that file's numbers are
 the original plan, not the current ids); a retired rule's successors are
@@ -192,7 +192,7 @@ plugins/themes, `M3` open sign-up graded on the default role's capabilities
 (`payload.registration`), never its name. Retired, don't re-add: table
 overhead (InnoDB `DATA_FREE` is preallocated, reusable space), trash and
 draft counts (WordPress empties the trash; drafts are editorial), scheduled
-task count. Thresholds overridable via `rules.thresholds.<id>`.
+task count, the DNS CAA record. Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges
   lists by position) is a list of Wordfence ids (a BlogVault id also works,

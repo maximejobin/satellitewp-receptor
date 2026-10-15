@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
-76 règles, 16 groupes.
+75 règles, 16 groupes.
 
 ## A. TLS / SSL
 
@@ -338,24 +338,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C2 — Autorités autorisées à émettre un certificat (CAA)
-
-- **Catégorie :** DNS · **Source :** EXT · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Un enregistrement DNS CAA limite les autorités pouvant émettre un certificat pour votre domaine.
-- **Échec (FR) :** Aucun enregistrement DNS CAA ne précise quelles autorités peuvent émettre un certificat pour votre domaine. C'est une protection supplémentaire facultative.
-
-```php
-        'check' => static function (Context $c) use ($dnsKnown) {
-            if (!$dnsKnown($c, 'caa')) {
-                return Check::unknown();
-            }
-            $caa = $c->list('probe.dns.caa');
-
-            return $caa !== [] ? Check::pass(count($caa)) : Check::fail(0);
-        },
-```
-
-### C3 — Nombre de redirections
+### C2 — Nombre de redirections
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2
 - **Réussite (FR) :** Redirections avant d'atteindre votre page d'accueil : {observed}, ce qui est raisonnable.
@@ -372,7 +355,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C4 — Disponibilité du site
+### C3 — Disponibilité du site
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Votre page d'accueil répond normalement (code HTTP {observed}).
@@ -389,7 +372,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C5 — Pages introuvables correctement signalées
+### C4 — Pages introuvables correctement signalées
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une adresse qui n'existe pas renvoie bien une erreur « 404 ».
@@ -406,7 +389,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C6 — Fichier robots.txt
+### C5 — Fichier robots.txt
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le fichier robots.txt, qui guide les moteurs de recherche, est présent.
@@ -427,7 +410,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C7 — Exploration du site autorisée
+### C6 — Exploration du site autorisée
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le fichier robots.txt n'empêche pas l'exploration du site.
@@ -450,7 +433,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C8 — Plan du site
+### C7 — Plan du site
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** {observed} plans du site déclarés et accessibles.

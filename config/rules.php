@@ -342,18 +342,7 @@ return [
         },
     ],
     [
-        'id' => 'C2', 'category' => Category::DNS, 'source' => 'EXT', 'severity' => Severity::Info,
-        'check' => static function (Context $c) use ($dnsKnown) {
-            if (!$dnsKnown($c, 'caa')) {
-                return Check::unknown();
-            }
-            $caa = $c->list('probe.dns.caa');
-
-            return $caa !== [] ? Check::pass(count($caa)) : Check::fail(0);
-        },
-    ],
-    [
-        'id' => 'C3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2,
+        'id' => 'C2', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2,
         'check' => static function (Context $c, Rule $rule) {
             if ($c->bool('probe.http.redirects.loop_detected') === true) {
                 return Check::fail('loop', ['variant' => 'loop'], Severity::High);
@@ -364,7 +353,7 @@ return [
         },
     ],
     [
-        'id' => 'C4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'id' => 'C3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) use ($homepageReadable) {
             $code = $c->number('probe.http.status_code');
             if ($code === null || !$homepageReadable($c)) {
@@ -375,7 +364,7 @@ return [
         },
     ],
     [
-        'id' => 'C5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $soft = $c->get('probe.http.soft_404');
             if (!$homepageReadable($c) || !is_array($soft) || ($soft['checked'] ?? false) !== true) {
@@ -386,7 +375,7 @@ return [
         },
     ],
     [
-        'id' => 'C6', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C5', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c) || !is_array($robots)) {
@@ -401,7 +390,7 @@ return [
         },
     ],
     [
-        'id' => 'C7', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C6', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c)) {
@@ -418,7 +407,7 @@ return [
         },
     ],
     [
-        'id' => 'C8', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C7', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c) || !is_array($robots) || ($robots['present'] ?? false) !== true) {

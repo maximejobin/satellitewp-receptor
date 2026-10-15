@@ -106,7 +106,7 @@ final readonly class SiteContext
     }
 
     /**
-     * The registered domain WHOIS/RDAP and NS/MX/CAA/DMARC lookups must
+     * The registered domain WHOIS/RDAP and NS/MX/DMARC lookups must
      * target, never the full hostname: the public suffix plus one label.
      */
     public static function registrableDomain(string $host): string
