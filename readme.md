@@ -173,8 +173,9 @@ catalogue est évalué sur `payload.json` + `probes/*.json` (aucun appel réseau
 produit un `findings.json` : la matière première du bilan de santé.
 
 Le catalogue vit dans [`config/rules.php`](config/rules.php) et suit
-`.github/validations-techniques.txt` du repo plugin — mêmes identifiants (`A1`,
-`B7a`, `I1`…), mêmes catégories, mêmes sévérités **(C)ritique / (É)levée /
+`.github/validations-techniques.txt` du repo plugin — mêmes lettres de
+catégorie, numérotées à la suite dans chaque lettre (`A1`, `B7`, `I1`…, sans
+suffixe), mêmes sévérités **(C)ritique / (É)levée /
 (M)oyenne / (I)nfo**. Quatre préfixes sont des ajouts hors catalogue,
 volontairement distincts pour ne jamais entrer en collision : `W*` (domaine
 WHOIS/RDAP), `PS*` (scores Lighthouse), `BV*` (BlogVault) et `WF*` (Wordfence

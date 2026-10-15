@@ -181,7 +181,7 @@ return [
         },
     ],
     [
-        'id' => 'A8', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'A7', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($headerPresent($c, 'strict-transport-security') ? Check::pass() : Check::fail())
             : Check::unknown(),
@@ -189,7 +189,7 @@ return [
     [
         // Reads the http:// chain only; a chain that failed or looped is unknown
         // (forces_https null). Ending on an http:// error page is not plain-text traffic.
-        'id' => 'A10', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
+        'id' => 'A8', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) {
             if (!$c->probeRan('http') || $c->string('probe.http.redirects.error') !== null) {
                 return Check::unknown();
@@ -270,14 +270,14 @@ return [
         },
     ],
     [
-        'id' => 'B7a', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B7', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($headerPresent($c, 'x-content-type-options') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
         // A CSP prevents framing only through its frame-ancestors directive.
-        'id' => 'B7b', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B8', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable, $headerPresent) {
             if (!$homepageReadable($c)) {
                 return Check::unknown();
@@ -291,25 +291,25 @@ return [
         },
     ],
     [
-        'id' => 'B7c', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B9', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($headerPresent($c, 'content-security-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
-        'id' => 'B7d', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B10', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($headerPresent($c, 'referrer-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
-        'id' => 'B7e', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B11', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => $homepageReadable($c)
             ? ($headerPresent($c, 'permissions-policy') ? Check::pass() : Check::fail())
             : Check::unknown(),
     ],
     [
-        'id' => 'B9', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'B12', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             if (!$c->probeRan('http')) {
                 return Check::unknown();
@@ -353,7 +353,7 @@ return [
         },
     ],
     [
-        'id' => 'C5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2,
+        'id' => 'C3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2,
         'check' => static function (Context $c, Rule $rule) {
             if ($c->bool('probe.http.redirects.loop_detected') === true) {
                 return Check::fail('loop', ['variant' => 'loop'], Severity::High);
@@ -364,7 +364,7 @@ return [
         },
     ],
     [
-        'id' => 'C7', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
+        'id' => 'C4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) use ($homepageReadable) {
             $code = $c->number('probe.http.status_code');
             if ($code === null || !$homepageReadable($c)) {
@@ -375,7 +375,7 @@ return [
         },
     ],
     [
-        'id' => 'C8', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C5', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $soft = $c->get('probe.http.soft_404');
             if (!$homepageReadable($c) || !is_array($soft) || ($soft['checked'] ?? false) !== true) {
@@ -386,7 +386,7 @@ return [
         },
     ],
     [
-        'id' => 'C9', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C6', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c) || !is_array($robots)) {
@@ -401,7 +401,7 @@ return [
         },
     ],
     [
-        'id' => 'C9a', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C7', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c)) {
@@ -418,7 +418,7 @@ return [
         },
     ],
     [
-        'id' => 'C10', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C8', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c) || !is_array($robots) || ($robots['present'] ?? false) !== true) {
@@ -506,19 +506,19 @@ return [
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.performance'), (float) $rule->threshold),
     ],
     [
-        'id' => 'PS1a', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'id' => 'PS2', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.performance'), (float) $rule->threshold),
     ],
     [
-        'id' => 'PS2', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'id' => 'PS3', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'accessibility'), (float) $rule->threshold),
     ],
     [
-        'id' => 'PS3', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
+        'id' => 'PS4', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 90,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'seo'), (float) $rule->threshold),
     ],
     [
-        'id' => 'PS4', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2500,
+        'id' => 'PS5', 'category' => Category::PERFORMANCE, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 2500,
         'check' => static function (Context $c, Rule $rule) {
             $lcp = $c->number('probe.pagespeed.mobile.lab.lcp.value');
             if ($lcp === null) {
@@ -626,7 +626,7 @@ return [
         },
     ],
     [
-        'id' => 'F7', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'F6', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             $php     = $c->string('payload.php.version');
@@ -653,7 +653,7 @@ return [
     [
         // Only speaks to software hosted on wp.org: premium/custom items
         // (on_wporg false) or ones this run couldn't fetch are skipped.
-        'id' => 'F8', 'category' => Category::UPDATES, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 365,
+        'id' => 'F7', 'category' => Category::UPDATES, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 365,
         'check' => static function (Context $c, Rule $rule) use ($nameList) {
             if (!$c->probeRan('wporg')) {
                 return Check::unknown();
@@ -693,7 +693,7 @@ return [
     ],
     [
         // Counted once per vulnerability across both detectors, matched by CVE.
-        'id' => 'F10', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::High,
+        'id' => 'F8', 'category' => Category::SECURITY, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) use ($nameList) {
             $bvKnown = $c->number('probe.blogvault.vulnerabilities_total') !== null;
             $wfKnown = $c->number('probe.wordfence.vulnerabilities_total') !== null;
@@ -714,7 +714,7 @@ return [
     ],
     [
         // Minor releases carry WordPress's security fixes.
-        'id' => 'F12a', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'F9', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) {
             $minor = $c->get('payload.core_update.auto_update_minor');
             if (!is_bool($minor)) {
@@ -732,7 +732,7 @@ return [
     ],
     [
         // A major release is applied after checking the site, never unattended.
-        'id' => 'F12b', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'F10', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $major = $c->get('payload.core_update.auto_update_major');
             if (!is_bool($major)) {
@@ -744,7 +744,7 @@ return [
     ],
     [
         // A plugin update is applied after checking the site, never unattended.
-        'id' => 'F12c', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'F11', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->get('payload.plugins');
             if (!is_array($plugins)) {
@@ -767,7 +767,7 @@ return [
     [
         // Inactive code stays reachable on disk. Exempt: the active theme's
         // parent, and one default theme WordPress falls back to.
-        'id' => 'F13', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'F12', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             $themes  = $c->list('payload.themes');
@@ -842,7 +842,7 @@ return [
         // post_max_size bounds the whole request, so it must be at least
         // upload_max_filesize (larger is PHP's own advice); the smaller of the
         // two must clear a working size. post_max_size 0 means unlimited.
-        'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
+        'id' => 'G2', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
         'check' => static function (Context $c, Rule $rule) {
             $postRaw   = $c->string('payload.php.post_max_size');
             $uploadRaw = $c->string('payload.php.upload_max_filesize');
@@ -871,11 +871,11 @@ return [
         },
     ],
     [
-        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 1000,
+        'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 1000,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
     ],
     [
-        'id' => 'G5', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $extensions = $c->list('payload.php.extensions');
             if ($extensions === []) {
@@ -891,7 +891,7 @@ return [
         },
     ],
     [
-        'id' => 'G6', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'G5', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $extensions = $c->list('payload.php.extensions');
             if ($extensions === []) {
@@ -936,7 +936,7 @@ return [
         },
     ],
     [
-        'id' => 'H5', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
+        'id' => 'H2', 'category' => Category::DATABASE, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 250,
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
     ],
 
@@ -960,7 +960,7 @@ return [
         },
     ],
     [
-        'id' => 'I4', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'I2', 'category' => Category::CACHE, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),
     ],
 
@@ -970,7 +970,7 @@ return [
     [
         // Graded on how late the oldest overdue task is, not on the count: a task
         // a few minutes late is only waiting for the next visit (WP-Cron runs on traffic).
-        'id' => 'J2', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 30,
+        'id' => 'J1', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 30,
         'check' => static function (Context $c, Rule $rule) {
             $overdue = $c->number('payload.cron.overdue_events');
             if ($overdue === null) {
@@ -1064,7 +1064,7 @@ return [
     ],
     [
         // A site-wide HTTPS redirect already protects the admin login.
-        'id' => 'K6', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'K5', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) {
             $forced = $c->constant('FORCE_SSL_ADMIN');
             if ($forced === true) {
@@ -1099,13 +1099,13 @@ return [
         },
     ],
     [
-        'id' => 'L4', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'L2', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
     ],
-    // L5 (core files writable in production) is disabled: most managed hosts
+    // L3 (core files writable in production) is disabled: most managed hosts
     // keep core writable by design so WordPress can update itself.
     // [
-    //     'id' => 'L5', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
+    //     'id' => 'L3', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
     //     'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
     // ],
 
@@ -1139,7 +1139,7 @@ return [
 
     [
         // Judged on what the default role grants, so a custom or renamed role counts too.
-        'id' => 'M7', 'category' => Category::USERS, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'M3', 'category' => Category::USERS, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) {
             $registration = $c->get('payload.registration');
             if (!is_array($registration) || !is_bool($registration['open'] ?? null) || !is_array($registration['default_role_caps'] ?? null)) {

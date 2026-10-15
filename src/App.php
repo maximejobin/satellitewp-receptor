@@ -176,7 +176,7 @@ final class App
             // Reads the newest test email in the validation mailbox over IMAP.
             $registry->register(new MailProbe((array) $this->config->get('mail', [])));
 
-            // Unauthenticated wp.org lookups (F8, abandoned plugins/themes).
+            // Unauthenticated wp.org lookups (F7, abandoned plugins/themes).
             $registry->register(new WporgProbe($connectTimeout, $timeout, $userAgent));
 
             // Creates the audit only; AuditPoller fetches the report when it is finished.

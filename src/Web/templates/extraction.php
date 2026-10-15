@@ -35,8 +35,8 @@ $coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['co
 
 /**
  * State column: Active/Inactive, then Auto-update/Vulnerable/Abandoned badges.
- * "Abandoned" uses F8's default 365-day threshold, read from probe.wporg
- * directly (a rules.thresholds.F8 override is not reflected here).
+ * "Abandoned" uses F7's default 365-day threshold, read from probe.wporg
+ * directly (a rules.thresholds.F7 override is not reflected here).
  *
  * @param list<array<string, mixed>> $merged
  * @param array<string, mixed>|null $wporgEntry probe.wporg.plugins[slug] / .themes[slug]

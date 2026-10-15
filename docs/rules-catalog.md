@@ -98,7 +98,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### A8 — Connexion sécurisée imposée aux navigateurs (HSTS)
+### A7 — Connexion sécurisée imposée aux navigateurs (HSTS)
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le site demande aux navigateurs de toujours utiliser une connexion sécurisée (HSTS).
@@ -110,7 +110,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::unknown(),
 ```
 
-### A10 — Redirection HTTP vers HTTPS
+### A8 — Redirection HTTP vers HTTPS
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Les visites en HTTP sont redirigées vers HTTPS.
@@ -228,7 +228,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### B7a — Protection contre l'exécution de fichiers déguisés
+### B7 — Protection contre l'exécution de fichiers déguisés
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** L'en-tête X-Content-Type-Options empêche l'exécution de fichiers déguisés.
@@ -240,7 +240,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::unknown(),
 ```
 
-### B7b — Protection contre le détournement de clics
+### B8 — Protection contre le détournement de clics
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Votre site ne peut pas être affiché à l'intérieur d'un autre site.
@@ -260,7 +260,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### B7c — Politique de sécurité du contenu (CSP)
+### B9 — Politique de sécurité du contenu (CSP)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une politique de sécurité du contenu limite les ressources que vos pages peuvent charger.
@@ -272,7 +272,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::unknown(),
 ```
 
-### B7d — Politique de transmission de l'adresse (Referrer-Policy)
+### B10 — Politique de transmission de l'adresse (Referrer-Policy)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une Referrer-Policy limite les informations transmises aux sites externes.
@@ -284,7 +284,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::unknown(),
 ```
 
-### B7e — Accès aux fonctions sensibles du navigateur (Permissions-Policy)
+### B11 — Accès aux fonctions sensibles du navigateur (Permissions-Policy)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une Permissions-Policy restreint l'accès aux fonctions sensibles du navigateur.
@@ -296,7 +296,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::unknown(),
 ```
 
-### B9 — Version du serveur non divulguée
+### B12 — Version du serveur non divulguée
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le serveur ne divulgue pas sa version logicielle.
@@ -355,7 +355,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C5 — Nombre de redirections
+### C3 — Nombre de redirections
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2
 - **Réussite (FR) :** Redirections avant d'atteindre votre page d'accueil : {observed}, ce qui est raisonnable.
@@ -372,7 +372,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C7 — Disponibilité du site
+### C4 — Disponibilité du site
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Votre page d'accueil répond normalement (code HTTP {observed}).
@@ -389,7 +389,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C8 — Pages introuvables correctement signalées
+### C5 — Pages introuvables correctement signalées
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une adresse qui n'existe pas renvoie bien une erreur « 404 ».
@@ -406,7 +406,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C9 — Fichier robots.txt
+### C6 — Fichier robots.txt
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le fichier robots.txt, qui guide les moteurs de recherche, est présent.
@@ -427,7 +427,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C9a — Exploration du site autorisée
+### C7 — Exploration du site autorisée
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le fichier robots.txt n'empêche pas l'exploration du site.
@@ -450,7 +450,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### C10 — Plan du site
+### C8 — Plan du site
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** {observed} plans du site déclarés et accessibles.
@@ -572,7 +572,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.desktop.scores.performance'), (float) $rule->threshold),
 ```
 
-### PS1a — Performance sur mobile
+### PS2 — Performance sur mobile
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
 - **Réussite (FR) :** La note de performance Google (Lighthouse) de votre page d'accueil sur mobile est de {observed}/100.
@@ -582,7 +582,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('probe.pagespeed.mobile.scores.performance'), (float) $rule->threshold),
 ```
 
-### PS2 — Accessibilité
+### PS3 — Accessibilité
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
 - **Réussite (FR) :** La note d'accessibilité Google (Lighthouse) de votre page d'accueil est de {observed}/100.
@@ -592,7 +592,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'accessibility'), (float) $rule->threshold),
 ```
 
-### PS3 — Référencement technique
+### PS4 — Référencement technique
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 90
 - **Réussite (FR) :** La note de référencement technique Google (Lighthouse) de votre page d'accueil est de {observed}/100.
@@ -602,7 +602,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($lowestScore($c, 'seo'), (float) $rule->threshold),
 ```
 
-### PS4 — Vitesse d'affichage sur mobile
+### PS5 — Vitesse d'affichage sur mobile
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2500
 - **Réussite (FR) :** Sur mobile, le contenu principal de votre page d'accueil s'affiche en {lcp_s} s (objectif : moins de {threshold_s} s).
@@ -741,7 +741,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F7 — Compatibilité des extensions
+### F6 — Compatibilité des extensions
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Toutes les extensions sont compatibles avec les versions de PHP et de WordPress du site.
@@ -772,7 +772,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F8 — Extensions et thèmes maintenus
+### F7 — Extensions et thèmes maintenus
 
 - **Catégorie :** UPDATES · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 365
 - **Réussite (FR) :** Toutes les extensions et tous les thèmes vérifiés ont été mis à jour par leur auteur au cours des {threshold} derniers jours.
@@ -817,7 +817,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F10 — Vulnérabilités connues
+### F8 — Vulnérabilités connues
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Aucune vulnérabilité connue ne touche WordPress, vos extensions ni vos thèmes.
@@ -843,7 +843,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12a — Mises à jour de sécurité automatiques
+### F9 — Mises à jour de sécurité automatiques
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, s'installent automatiquement.
@@ -866,7 +866,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12b — Mises à jour majeures de WordPress
+### F10 — Mises à jour majeures de WordPress
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Les nouvelles versions majeures de WordPress ne s'installent pas d'elles-mêmes : elles peuvent être appliquées après vérification.
@@ -883,7 +883,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12c — Mises à jour automatiques des extensions
+### F11 — Mises à jour automatiques des extensions
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Aucune extension ne se met à jour automatiquement : chaque mise à jour peut être vérifiée avant son installation.
@@ -910,7 +910,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F13 — Extensions et thèmes inutilisés
+### F12 — Extensions et thèmes inutilisés
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Aucune extension ni aucun thème inutilisé n'est installé.
@@ -992,7 +992,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### G3 — Taille maximale des envois de fichiers
+### G2 — Taille maximale des envois de fichiers
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 50
 - **Réussite (FR) :** Les envois de fichiers peuvent atteindre {effective_mb} Mo.
@@ -1027,7 +1027,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### G4 — Nombre de champs par formulaire
+### G3 — Nombre de champs par formulaire
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 1000
 - **Réussite (FR) :** PHP accepte {observed} champs par formulaire, ce qui est suffisant.
@@ -1037,7 +1037,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
 ```
 
-### G5 — Modules PHP nécessaires
+### G4 — Modules PHP nécessaires
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Tous les modules PHP dont WordPress a besoin sont présents.
@@ -1059,7 +1059,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### G6 — Accélérateur PHP (OPcache)
+### G5 — Accélérateur PHP (OPcache)
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** L'accélérateur OPcache est actif.
@@ -1114,7 +1114,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### H5 — Données temporaires expirées
+### H2 — Données temporaires expirées
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 250
 - **Réussite (FR) :** La base de données contient {observed} données temporaires expirées, ce qui est normal.
@@ -1148,7 +1148,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### I4 — Cache objet persistant
+### I2 — Cache objet persistant
 
 - **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Un cache objet persistant (Redis ou Memcached) accélère le site.
@@ -1160,7 +1160,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ## J. Cron
 
-### J2 — Tâches planifiées exécutées à temps
+### J1 — Tâches planifiées exécutées à temps
 
 - **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 30
 - **Réussite (FR) :** Les tâches planifiées de WordPress s'exécutent à temps.
@@ -1279,7 +1279,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             : Check::isTrue($c->constant('DISALLOW_FILE_EDIT')),
 ```
 
-### K6 — Administration protégée par HTTPS
+### K5 — Administration protégée par HTTPS
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** L'accès à l'administration est forcé en HTTPS.
@@ -1324,7 +1324,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### L4 — Enregistrement des médias
+### L2 — Enregistrement des médias
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** WordPress peut enregistrer vos médias.
@@ -1372,7 +1372,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### M7 — Inscriptions publiques
+### M3 — Inscriptions publiques
 
 - **Catégorie :** USERS · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Personne ne peut se créer de compte sans y être invité.

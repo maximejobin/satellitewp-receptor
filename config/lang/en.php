@@ -217,14 +217,14 @@ return [
             'fail' => 'The server still accepts {observed}, outdated and vulnerable versions of encryption. Ask your host to disable them.',
             'pass' => 'Only modern encryption versions (TLS 1.2 and newer) are accepted.',
         ],
-        'A8' => [
+        'A7' => [
             'title' => 'Secure connection enforced in browsers (HSTS)',
             'title_success' => 'Secure connection enforced (HSTS)',
             'title_failure' => 'Secure connection not enforced (HSTS)',
             'fail' => 'The site does not tell browsers to always use a secure connection: a first visit over HTTP can be intercepted. Have the Strict-Transport-Security (HSTS) header added.',
             'pass' => 'The site tells browsers to always use a secure connection (HSTS).',
         ],
-        'A10' => [
+        'A8' => [
             'title' => 'HTTP to HTTPS redirect',
             'title_success' => 'HTTPS redirect active',
             'title_failure' => 'No HTTPS redirect',
@@ -278,42 +278,42 @@ return [
             'pass' => 'Browsers keep your images, styles and scripts for {cache_days} {cache_days|day|days}.',
             'pass_hours' => 'Browsers keep your images, styles and scripts for {cache_hours} {cache_hours|hour|hours}.',
         ],
-        'B7a' => [
+        'B7' => [
             'title' => 'Protection against disguised files',
             'title_success' => 'X-Content-Type-Options header present',
             'title_failure' => 'X-Content-Type-Options header missing',
             'fail' => 'The X-Content-Type-Options header is missing: a browser could run a disguised file as a script. Have "X-Content-Type-Options: nosniff" added.',
             'pass' => 'The X-Content-Type-Options header prevents disguised files from running.',
         ],
-        'B7b' => [
+        'B8' => [
             'title' => 'Clickjacking protection',
             'title_success' => 'Protected against clickjacking',
             'title_failure' => 'Vulnerable to clickjacking',
             'fail' => 'Your site can be shown inside another site without the visitor knowing, to trick them into clicking something else (clickjacking). Have the X-Frame-Options header or a content security policy added.',
             'pass' => 'Your site cannot be shown inside another site.',
         ],
-        'B7c' => [
+        'B9' => [
             'title' => 'Content security policy (CSP)',
             'title_success' => 'Content security policy defined',
             'title_failure' => 'No content security policy',
             'fail' => 'No content security policy (Content-Security-Policy) limits the scripts your pages can load, which worsens the impact of a code injection. It is rolled out gradually, with your developer.',
             'pass' => 'A content security policy limits the resources your pages can load.',
         ],
-        'B7d' => [
+        'B10' => [
             'title' => 'Referrer policy (Referrer-Policy)',
             'title_success' => 'Referrer-Policy set',
             'title_failure' => 'Referrer-Policy missing',
             'fail' => 'No Referrer-Policy is set: the full address of your pages can be passed to the sites you link to.',
             'pass' => 'A Referrer-Policy limits what is passed to external sites.',
         ],
-        'B7e' => [
+        'B11' => [
             'title' => 'Access to sensitive browser features (Permissions-Policy)',
             'title_success' => 'Permissions-Policy set',
             'title_failure' => 'Permissions-Policy missing',
             'fail' => 'No Permissions-Policy restricts scripts\' access to the camera, microphone or geolocation.',
             'pass' => 'A Permissions-Policy restricts access to sensitive browser features.',
         ],
-        'B9' => [
+        'B12' => [
             'title' => 'Server version not disclosed',
             'title_success' => 'Server version not disclosed',
             'title_failure' => 'Server version disclosed',
@@ -334,7 +334,7 @@ return [
             'fail' => 'No DNS CAA record states which authorities may issue a certificate for your domain. This is an optional extra protection.',
             'pass' => 'A DNS CAA record restricts which authorities may issue a certificate for your domain.',
         ],
-        'C5' => [
+        'C3' => [
             'title' => 'Number of redirects',
             'title_success' => 'Few redirects',
             'title_failure' => 'Too many redirects',
@@ -342,35 +342,35 @@ return [
             'fail_loop' => 'Reaching your home page loops through redirects: the site may be unreachable. Have the redirects fixed without delay.',
             'pass' => 'Redirects before reaching your home page: {observed}, which is reasonable.',
         ],
-        'C7' => [
+        'C4' => [
             'title' => 'Site availability',
             'title_success' => 'Site available',
             'title_failure' => 'Site unavailable',
             'fail' => 'Your home page answers with an error (HTTP code {observed}): your visitors cannot view it. Check the site without delay.',
             'pass' => 'Your home page answers normally (HTTP code {observed}).',
         ],
-        'C8' => [
+        'C5' => [
             'title' => 'Missing pages correctly reported',
             'title_success' => 'Missing pages correctly reported',
             'title_failure' => 'Missing pages not reported',
             'fail' => 'An address that does not exist shows a normal page instead of a "404" error: search engines may index empty pages. Have the site configuration fixed.',
             'pass' => 'An address that does not exist correctly returns a "404" error.',
         ],
-        'C9' => [
+        'C6' => [
             'title' => 'robots.txt file',
             'title_success' => 'robots.txt file present',
             'title_failure' => 'robots.txt file missing',
             'fail' => 'The robots.txt file, which guides search engines, is missing. Have one published that points to your sitemap.',
             'pass' => 'The robots.txt file, which guides search engines, is present.',
         ],
-        'C9a' => [
+        'C7' => [
             'title' => 'Site crawling allowed',
             'title_success' => 'Site crawling allowed',
             'title_failure' => 'Site crawling blocked',
             'fail' => 'The robots.txt file forbids search engines from crawling the whole site: it will not appear in Google. If that is not intended (staging site), remove the "Disallow: /" rule.',
             'pass' => 'The robots.txt file does not prevent the site from being crawled.',
         ],
-        'C10' => [
+        'C8' => [
             'title' => 'Sitemap',
             'title_success' => 'Sitemap declared',
             'title_failure' => 'Sitemap missing or unreachable',
@@ -425,28 +425,28 @@ return [
             'fail' => 'Your home page\'s Google performance score (Lighthouse) on desktop is {observed}/100 (target: {threshold}): a slow site loses visitors and Google ranking. Have images, caching and plugins optimized.',
             'pass' => 'Your home page\'s Google performance score (Lighthouse) on desktop is {observed}/100.',
         ],
-        'PS1a' => [
+        'PS2' => [
             'title' => 'Mobile performance',
             'title_success' => 'Good mobile performance',
             'title_failure' => 'Mobile performance to improve',
             'fail' => 'Your home page\'s Google performance score (Lighthouse) on mobile is {observed}/100 (target: {threshold}): most visitors browse on mobile and leave a slow site. Have images, caching and plugins optimized.',
             'pass' => 'Your home page\'s Google performance score (Lighthouse) on mobile is {observed}/100.',
         ],
-        'PS2' => [
+        'PS3' => [
             'title' => 'Accessibility',
             'title_success' => 'Good accessibility',
             'title_failure' => 'Accessibility to improve',
             'fail' => 'Your home page\'s Google accessibility score (Lighthouse) is {observed}/100 (target: {threshold}): some people, notably with disabilities, struggle to use the site. Have the flagged contrasts, alternative texts and labels fixed.',
             'pass' => 'Your home page\'s Google accessibility score (Lighthouse) is {observed}/100.',
         ],
-        'PS3' => [
+        'PS4' => [
             'title' => 'Technical SEO',
             'title_success' => 'Good technical SEO',
             'title_failure' => 'Technical SEO to improve',
             'fail' => 'Your home page\'s Google technical SEO score (Lighthouse) is {observed}/100 (target: {threshold}): basic elements (title, description, links) hurt your visibility. Have the flagged items fixed.',
             'pass' => 'Your home page\'s Google technical SEO score (Lighthouse) is {observed}/100.',
         ],
-        'PS4' => [
+        'PS5' => [
             'title' => 'Mobile display speed',
             'title_success' => 'Fast display on mobile',
             'title_failure' => 'Slow display on mobile',
@@ -493,7 +493,7 @@ return [
             'fail_more' => '{observed} {observed|theme has|themes have} a pending update: {names} and {more} {more|other|others}. Apply them after a backup.',
             'pass' => 'All themes are up to date.',
         ],
-        'F7' => [
+        'F6' => [
             'title' => 'Plugin compatibility',
             'title_success' => 'Plugins compatible with the server',
             'title_failure' => 'Plugins incompatible with the server',
@@ -501,7 +501,7 @@ return [
             'fail_more' => '{observed} {observed|plugin requires|plugins require} a newer PHP or WordPress version than the site has: {names} and {more} {more|other|others}. They may malfunction; update the environment or replace them.',
             'pass' => 'All plugins are compatible with the site\'s PHP and WordPress versions.',
         ],
-        'F8' => [
+        'F7' => [
             'title' => 'Maintained plugins and themes',
             'title_success' => 'No abandoned plugin or theme',
             'title_failure' => 'Potentially abandoned plugins or themes',
@@ -509,7 +509,7 @@ return [
             'fail_more' => '{observed} {observed|plugin or theme has had|plugins or themes have had} no update from their author in over {threshold} days: {names} and {more} {more|other|others}. Abandoned software no longer gets security fixes; consider replacing it.',
             'pass' => 'Every checked plugin and theme was updated by its author within the last {threshold} days.',
         ],
-        'F10' => [
+        'F8' => [
             'title' => 'Known vulnerabilities',
             'title_success' => 'No known vulnerability',
             'title_failure' => 'Known vulnerabilities detected',
@@ -517,7 +517,7 @@ return [
             'fail_more' => '{observed} known {observed|vulnerability affects|vulnerabilities affect} {components} {components|component|components} of your site: {names} and {more} {more|other|others}. These flaws are public and exploited by bots; apply the fixing updates soon.',
             'pass' => 'No known vulnerability affects WordPress, your plugins or your themes.',
         ],
-        'F12a' => [
+        'F9' => [
             'title' => 'Automatic security updates',
             'title_success' => 'Automatic security fixes enabled',
             'title_failure' => 'Automatic security fixes disabled',
@@ -526,14 +526,14 @@ return [
             'fail_file_mods' => 'File changes are locked on this site: no update can be installed from the dashboard, automatically or manually, security fixes included.',
             'pass' => 'WordPress minor updates, which carry the security fixes, install automatically.',
         ],
-        'F12b' => [
+        'F10' => [
             'title' => 'WordPress major updates',
             'title_success' => 'WordPress major updates under control',
             'title_failure' => 'WordPress major updates install automatically',
             'fail' => 'New major WordPress versions install automatically: a significant change can land unchecked and break a plugin or the theme. Have automatic major updates turned off so they are applied after checking.',
             'pass' => 'New major WordPress versions do not install on their own: they can be applied after checking.',
         ],
-        'F12c' => [
+        'F11' => [
             'title' => 'Plugin automatic updates',
             'title_success' => 'No plugin updates automatically',
             'title_failure' => 'Plugins update automatically',
@@ -541,7 +541,7 @@ return [
             'fail_more' => '{observed} {observed|plugin updates|plugins update} automatically: {names} and {more} {more|other|others}. An update installed unchecked can break the site without anyone noticing. Have these automatic updates turned off.',
             'pass' => 'No plugin updates automatically: every update can be checked before it is installed.',
         ],
-        'F13' => [
+        'F12' => [
             'title' => 'Unused plugins and themes',
             'title_success' => 'No unused plugin or theme',
             'title_failure' => 'Unused plugins or themes installed',
@@ -557,7 +557,7 @@ return [
             'pass' => 'PHP has {memory_mb} MB of memory, which is enough.',
             'pass_unlimited' => 'Memory available to PHP is not limited on this server.',
         ],
-        'G3' => [
+        'G2' => [
             'title' => 'Maximum file upload size',
             'title_success' => 'File uploads well configured',
             'title_failure' => 'File uploads misconfigured',
@@ -566,21 +566,21 @@ return [
             'pass' => 'File uploads can reach {effective_mb} MB.',
             'pass_unlimited' => 'File upload size is not limited by PHP on this server.',
         ],
-        'G4' => [
+        'G3' => [
             'title' => 'Fields per form',
             'title_success' => 'Form capacity sufficient',
             'title_failure' => 'Form capacity insufficient',
             'fail' => 'PHP accepts at most {observed} fields per form (recommended: at least {threshold}): saving menus or complex pages may silently lose data. Have the max_input_vars setting raised.',
             'pass' => 'PHP accepts {observed} fields per form, which is enough.',
         ],
-        'G5' => [
+        'G4' => [
             'title' => 'Required PHP modules',
             'title_success' => 'Required PHP modules present',
             'title_failure' => 'Required PHP modules missing',
             'fail' => 'PHP modules WordPress needs are missing ({observed}): some features (images, updates, security) may fail. Have your host install them.',
             'pass' => 'Every PHP module WordPress needs is present.',
         ],
-        'G6' => [
+        'G5' => [
             'title' => 'PHP accelerator (OPcache)',
             'title_success' => 'PHP accelerator enabled',
             'title_failure' => 'PHP accelerator disabled',
@@ -596,7 +596,7 @@ return [
             'pass' => 'Your database ({observed}) receives security fixes until {eol_date}.',
             'pass_no_date' => 'Your database ({observed}) still receives security fixes.',
         ],
-        'H5' => [
+        'H2' => [
             'title' => 'Expired temporary data',
             'title_success' => 'Little expired temporary data',
             'title_failure' => 'Expired temporary data piling up',
@@ -610,14 +610,14 @@ return [
             'fail' => 'The settings WordPress loads on every page ("autoload" options) weigh {size_kb} KB (ideally under 500 KB): every visit is slowed down. Have settings left behind by old plugins cleaned up.',
             'pass' => 'The settings WordPress loads on every page weigh {size_kb} KB, within norms.',
         ],
-        'I4' => [
+        'I2' => [
             'title' => 'Persistent object cache',
             'title_success' => 'Persistent object cache enabled',
             'title_failure' => 'No persistent object cache',
             'fail' => 'No persistent object cache (Redis or Memcached) is configured. It should be considered to speed up the site: it saves repeating the same database queries on every page.',
             'pass' => 'A persistent object cache (Redis or Memcached) speeds up the site.',
         ],
-        'J2' => [
+        'J1' => [
             'title' => 'Scheduled tasks run on time',
             'title_success' => 'Scheduled tasks up to date',
             'title_failure' => 'Scheduled tasks overdue',
@@ -656,7 +656,7 @@ return [
             'pass' => 'The code editor built into the dashboard is disabled.',
             'pass_file_mods' => 'All file changes from the dashboard are blocked (DISALLOW_FILE_MODS), which also disables the code editor.',
         ],
-        'K6' => [
+        'K5' => [
             'title' => 'Dashboard protected by HTTPS',
             'title_success' => 'Dashboard protected by HTTPS',
             'title_failure' => 'Dashboard not forced to HTTPS',
@@ -671,14 +671,14 @@ return [
             'fail' => 'Only {observed}% of disk space is left ({free_gb} GB): backups, updates and uploads may fail. Free up space or upgrade your plan.',
             'pass' => '{observed}% of disk space is left ({free_gb} GB).',
         ],
-        'L4' => [
+        'L2' => [
             'title' => 'Saving media',
             'title_success' => 'Media can be saved',
             'title_failure' => 'Media cannot be saved',
             'fail' => 'WordPress cannot write to the media folder: adding images and some updates fail. Have the folder permissions fixed.',
             'pass' => 'WordPress can save your media.',
         ],
-        'L5' => [
+        'L3' => [
             'title' => 'WordPress files write-protected',
             'title_success' => 'WordPress files write-protected',
             'title_failure' => 'WordPress files writable',
@@ -699,7 +699,7 @@ return [
             'fail' => 'An administrator account uses the "admin" login, the first one attack bots try. Replace it with a unique login.',
             'pass' => 'No administrator account uses the "admin" login.',
         ],
-        'M7' => [
+        'M3' => [
             'title' => 'Public sign-up',
             'title_success' => 'Public sign-up closed',
             'title_failure' => 'Public sign-up open',

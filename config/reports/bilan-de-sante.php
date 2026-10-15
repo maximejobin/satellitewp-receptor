@@ -82,9 +82,9 @@ return [
         // Manager's own wordpress.org cache — the site's self-report can be stale.
         'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version', 'default' => '—'],
         'wp_install_type'      => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type'],
-        // The policy the plugin resolved (constant, options, filters), as rules F12a/F12b read it.
+        // The policy the plugin resolved (constant, options, filters), as rules F9/F10 read it.
         'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.core_update', 'transform' => 'auto_update_core'],
-        'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F12a', 'F12b']],
+        'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F9', 'F10']],
 
         // Thèmes.
         'wp_theme'               => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme', 'default' => '—'],
@@ -97,7 +97,7 @@ return [
         'wp_plugins_list'         => ['type' => 'table', 'source' => 'plugins'],
         'wp_plugins_list_mu'      => ['type' => 'table', 'source' => 'mu_plugins'],
         'wp_plugins_list_dropins' => ['type' => 'table', 'source' => 'dropins'],
-        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F7', 'F8', 'F12c']],
+        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F6', 'F7', 'F11']],
 
         // Sécurité et accès.
         'vulnerabilities'       => ['type' => 'table', 'source' => 'vulnerabilities'],

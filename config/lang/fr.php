@@ -215,14 +215,14 @@ return [
             'fail' => 'Le serveur accepte encore {observed}, des versions du chiffrement obsolètes et vulnérables. Demandez à votre hébergeur de les désactiver.',
             'pass' => 'Seules les versions modernes du chiffrement (TLS 1.2 et plus récentes) sont acceptées.',
         ],
-        'A8' => [
+        'A7' => [
             'title' => 'Connexion sécurisée imposée aux navigateurs (HSTS)',
             'title_success' => 'Connexion sécurisée imposée (HSTS)',
             'title_failure' => 'Connexion sécurisée non imposée (HSTS)',
             'fail' => 'Le site ne demande pas aux navigateurs de toujours utiliser une connexion sécurisée : une première visite en HTTP peut être interceptée. Faites ajouter l\'en-tête Strict-Transport-Security (HSTS).',
             'pass' => 'Le site demande aux navigateurs de toujours utiliser une connexion sécurisée (HSTS).',
         ],
-        'A10' => [
+        'A8' => [
             'title' => 'Redirection HTTP vers HTTPS',
             'title_success' => 'Redirection vers HTTPS active',
             'title_failure' => 'Aucune redirection vers HTTPS',
@@ -276,42 +276,42 @@ return [
             'pass' => 'Les navigateurs conservent vos images, styles et scripts {cache_days} {cache_days|jour|jours}.',
             'pass_hours' => 'Les navigateurs conservent vos images, styles et scripts {cache_hours} {cache_hours|heure|heures}.',
         ],
-        'B7a' => [
+        'B7' => [
             'title' => 'Protection contre l\'exécution de fichiers déguisés',
             'title_success' => 'En-tête X-Content-Type-Options présent',
             'title_failure' => 'En-tête X-Content-Type-Options absent',
             'fail' => 'L\'en-tête X-Content-Type-Options est absent : un navigateur pourrait exécuter comme un script un fichier déguisé. Faites ajouter « X-Content-Type-Options: nosniff ».',
             'pass' => 'L\'en-tête X-Content-Type-Options empêche l\'exécution de fichiers déguisés.',
         ],
-        'B7b' => [
+        'B8' => [
             'title' => 'Protection contre le détournement de clics',
             'title_success' => 'Protégé contre le détournement de clics',
             'title_failure' => 'Vulnérable au détournement de clics',
             'fail' => 'Votre site peut être affiché à l\'intérieur d\'un autre site à l\'insu du visiteur, pour lui faire cliquer sur autre chose (détournement de clics). Faites ajouter l\'en-tête X-Frame-Options ou une politique de sécurité du contenu.',
             'pass' => 'Votre site ne peut pas être affiché à l\'intérieur d\'un autre site.',
         ],
-        'B7c' => [
+        'B9' => [
             'title' => 'Politique de sécurité du contenu (CSP)',
             'title_success' => 'Politique de sécurité du contenu définie',
             'title_failure' => 'Aucune politique de sécurité du contenu',
             'fail' => 'Aucune politique de sécurité du contenu (Content-Security-Policy) ne limite les scripts que vos pages peuvent charger, ce qui aggrave l\'impact d\'une injection de code. Elle se met en place progressivement, avec votre développeur.',
             'pass' => 'Une politique de sécurité du contenu limite les ressources que vos pages peuvent charger.',
         ],
-        'B7d' => [
+        'B10' => [
             'title' => 'Politique de transmission de l\'adresse (Referrer-Policy)',
             'title_success' => 'Referrer-Policy définie',
             'title_failure' => 'Referrer-Policy absente',
             'fail' => 'Aucune Referrer-Policy n\'est définie : l\'adresse complète de vos pages peut être transmise aux sites vers lesquels vous faites des liens.',
             'pass' => 'Une Referrer-Policy limite les informations transmises aux sites externes.',
         ],
-        'B7e' => [
+        'B11' => [
             'title' => 'Accès aux fonctions sensibles du navigateur (Permissions-Policy)',
             'title_success' => 'Permissions-Policy définie',
             'title_failure' => 'Permissions-Policy absente',
             'fail' => 'Aucune Permissions-Policy ne restreint l\'accès des scripts à la caméra, au micro ou à la géolocalisation.',
             'pass' => 'Une Permissions-Policy restreint l\'accès aux fonctions sensibles du navigateur.',
         ],
-        'B9' => [
+        'B12' => [
             'title' => 'Version du serveur non divulguée',
             'title_success' => 'Version du serveur non divulguée',
             'title_failure' => 'Version du serveur divulguée',
@@ -332,7 +332,7 @@ return [
             'fail' => 'Aucun enregistrement DNS CAA ne précise quelles autorités peuvent émettre un certificat pour votre domaine. C\'est une protection supplémentaire facultative.',
             'pass' => 'Un enregistrement DNS CAA limite les autorités pouvant émettre un certificat pour votre domaine.',
         ],
-        'C5' => [
+        'C3' => [
             'title' => 'Nombre de redirections',
             'title_success' => 'Redirections limitées',
             'title_failure' => 'Trop de redirections',
@@ -340,35 +340,35 @@ return [
             'fail_loop' => 'L\'accès à votre page d\'accueil tourne en boucle de redirections : le site peut être inaccessible. Faites corriger les redirections sans délai.',
             'pass' => 'Redirections avant d\'atteindre votre page d\'accueil : {observed}, ce qui est raisonnable.',
         ],
-        'C7' => [
+        'C4' => [
             'title' => 'Disponibilité du site',
             'title_success' => 'Site disponible',
             'title_failure' => 'Site indisponible',
             'fail' => 'Votre page d\'accueil répond par une erreur (code HTTP {observed}) : vos visiteurs ne peuvent pas la consulter. Vérifiez le site sans délai.',
             'pass' => 'Votre page d\'accueil répond normalement (code HTTP {observed}).',
         ],
-        'C8' => [
+        'C5' => [
             'title' => 'Pages introuvables correctement signalées',
             'title_success' => 'Pages introuvables correctement signalées',
             'title_failure' => 'Pages introuvables mal signalées',
             'fail' => 'Une adresse qui n\'existe pas affiche une page normale au lieu d\'une erreur « 404 » : les moteurs de recherche peuvent indexer des pages vides. Faites corriger la configuration du site.',
             'pass' => 'Une adresse qui n\'existe pas renvoie bien une erreur « 404 ».',
         ],
-        'C9' => [
+        'C6' => [
             'title' => 'Fichier robots.txt',
             'title_success' => 'Fichier robots.txt présent',
             'title_failure' => 'Fichier robots.txt absent',
             'fail' => 'Le fichier robots.txt, qui guide les moteurs de recherche, est absent. Faites-en publier un qui indique l\'adresse de votre plan du site.',
             'pass' => 'Le fichier robots.txt, qui guide les moteurs de recherche, est présent.',
         ],
-        'C9a' => [
+        'C7' => [
             'title' => 'Exploration du site autorisée',
             'title_success' => 'Exploration du site autorisée',
             'title_failure' => 'Exploration du site bloquée',
             'fail' => 'Le fichier robots.txt interdit aux moteurs de recherche d\'explorer tout le site : il n\'apparaîtra pas dans Google. Si ce n\'est pas voulu (site de test), retirez la règle « Disallow: / ».',
             'pass' => 'Le fichier robots.txt n\'empêche pas l\'exploration du site.',
         ],
-        'C10' => [
+        'C8' => [
             'title' => 'Plan du site',
             'title_success' => 'Plan du site déclaré',
             'title_failure' => 'Plan du site absent ou inaccessible',
@@ -423,28 +423,28 @@ return [
             'fail' => 'La note de performance Google (Lighthouse) de votre page d\'accueil sur ordinateur est de {observed}/100 (objectif : {threshold}) : un site lent perd des visiteurs et du classement dans Google. Faites optimiser les images, le cache et les extensions.',
             'pass' => 'La note de performance Google (Lighthouse) de votre page d\'accueil sur ordinateur est de {observed}/100.',
         ],
-        'PS1a' => [
+        'PS2' => [
             'title' => 'Performance sur mobile',
             'title_success' => 'Bonne performance sur mobile',
             'title_failure' => 'Performance à améliorer sur mobile',
             'fail' => 'La note de performance Google (Lighthouse) de votre page d\'accueil sur mobile est de {observed}/100 (objectif : {threshold}) : la majorité des visiteurs naviguent sur mobile et quittent un site lent. Faites optimiser les images, le cache et les extensions.',
             'pass' => 'La note de performance Google (Lighthouse) de votre page d\'accueil sur mobile est de {observed}/100.',
         ],
-        'PS2' => [
+        'PS3' => [
             'title' => 'Accessibilité',
             'title_success' => 'Bonne accessibilité',
             'title_failure' => 'Accessibilité à améliorer',
             'fail' => 'La note d\'accessibilité Google (Lighthouse) de votre page d\'accueil est de {observed}/100 (objectif : {threshold}) : certaines personnes, notamment en situation de handicap, ont du mal à utiliser le site. Faites corriger les contrastes, textes alternatifs et libellés signalés.',
             'pass' => 'La note d\'accessibilité Google (Lighthouse) de votre page d\'accueil est de {observed}/100.',
         ],
-        'PS3' => [
+        'PS4' => [
             'title' => 'Référencement technique',
             'title_success' => 'Bon référencement technique',
             'title_failure' => 'Référencement technique à améliorer',
             'fail' => 'La note de référencement technique Google (Lighthouse) de votre page d\'accueil est de {observed}/100 (objectif : {threshold}) : des éléments de base (titre, description, liens) nuisent à votre visibilité. Faites corriger les points signalés.',
             'pass' => 'La note de référencement technique Google (Lighthouse) de votre page d\'accueil est de {observed}/100.',
         ],
-        'PS4' => [
+        'PS5' => [
             'title' => 'Vitesse d\'affichage sur mobile',
             'title_success' => 'Affichage rapide sur mobile',
             'title_failure' => 'Affichage lent sur mobile',
@@ -491,7 +491,7 @@ return [
             'fail_more' => '{observed} {observed|thème a|thèmes ont} une mise à jour en attente : {names} et {more} {more|autre|autres}. Appliquez-les après une sauvegarde.',
             'pass' => 'Tous les thèmes sont à jour.',
         ],
-        'F7' => [
+        'F6' => [
             'title' => 'Compatibilité des extensions',
             'title_success' => 'Extensions compatibles avec le serveur',
             'title_failure' => 'Extensions incompatibles avec le serveur',
@@ -499,7 +499,7 @@ return [
             'fail_more' => '{observed} {observed|extension exige|extensions exigent} une version de PHP ou de WordPress plus récente que celle du site : {names} et {more} {more|autre|autres}. Elles risquent de mal fonctionner ; mettez l\'environnement à jour ou remplacez-les.',
             'pass' => 'Toutes les extensions sont compatibles avec les versions de PHP et de WordPress du site.',
         ],
-        'F8' => [
+        'F7' => [
             'title' => 'Extensions et thèmes maintenus',
             'title_success' => 'Aucune extension ni thème abandonné',
             'title_failure' => 'Extensions ou thèmes potentiellement abandonnés',
@@ -507,7 +507,7 @@ return [
             'fail_more' => '{observed} {observed|extension ou thème n\'a reçu|extensions ou thèmes n\'ont reçu} aucune mise à jour de leur auteur depuis plus de {threshold} jours : {names} et {more} {more|autre|autres}. Un logiciel abandonné ne reçoit plus de correctifs de sécurité ; envisagez de le remplacer.',
             'pass' => 'Toutes les extensions et tous les thèmes vérifiés ont été mis à jour par leur auteur au cours des {threshold} derniers jours.',
         ],
-        'F10' => [
+        'F8' => [
             'title' => 'Vulnérabilités connues',
             'title_success' => 'Aucune vulnérabilité connue',
             'title_failure' => 'Vulnérabilités connues détectées',
@@ -515,7 +515,7 @@ return [
             'fail_more' => '{observed} {observed|vulnérabilité connue touche|vulnérabilités connues touchent} {components} {components|composant|composants} de votre site : {names} et {more} {more|autre|autres}. Ces failles sont publiques et exploitées par des robots ; appliquez les mises à jour correctives sans tarder.',
             'pass' => 'Aucune vulnérabilité connue ne touche WordPress, vos extensions ni vos thèmes.',
         ],
-        'F12a' => [
+        'F9' => [
             'title' => 'Mises à jour de sécurité automatiques',
             'title_success' => 'Correctifs de sécurité automatiques actifs',
             'title_failure' => 'Correctifs de sécurité automatiques désactivés',
@@ -524,14 +524,14 @@ return [
             'fail_file_mods' => 'Les modifications de fichiers sont verrouillées sur ce site : aucune mise à jour ne peut s\'installer depuis l\'administration, ni automatiquement ni manuellement, y compris les correctifs de sécurité.',
             'pass' => 'Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, s\'installent automatiquement.',
         ],
-        'F12b' => [
+        'F10' => [
             'title' => 'Mises à jour majeures de WordPress',
             'title_success' => 'Mises à jour majeures de WordPress maîtrisées',
             'title_failure' => 'Mises à jour majeures de WordPress automatiques',
             'fail' => 'Les nouvelles versions majeures de WordPress s\'installent automatiquement : un changement important peut survenir sans vérification et briser une extension ou le thème. Faites désactiver les mises à jour majeures automatiques pour qu\'elles soient appliquées après vérification.',
             'pass' => 'Les nouvelles versions majeures de WordPress ne s\'installent pas d\'elles-mêmes : elles peuvent être appliquées après vérification.',
         ],
-        'F12c' => [
+        'F11' => [
             'title' => 'Mises à jour automatiques des extensions',
             'title_success' => 'Aucune extension mise à jour automatiquement',
             'title_failure' => 'Extensions mises à jour automatiquement',
@@ -539,7 +539,7 @@ return [
             'fail_more' => '{observed} {observed|extension se met|extensions se mettent} à jour automatiquement : {names} et {more} {more|autre|autres}. Une mise à jour installée sans vérification peut briser le site sans que personne ne s\'en aperçoive. Faites désactiver ces mises à jour automatiques.',
             'pass' => 'Aucune extension ne se met à jour automatiquement : chaque mise à jour peut être vérifiée avant son installation.',
         ],
-        'F13' => [
+        'F12' => [
             'title' => 'Extensions et thèmes inutilisés',
             'title_success' => 'Aucune extension ni thème inutilisé',
             'title_failure' => 'Extensions ou thèmes inutilisés installés',
@@ -555,7 +555,7 @@ return [
             'pass' => 'PHP dispose de {memory_mb} Mo de mémoire, ce qui est suffisant.',
             'pass_unlimited' => 'La mémoire disponible pour PHP n\'est pas limitée sur ce serveur.',
         ],
-        'G3' => [
+        'G2' => [
             'title' => 'Taille maximale des envois de fichiers',
             'title_success' => 'Envois de fichiers bien configurés',
             'title_failure' => 'Envois de fichiers mal configurés',
@@ -564,21 +564,21 @@ return [
             'pass' => 'Les envois de fichiers peuvent atteindre {effective_mb} Mo.',
             'pass_unlimited' => 'La taille des envois de fichiers n\'est pas limitée par PHP sur ce serveur.',
         ],
-        'G4' => [
+        'G3' => [
             'title' => 'Nombre de champs par formulaire',
             'title_success' => 'Capacité des formulaires suffisante',
             'title_failure' => 'Capacité des formulaires insuffisante',
             'fail' => 'PHP accepte au plus {observed} champs par formulaire (recommandé : au moins {threshold}) : l\'enregistrement de menus ou de pages complexes peut perdre des données sans avertissement. Faites augmenter le réglage max_input_vars.',
             'pass' => 'PHP accepte {observed} champs par formulaire, ce qui est suffisant.',
         ],
-        'G5' => [
+        'G4' => [
             'title' => 'Modules PHP nécessaires',
             'title_success' => 'Modules PHP nécessaires présents',
             'title_failure' => 'Modules PHP nécessaires manquants',
             'fail' => 'Des modules PHP dont WordPress a besoin sont absents ({observed}) : certaines fonctions (images, mises à jour, sécurité) peuvent échouer. Faites-les installer par votre hébergeur.',
             'pass' => 'Tous les modules PHP dont WordPress a besoin sont présents.',
         ],
-        'G6' => [
+        'G5' => [
             'title' => 'Accélérateur PHP (OPcache)',
             'title_success' => 'Accélérateur PHP actif',
             'title_failure' => 'Accélérateur PHP inactif',
@@ -594,7 +594,7 @@ return [
             'pass' => 'Votre base de données ({observed}) reçoit des correctifs de sécurité jusqu\'au {eol_date}.',
             'pass_no_date' => 'Votre base de données ({observed}) reçoit encore des correctifs de sécurité.',
         ],
-        'H5' => [
+        'H2' => [
             'title' => 'Données temporaires expirées',
             'title_success' => 'Peu de données temporaires expirées',
             'title_failure' => 'Données temporaires expirées accumulées',
@@ -608,14 +608,14 @@ return [
             'fail' => 'Les réglages que WordPress charge à chaque page (options « autoload ») pèsent {size_kb} Ko (idéalement moins de 500 Ko) : chaque visite en est ralentie. Faites nettoyer les réglages laissés par d\'anciennes extensions.',
             'pass' => 'Les réglages que WordPress charge à chaque page pèsent {size_kb} Ko, dans la norme.',
         ],
-        'I4' => [
+        'I2' => [
             'title' => 'Cache objet persistant',
             'title_success' => 'Cache objet persistant actif',
             'title_failure' => 'Aucun cache objet persistant',
             'fail' => 'Aucun cache objet persistant (Redis ou Memcached) n\'est configuré. Il est à considérer pour accélérer le site : il évite de refaire les mêmes requêtes à la base de données à chaque page.',
             'pass' => 'Un cache objet persistant (Redis ou Memcached) accélère le site.',
         ],
-        'J2' => [
+        'J1' => [
             'title' => 'Tâches planifiées exécutées à temps',
             'title_success' => 'Tâches planifiées à jour',
             'title_failure' => 'Tâches planifiées en retard',
@@ -654,7 +654,7 @@ return [
             'pass' => 'L\'éditeur de code intégré à l\'administration est désactivé.',
             'pass_file_mods' => 'Toute modification de fichiers depuis l\'administration est bloquée (DISALLOW_FILE_MODS), ce qui désactive aussi l\'éditeur de code.',
         ],
-        'K6' => [
+        'K5' => [
             'title' => 'Administration protégée par HTTPS',
             'title_success' => 'Administration protégée par HTTPS',
             'title_failure' => 'Administration non forcée en HTTPS',
@@ -669,14 +669,14 @@ return [
             'fail' => 'Il ne reste que {observed} % d\'espace disque ({free_gb} Go) : les sauvegardes, mises à jour et téléversements peuvent échouer. Libérez de l\'espace ou augmentez votre forfait.',
             'pass' => 'Il reste {observed} % d\'espace disque ({free_gb} Go).',
         ],
-        'L4' => [
+        'L2' => [
             'title' => 'Enregistrement des médias',
             'title_success' => 'Médias enregistrables',
             'title_failure' => 'Médias non enregistrables',
             'fail' => 'WordPress ne peut pas écrire dans le dossier des médias : l\'ajout d\'images et certaines mises à jour échouent. Faites corriger les permissions du dossier.',
             'pass' => 'WordPress peut enregistrer vos médias.',
         ],
-        'L5' => [
+        'L3' => [
             'title' => 'Fichiers de WordPress protégés en écriture',
             'title_success' => 'Fichiers de WordPress protégés en écriture',
             'title_failure' => 'Fichiers de WordPress modifiables',
@@ -697,7 +697,7 @@ return [
             'fail' => 'Un compte administrateur utilise l\'identifiant « admin », le premier que testent les robots d\'attaque. Remplacez-le par un identifiant unique.',
             'pass' => 'Aucun compte administrateur n\'utilise l\'identifiant « admin ».',
         ],
-        'M7' => [
+        'M3' => [
             'title' => 'Inscriptions publiques',
             'title_success' => 'Inscriptions publiques fermées',
             'title_failure' => 'Inscriptions publiques ouvertes',

@@ -385,7 +385,7 @@ final class HttpProbeTest extends TestCase
 
     /**
      * collect() against a site whose plain-HTTP vhost is broken but whose
-     * home_url is healthy: A10 reads the http:// chain, everything else the
+     * home_url is healthy: A8 reads the http:// chain, everything else the
      * homepage.
      */
     public function testCollectMeasuresTheHomepageNotTheHttpVhost(): void
@@ -415,7 +415,7 @@ final class HttpProbeTest extends TestCase
         $this->assertSame([], $data['exposure']['sensitive_files'], 'HTML 404 pages are never exposures');
     }
 
-    /** A dead plain-HTTP vhost answers A10 alone: it never turns the whole probe into an error. */
+    /** A dead plain-HTTP vhost answers A8 alone: it never turns the whole probe into an error. */
     public function testAFailingHttpChainIsKeptInRedirectsNotAProbeError(): void
     {
         $handler = static function (\Psr\Http\Message\RequestInterface $request): \GuzzleHttp\Promise\PromiseInterface {

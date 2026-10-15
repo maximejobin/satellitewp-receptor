@@ -136,7 +136,7 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['G1', 'G3', 'G4', 'G5', 'G6', 'I1', 'I4', 'J2', 'K1', 'K2', 'K4', 'K6', 'L1', 'L4', 'M1', 'M2', 'F1', 'F4'] as $id) {
+        foreach (['G1', 'G2', 'G3', 'G4', 'G5', 'I1', 'I2', 'J1', 'K1', 'K2', 'K4', 'K5', 'L1', 'L2', 'M1', 'M2', 'F1', 'F4'] as $id) {
             $this->assertSame(
                 Status::Pass->value,
                 $findings[$id]['status'],
@@ -150,7 +150,7 @@ final class RuleCatalogTest extends TestCase
         $payload = $this->fixtureArray('extraction-valid.json');
         $payload['constants']['WP_DEBUG']    = true;   // K1
         $payload['autoload']['total_bytes']  = 2_000_000; // I1
-        $payload['cron']['overdue_events']   = 7;      // J2
+        $payload['cron']['overdue_events']   = 7;      // J1
         $payload['cron']['overdue_minutes']  = 90;
         $payload['administrators']           = [['id' => 1, 'login' => 'admin']]; // M2
         $payload['filesystem']['disk_free_bytes'] = 1_000_000; // L1, ~1%
@@ -162,14 +162,14 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['K1', 'I1', 'J2', 'M2', 'L1'] as $id) {
+        foreach (['K1', 'I1', 'J1', 'M2', 'L1'] as $id) {
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
             // Findings are neutral: they carry the raw observed value, not prose.
             $this->assertArrayHasKey('observed', $findings[$id]);
         }
     }
 
-    /** G3: the two upload limits must match and clear the working threshold. */
+    /** G2: the two upload limits must match and clear the working threshold. */
     public function testUploadLimitsConsistencyRule(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
@@ -179,40 +179,40 @@ final class RuleCatalogTest extends TestCase
         $payload['php']['upload_max_filesize'] = '32M';
         $payload['php']['upload_max_size']     = 32 * 1048576;
         $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
-        $this->assertSame(Status::Fail->value, $findings['G3']['status']);
+        $this->assertSame(Status::Fail->value, $findings['G2']['status']);
 
         // Identical but under the 50 MB threshold — still fails.
         $payload['php']['post_max_size']       = '32M';
         $payload['php']['upload_max_filesize'] = '32M';
         $payload['php']['upload_max_size']     = 32 * 1048576;
         $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
-        $this->assertSame(Status::Fail->value, $findings['G3']['status']);
+        $this->assertSame(Status::Fail->value, $findings['G2']['status']);
 
         // Identical and at least 50 MB — passes.
         $payload['php']['post_max_size']       = '64M';
         $payload['php']['upload_max_filesize'] = '64M';
         $payload['php']['upload_max_size']     = 64 * 1048576;
         $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
-        $this->assertSame(Status::Pass->value, $findings['G3']['status']);
+        $this->assertSame(Status::Pass->value, $findings['G2']['status']);
 
         // Missing data — unknown, never a fabricated failure.
         unset($payload['php']['post_max_size']);
         $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
-        $this->assertSame(Status::Unknown->value, $findings['G3']['status']);
+        $this->assertSame(Status::Unknown->value, $findings['G2']['status']);
     }
 
-    /** G3 compares bytes, not raw ini strings, and reads post_max_size 0 as unlimited. */
+    /** G2 compares bytes, not raw ini strings, and reads post_max_size 0 as unlimited. */
     public function testUploadLimitsCompareBytesAndTreatZeroPostAsUnlimited(): void
     {
         $g3 = function (string $post, string $upload): string {
             $payload = $this->fixtureArray('extraction-valid.json');
             $payload['php']['post_max_size']       = $post;
             $payload['php']['upload_max_filesize'] = $upload;
-            $payload['php']['upload_max_size']     = 0; // never read by G3 any more
+            $payload['php']['upload_max_size']     = 0; // never read by G2 any more
 
             $findings = array_column($this->engine()->evaluate(new Context($payload))['findings'], null, 'id');
 
-            return $findings['G3']['status'];
+            return $findings['G2']['status'];
         };
 
         $this->assertSame(Status::Pass->value, $g3('64M', '64m'), 'same size, different case');
@@ -255,13 +255,13 @@ final class RuleCatalogTest extends TestCase
 
         $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
 
-        foreach (['A8', 'B7a', 'B7b', 'B7c', 'B7d', 'B7e'] as $id) {
+        foreach (['A7', 'B7', 'B8', 'B9', 'B10', 'B11'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} must not fail a non-public site");
         }
 
         $probes['http']['data']['auth']['required'] = false;
         $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
-        $this->assertSame(Status::Fail->value, $findings['B7a']['status'], 'public site with no headers still fails');
+        $this->assertSame(Status::Fail->value, $findings['B7']['status'], 'public site with no headers still fails');
     }
 
     /** "N/A" (undefined constant) reads as false, as in WordPress — (bool) "N/A" would be true. */
@@ -282,7 +282,7 @@ final class RuleCatalogTest extends TestCase
         }
 
         // Undefined DISALLOW_FILE_EDIT / FORCE_SSL_ADMIN means not hardened.
-        foreach (['K4', 'K6'] as $id) {
+        foreach (['K4', 'K5'] as $id) {
             $this->assertSame(Status::Fail->value, $findings[$id]['status'], "{$id} should fail");
         }
     }
@@ -299,7 +299,7 @@ final class RuleCatalogTest extends TestCase
             'id'
         );
 
-        foreach (['K1', 'K2', 'K4', 'K6'] as $id) {
+        foreach (['K1', 'K2', 'K4', 'K5'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} should be unknown");
         }
     }
@@ -308,11 +308,11 @@ final class RuleCatalogTest extends TestCase
     {
         $payload = $this->fixtureArray('extraction-valid.json'); // transients.expired = 14
 
-        $strict   = $this->engine(['H5' => 5])->evaluate(new Context($payload));
+        $strict   = $this->engine(['H2' => 5])->evaluate(new Context($payload));
         $findings = array_column($strict['findings'], null, 'id');
 
-        $this->assertSame(Status::Fail->value, $findings['H5']['status']);
-        $this->assertSame(5, $findings['H5']['threshold']);
+        $this->assertSame(Status::Fail->value, $findings['H2']['status']);
+        $this->assertSame(5, $findings['H2']['threshold']);
     }
 
     public function testEolRulesUseInjectedReferenceData(): void
@@ -344,8 +344,8 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame('MySQL 8.0', $findings['H1']['observed']);
     }
 
-    /** F8 flags only wp.org-hosted software idle past the threshold; premium/custom items are skipped. */
-    public function testF8FlagsOnlyAWporgHostedPluginOrThemeIdleBeyondTheThreshold(): void
+    /** F7 flags only wp.org-hosted software idle past the threshold; premium/custom items are skipped. */
+    public function testF7FlagsOnlyAWporgHostedPluginOrThemeIdleBeyondTheThreshold(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
         // Fixture: plugins woocommerce/woocommerce.php + akismet/akismet.php,
@@ -354,7 +354,7 @@ final class RuleCatalogTest extends TestCase
             $probes   = ['wporg' => ['status' => 'ok', 'data' => $wporgData]];
             $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
 
-            return $findings['F8'];
+            return $findings['F7'];
         };
 
         $this->assertSame(Status::Unknown->value, $f8([])['status'], 'the probe never ran / nothing matched');
@@ -472,7 +472,7 @@ final class RuleCatalogTest extends TestCase
         );
 
         // No probe data at all — external rules must not claim a failure.
-        foreach (['A1', 'A10', 'B1', 'C5', 'D1', 'W1'] as $id) {
+        foreach (['A1', 'A8', 'B1', 'C3', 'D1', 'W1'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], "{$id} without probes");
         }
     }

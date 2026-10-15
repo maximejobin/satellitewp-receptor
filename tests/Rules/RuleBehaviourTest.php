@@ -134,16 +134,16 @@ final class RuleBehaviourTest extends TestCase
         $http = ['auth' => ['required' => true], 'status_code' => 401, 'robots' => ['present' => false], 'soft_404' => ['checked' => true, 'is_soft_404' => false]];
         $findings = $this->evaluate($this->payload(), ['http' => $http]);
 
-        foreach (['C7', 'C8', 'C9', 'C9a', 'C10'] as $id) {
+        foreach (['C4', 'C5', 'C6', 'C7', 'C8'] as $id) {
             $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
         }
 
         // Probe data predating the auth flag only carries the bare 401.
         unset($http['auth']);
-        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => $http])['C7']['status']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => $http])['C4']['status']);
 
         $http['status_code'] = 500;
-        $this->assertSame(Status::Fail->value, $this->evaluate($this->payload(), ['http' => $http])['C7']['status']);
+        $this->assertSame(Status::Fail->value, $this->evaluate($this->payload(), ['http' => $http])['C4']['status']);
     }
 
     public function testNoClientTextFallsBackToAParenthesisedPlural(): void
@@ -193,13 +193,13 @@ final class RuleBehaviourTest extends TestCase
         ]]);
 
         $failed = $http(['present' => null, 'error' => 'cURL error 28']);
-        foreach (['C9', 'C9a'] as $id) {
+        foreach (['C6', 'C7'] as $id) {
             $this->assertSame(Status::Unknown->value, $failed[$id]['status'], $id);
         }
-        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => true])['C10']['status']);
-        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => null])['C10']['status']);
-        $this->assertSame(Status::Fail->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => false])['C10']['status']);
-        $this->assertSame(Status::Fail->value, $http(['present' => false])['C9']['status']);
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => true])['C8']['status']);
+        $this->assertSame(Status::Unknown->value, $http(['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => null])['C8']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => true, 'sitemaps' => [], 'sitemap_unverified' => false])['C8']['status']);
+        $this->assertSame(Status::Fail->value, $http(['present' => false])['C6']['status']);
     }
 
     public function testOpenRegistrationIsGradedOnWhatTheDefaultRoleCanDo(): void
@@ -208,7 +208,7 @@ final class RuleBehaviourTest extends TestCase
             $payload = $this->payload();
             $payload['registration'] = $registration;
 
-            return $this->evaluate($payload)['M7'];
+            return $this->evaluate($payload)['M3'];
         };
         $open = static fn (array $caps): array => ['open' => true, 'default_role' => 'x', 'default_role_name' => 'Rôle', 'default_role_caps' => $caps];
 
@@ -314,11 +314,11 @@ final class RuleBehaviourTest extends TestCase
     {
         $headers = ['strict-transport-security' => ' ', 'x-content-type-options' => '', 'x-frame-options' => '', 'content-security-policy' => '', 'referrer-policy' => '', 'permissions-policy' => "\t"];
         $empty   = $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $headers]]);
-        foreach (['A8', 'B7a', 'B7b', 'B7c', 'B7d', 'B7e'] as $id) {
+        foreach (['A7', 'B7', 'B8', 'B9', 'B10', 'B11'] as $id) {
             $this->assertSame(Status::Fail->value, $empty[$id]['status'], $id);
         }
 
-        $b7b = fn (array $h): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $h]])['B7b']['status'];
+        $b7b = fn (array $h): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $h]])['B8']['status'];
         $this->assertSame(Status::Fail->value, $b7b(['content-security-policy' => "default-src 'self'"]), 'a CSP without frame-ancestors does not stop framing');
         $this->assertSame(Status::Pass->value, $b7b(['content-security-policy' => "default-src 'self'; frame-ancestors 'self'"]));
         $this->assertSame(Status::Pass->value, $b7b(['x-frame-options' => 'SAMEORIGIN']));
@@ -336,15 +336,15 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Fail->value, $b6(['checked' => true, 'url' => 'https://example.com/a.css', 'status' => 200, 'max_age' => 0]));
     }
 
-    public function testA10TellsAnErrorPageFromPlainHttpTraffic(): void
+    public function testA8TellsAnErrorPageFromPlainHttpTraffic(): void
     {
-        $a10 = fn (array $redirects): array => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'redirects' => $redirects]])['A10'];
+        $a10 = fn (array $redirects): array => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'redirects' => $redirects]])['A8'];
 
         $error = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 500]], 'forces_https' => false]);
         $this->assertSame(Status::Fail->value, $error['status']);
         $this->assertSame('http_error', $error['data']['variant']);
         $this->assertStringNotContainsString('chiffrement', (string) (new Translator('fr', self::LANG))->message($error));
-        $this->assertSame('Adresse en HTTP en erreur', (new Translator('fr', self::LANG))->title('A10', 'fail', 'http_error'));
+        $this->assertSame('Adresse en HTTP en erreur', (new Translator('fr', self::LANG))->title('A8', 'fail', 'http_error'));
 
         $plain = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 200]], 'forces_https' => false]);
         $this->assertSame(Status::Fail->value, $plain['status']);
@@ -418,7 +418,7 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('insecure', $f2(['minor_update_version' => ''], ['6.8.1' => 'insecure'])['data']['variant']);
     }
 
-    public function testF10CountsAVulnerabilitySeenByBothSourcesOnce(): void
+    public function testF8CountsAVulnerabilitySeenByBothSourcesOnce(): void
     {
         $shared = ['cve_id' => 'CVE-2025-0001', 'title' => 'XSS'];
         $bv = [
@@ -432,17 +432,17 @@ final class RuleBehaviourTest extends TestCase
             'plugins' => ['items' => [['slug' => 'akismet', 'name' => 'Akismet', 'vulnerabilities' => [$shared]]]],
         ];
 
-        $f10 = $this->evaluate($this->payload(), ['blogvault' => $bv, 'wordfence' => $wf])['F10'];
+        $f10 = $this->evaluate($this->payload(), ['blogvault' => $bv, 'wordfence' => $wf])['F8'];
         $this->assertSame(Status::Fail->value, $f10['status']);
         $this->assertSame(3, $f10['observed']);
         $this->assertSame(2, $f10['data']['components']);
 
-        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload())['F10']['status']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload())['F8']['status']);
         $clean = ['vulnerabilities_total' => 0, 'core' => ['vulnerabilities' => []]];
-        $this->assertSame(Status::Pass->value, $this->evaluate($this->payload(), ['wordfence' => $clean])['F10']['status']);
+        $this->assertSame(Status::Pass->value, $this->evaluate($this->payload(), ['wordfence' => $clean])['F8']['status']);
     }
 
-    public function testF10IgnoresConfiguredVulnerabilityIds(): void
+    public function testF8IgnoresConfiguredVulnerabilityIds(): void
     {
         $wf = [
             'vulnerabilities_total' => 2,
@@ -453,22 +453,22 @@ final class RuleBehaviourTest extends TestCase
             ]]]],
         ];
 
-        $some = $this->evaluate($this->payload(), ['wordfence' => $wf], ['ignored_vulnerabilities' => ['aaaa-1111']])['F10'];
+        $some = $this->evaluate($this->payload(), ['wordfence' => $wf], ['ignored_vulnerabilities' => ['aaaa-1111']])['F8'];
         $this->assertSame(Status::Fail->value, $some['status']);
         $this->assertSame(1, $some['observed']);
 
-        $all = $this->evaluate($this->payload(), ['wordfence' => $wf], ['ignored_vulnerabilities' => ['aaaa-1111', 'bbbb-2222']])['F10'];
+        $all = $this->evaluate($this->payload(), ['wordfence' => $wf], ['ignored_vulnerabilities' => ['aaaa-1111', 'bbbb-2222']])['F8'];
         $this->assertSame(Status::Pass->value, $all['status']);
     }
 
-    public function testF12aRequiresAutomaticMinorUpdates(): void
+    public function testF9RequiresAutomaticMinorUpdates(): void
     {
         $f12a = function (array $coreUpdate, array $constants = []): array {
             $payload = $this->payload();
             $payload['core_update'] = $coreUpdate + $payload['core_update'];
             $payload['constants']   = $constants + $payload['constants'];
 
-            return $this->evaluate($payload)['F12a'];
+            return $this->evaluate($payload)['F9'];
         };
 
         $this->assertSame(Status::Pass->value, $f12a(['auto_update_minor' => true])['status']);
@@ -478,13 +478,13 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $f12a(['auto_update_minor' => null])['status'], 'the constant alone ignores the Dashboard options and filters');
     }
 
-    public function testF12bRefusesAutomaticMajorUpdates(): void
+    public function testF10RefusesAutomaticMajorUpdates(): void
     {
         $f12b = function (?bool $major): string {
             $payload = $this->payload();
             $payload['core_update']['auto_update_major'] = $major;
 
-            return $this->evaluate($payload)['F12b']['status'];
+            return $this->evaluate($payload)['F10']['status'];
         };
 
         $this->assertSame(Status::Pass->value, $f12b(false));
@@ -492,35 +492,35 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $f12b(null));
     }
 
-    public function testF12cListsPluginsThatUpdateThemselves(): void
+    public function testF11ListsPluginsThatUpdateThemselves(): void
     {
         $payload = $this->payload(); // akismet auto-updates, woocommerce doesn't
-        $fail    = $this->evaluate($payload)['F12c'];
+        $fail    = $this->evaluate($payload)['F11'];
         $this->assertSame(Status::Fail->value, $fail['status']);
         $this->assertSame(1, $fail['observed']);
         $this->assertSame('Akismet Anti-spam', $fail['data']['names']);
 
         $payload['plugins']['akismet/akismet.php']['auto_update'] = false;
-        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F12c']['status']);
+        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F11']['status']);
 
         unset($payload['plugins']['akismet/akismet.php']['auto_update']);
-        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F12c']['status'], 'a plugin release without the field cannot tell');
+        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F11']['status'], 'a plugin release without the field cannot tell');
     }
 
-    public function testF13ListsInactiveSoftwareButSparesTheParentThemeAndOneDefault(): void
+    public function testF12ListsInactiveSoftwareButSparesTheParentThemeAndOneDefault(): void
     {
         $payload = $this->payload(); // akismet inactive; storefront is the active child's parent
         $payload['themes']['twentytwentyfour']  = ['name' => 'Twenty Twenty-Four', 'slug' => 'twentytwentyfour', 'active' => false];
         $payload['themes']['twentytwentythree'] = ['name' => 'Twenty Twenty-Three', 'slug' => 'twentytwentythree', 'active' => false];
 
-        $f13 = $this->evaluate($payload)['F13'];
+        $f13 = $this->evaluate($payload)['F12'];
         $this->assertSame(Status::Fail->value, $f13['status']);
         $this->assertSame(2, $f13['observed']);
         $this->assertStringContainsString('Akismet', $f13['data']['names']);
         $this->assertStringNotContainsString('Storefront', $f13['data']['names']);
 
         $payload['is_multisite'] = true;
-        $this->assertSame(Status::NotApplicable->value, $this->evaluate($payload)['F13']['status']);
+        $this->assertSame(Status::NotApplicable->value, $this->evaluate($payload)['F12']['status']);
     }
 
     public function testLongNameListsAreTruncatedWithACount(): void
@@ -536,14 +536,14 @@ final class RuleBehaviourTest extends TestCase
         $this->assertStringContainsString('et 3 autres', (string) (new Translator('fr', self::LANG))->message($f4));
     }
 
-    public function testJ2GradesOnHowLateTheOldestTaskIs(): void
+    public function testJ1GradesOnHowLateTheOldestTaskIs(): void
     {
         $j2 = function (int $overdue, ?int $minutes): array {
             $payload = $this->payload();
             $payload['cron']['overdue_events']  = $overdue;
             $payload['cron']['overdue_minutes'] = $minutes;
 
-            return $this->evaluate($payload)['J2'];
+            return $this->evaluate($payload)['J1'];
         };
 
         $this->assertSame(Status::Pass->value, $j2(0, null)['status']);
@@ -572,13 +572,13 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['K3']['status']);
     }
 
-    public function testK6PassesWhenTheWholeSiteIsForcedToHttps(): void
+    public function testK5PassesWhenTheWholeSiteIsForcedToHttps(): void
     {
         $payload = $this->payload();
         $payload['constants']['FORCE_SSL_ADMIN'] = 'N/A';
 
-        $this->assertSame(Status::Fail->value, $this->evaluate($payload)['K6']['status']);
-        $k6 = $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => true]]])['K6'];
+        $this->assertSame(Status::Fail->value, $this->evaluate($payload)['K5']['status']);
+        $k6 = $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => true]]])['K5'];
         $this->assertSame(Status::Pass->value, $k6['status']);
         $this->assertSame('site_https', $k6['data']['variant']);
     }
@@ -591,11 +591,11 @@ final class RuleBehaviourTest extends TestCase
         }
 
         $this->assertSame(Severity::Info, $rules['K3']);
-        $this->assertSame(Severity::High, $rules['F12a']);
-        $this->assertSame(Severity::Medium, $rules['F12b']);
-        $this->assertSame(Severity::Medium, $rules['F12c']);
+        $this->assertSame(Severity::High, $rules['F9']);
+        $this->assertSame(Severity::Medium, $rules['F10']);
+        $this->assertSame(Severity::Medium, $rules['F11']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
-        foreach (['B3', 'B4', 'B5', 'B7d', 'B7e', 'C9a', 'C1', 'I4'] as $id) {
+        foreach (['B3', 'B4', 'B5', 'B10', 'B11', 'C7', 'C1', 'I2'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
         $this->assertArrayNotHasKey('X6', $rules);
@@ -617,9 +617,9 @@ final class RuleBehaviourTest extends TestCase
         ];
         $findings = $this->evaluate($this->payload(), ['pagespeed' => $pagespeed]);
 
-        $this->assertSame(Status::Fail->value, $findings['PS2']['status']);
-        $this->assertEquals(80, $findings['PS2']['observed']);
-        $this->assertSame(Status::Pass->value, $findings['PS3']['status']);
+        $this->assertSame(Status::Fail->value, $findings['PS3']['status']);
+        $this->assertEquals(80, $findings['PS3']['observed']);
+        $this->assertSame(Status::Pass->value, $findings['PS4']['status']);
     }
 
     /** @param array<string, string> $verdicts */

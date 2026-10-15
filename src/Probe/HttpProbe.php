@@ -122,7 +122,7 @@ final class HttpProbe extends AbstractProbe
         $errors             = [];
         $this->inconclusive = [];
 
-        // 1. The http:// chain answers only "does the site force HTTPS" (A10).
+        // 1. The http:// chain answers only "does the site force HTTPS" (A8).
         // Its landing URL is never reused: a plain-HTTP vhost can be broken
         // independently of the site visitors actually reach, so its failure
         // stays in redirects.error and never fails the whole probe.

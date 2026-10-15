@@ -333,7 +333,7 @@ final class ReportBuilder
 
     /**
      * Core auto-update policy from payload.core_update, as the plugin resolved
-     * it (constant, Dashboard options, filters) and rules F12a/F12b read it.
+     * it (constant, Dashboard options, filters) and rules F9/F10 read it.
      */
     private function autoUpdateCore(mixed $coreUpdate): string
     {
@@ -750,7 +750,7 @@ final class ReportBuilder
 
     /**
      * Undetermined, uncoloured, when the homepage could not be read (no http
-     * probe, failed main request, 401), where A8/B7* are unknown too.
+     * probe, failed main request, 401), where A7 and B7–B11 are unknown too.
      * A header sent with an empty value protects nothing and reads as absent.
      *
      * @param array<string, mixed> $context

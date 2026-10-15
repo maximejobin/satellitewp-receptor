@@ -78,7 +78,7 @@ final readonly class Context
      *
      * The plugin's ConstantsCollector emits the string "N/A" for a constant
      * that is not defined, and (bool) "N/A" is true — which silently turned
-     * "no hardening at all" into a green pastille on K4/K6. In WordPress an
+     * "no hardening at all" into a green pastille on K4/K5. In WordPress an
      * undefined boolean constant behaves as false, so "N/A" reads as false.
      *
      * Null is reserved for "we never received the constants at all", so a

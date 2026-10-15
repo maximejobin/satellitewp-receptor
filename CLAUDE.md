@@ -113,7 +113,7 @@ address, extractions sent from the main site only.
 optional calls need `try/catch`.
 
 **Probes (`src/Probe`).** Parsing is pure static and unit-tested offline.
-- `HttpProbe`: the redirect chain for A10 starts on `http://host/`; every
+- `HttpProbe`: the redirect chain for A8 starts on `http://host/`; every
   other check (status, headers, exposure, soft-404, assets, robots,
   compression, protocols) targets `home_url` (fallback `site_url`). A plain-HTTP
   vhost can be broken independently of the real site. Redirects are followed
@@ -178,19 +178,26 @@ optional calls need `try/catch`.
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
 
-**Rules (`src/Rules`, `config/rules.php`).** 76 active rules. Ids follow the
-plugin's `.github/validations-techniques.txt` letters; `W*` domain, `PS*`
-Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F10` merged
+**Rules (`src/Rules`, `config/rules.php`).** 76 active rules. Ids are the
+category letter of the plugin's `.github/validations-techniques.txt` plus a
+number, sequential within each letter, no suffixes (that file's numbers are
+the original plan, not the current ids); a retired rule's successors are
+renumbered and `rules:reevaluate` rewrites stored findings. `W*` domain, `PS*`
+Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F8` merged
 vulnerabilities (BlogVault + Wordfence by CVE, `Rules\VulnerabilityMerge`,
-also used by the UI), `F12a/b/c` auto-updates (minor on, core major off, no
+also used by the UI), `F9`/`F10`/`F11` auto-updates (minor on, core major off, no
 plugin auto-updating; read from the policy the plugin resolves — constant,
-Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes. `H4` (table overhead) is retired: InnoDB `DATA_FREE` is preallocated, reusable space that OPTIMIZE does not reclaim. `N2` (trash) and `N4` (drafts) are retired: WordPress empties the trash itself and drafts are editorial, not site health; `J3` (scheduled task count) too: a count says nothing. `M7` grades open sign-up on the default role's capabilities (`payload.registration`), never its name.
-`F9` is reserved. Thresholds overridable via `rules.thresholds.<id>`.
+Dashboard options, filters — never from the constant alone), `F12` inactive
+plugins/themes, `M3` open sign-up graded on the default role's capabilities
+(`payload.registration`), never its name. Retired, don't re-add: table
+overhead (InnoDB `DATA_FREE` is preallocated, reusable space), trash and
+draft counts (WordPress empties the trash; drafts are editorial), scheduled
+task count. Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges
   lists by position) is a list of Wordfence ids (a BlogVault id also works,
   case-insensitive). Applied at evaluation/display time only (`App::ignoredVulnerabilities()`
-  → F10 via `reference('ignored_vulnerabilities')`, `ReportBuilder`, extraction
+  → F8 via `reference('ignored_vulnerabilities')`, `ReportBuilder`, extraction
   page), never at probe time, so `probes/*.json` stay raw; run
   `rules:reevaluate` to re-score. `/data/vulnerabilities` still lists them, with
   an "Ignored" tag, an ignored-only/hide filter and a banner.

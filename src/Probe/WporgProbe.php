@@ -17,7 +17,7 @@ use Throwable;
 
 /**
  * wordpress.org's "last updated" date for each installed plugin/theme (rule
- * F8). A probe rather than a SoftwareCatalog field: it is a live external
+ * F7). A probe rather than a SoftwareCatalog field: it is a live external
  * fact snapshotted with this extraction. The target is wp.org's fixed API,
  * never derived from the payload, so no SSRF guard is needed.
  */
