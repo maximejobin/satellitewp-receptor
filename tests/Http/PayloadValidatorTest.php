@@ -111,6 +111,51 @@ final class PayloadValidatorTest extends TestCase
         $this->validator->validate($body, 'bogus', self::SITE);
     }
 
+    public function testPluginReportedExtrasAreAccepted(): void
+    {
+        $payload                         = $this->fixtureArray('extraction-valid.json');
+        $payload['mail']['test']         = ['recipient' => 'admin@example.com', 'sent' => false, 'error' => 'Could not instantiate mail function.', 'sent_at_gmt' => '2026-01-01 12:00:00'];
+        $payload['plugin_errors']        = [['time_gmt' => '2026-01-01 12:00:00', 'context' => 'collector:php', 'message' => 'RuntimeException: denied', 'where' => 'satellitewp/src/x.php:12']];
+        $payload['connectors']['polylang'] = [
+            'provider' => 'polylang', 'label' => 'Polylang Pro', 'version' => '3.6', 'default_language' => 'fr',
+            'active_languages' => ['fr', 'en'], 'locales' => ['fr' => 'fr_CA', 'en' => 'en_CA'],
+            'language_urls' => ['fr' => 'https://example.com/', 'en' => 'https://example.com/en/'],
+            'url_mode' => 'directory', 'browser_redirect' => null,
+            'details' => ['hide_default_in_url' => true, 'synchronized' => ['taxonomies'], 'addons' => ['woocommerce' => '2.0'], 'empty' => []],
+            'error' => '',
+        ];
+
+        $result = $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+        $this->assertSame('fpm-fcgi', $result['php']['sapi']);
+    }
+
+    /** @return array<string, array{0: callable(array<string, mixed>): array<string, mixed>, 1: string}> */
+    public static function badPluginExtras(): array
+    {
+        return [
+            'mail test sent as a string'   => [static fn (array $p) => ['mail' => ['test' => ['sent' => 'yes']] + $p['mail']] + $p, 'mail.test'],
+            'mail test as a list'          => [static fn (array $p) => ['mail' => ['test' => ['x']] + $p['mail']] + $p, 'mail.test'],
+            'plugin errors as an object'   => [static fn (array $p) => ['plugin_errors' => ['a' => ['message' => 'm']]] + $p, 'plugin_errors'],
+            'plugin error message too long' => [static fn (array $p) => ['plugin_errors' => [['message' => str_repeat('x', 1_025)]]] + $p, 'plugin_errors'],
+            'too many plugin errors'       => [static fn (array $p) => ['plugin_errors' => array_fill(0, 101, ['message' => 'm'])] + $p, 'plugin_errors'],
+            'sapi not a string'            => [static fn (array $p) => ['php' => ['sapi' => 1] + $p['php']] + $p, 'php.sapi'],
+            'nested connector details'     => [static fn (array $p) => ['connectors' => ['wpml' => ['details' => ['addons' => ['a' => ['b' => '1']]]]]] + $p, 'details'],
+            'connector details as a list'  => [static fn (array $p) => ['connectors' => ['wpml' => ['details' => ['x']]]] + $p, 'details'],
+            'connector error not a string' => [static fn (array $p) => ['connectors' => ['wpml' => ['error' => ['x']]]] + $p, 'error'],
+        ];
+    }
+
+    /** @param callable(array<string, mixed>): array<string, mixed> $patch */
+    #[DataProvider('badPluginExtras')]
+    public function testMalformedPluginExtrasAreRefused(callable $patch, string $where): void
+    {
+        $payload = $patch($this->fixtureArray('extraction-valid.json'));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($where);
+        $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+    }
+
     public function testPartialExtractionIsAccepted(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');

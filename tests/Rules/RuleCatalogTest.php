@@ -293,7 +293,8 @@ final class RuleCatalogTest extends TestCase
     public function testMissingConstantsBlockStaysUnknown(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
-        unset($payload['constants']);
+        // K2 reads the runtime display_errors first: without it, it falls back on the constants.
+        unset($payload['constants'], $payload['php']['display_errors']);
 
         $findings = array_column(
             $this->engine()->evaluate(new Context($payload))['findings'],

@@ -233,6 +233,47 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('hacked', $this->evaluate($this->payload(), ['blogvault' => ['scanner' => ['status' => 'hacked', 'unresolved_count' => 0]]])['BV1']['data']['variant']);
     }
 
+        public function testRuntimeRulesAreUnknownWhenTheExtractionCameFromWpCli(): void
+    {
+        $payload = $this->payload();
+        $payload['php']['sapi'] = 'cli';
+        $findings = $this->evaluate($payload);
+
+        foreach (['F3', 'F6', 'G1', 'G2', 'G3', 'G4', 'G5', 'K2', 'L2'] as $id) {
+            $this->assertSame(Status::Unknown->value, $findings[$id]['status'], $id);
+        }
+        $this->assertNotSame(Status::Unknown->value, $findings['F4']['status'], 'not a runtime reading');
+    }
+
+    public function testRuntimeFlagsDecideErrorsShownAndOpcache(): void
+    {
+        $payload = $this->payload();
+        $payload['php']['extensions'][]    = 'Zend OPcache';
+        $payload['php']['display_errors']  = true;
+        $payload['php']['opcache_enabled'] = false;
+        $findings = $this->evaluate($payload);
+        $this->assertSame(Status::Fail->value, $findings['K2']['status'], 'php.ini shows errors even with WP_DEBUG off');
+        $this->assertSame(Status::Fail->value, $findings['G5']['status'], 'loaded but disabled');
+
+        unset($payload['php']['display_errors'], $payload['php']['opcache_enabled']);
+        $findings = $this->evaluate($payload);
+        $this->assertSame(Status::Unknown->value, $findings['K2']['status']);
+        $this->assertSame(Status::Unknown->value, $findings['G5']['status']);
+    }
+
+    public function testNoUpdateIsOnlyProvenByARecentCheck(): void
+    {
+        $payload = $this->payload();
+        $payload['plugins'] = array_map(static fn (array $p): array => ['new_version' => ''] + $p, $payload['plugins']);
+        $payload['plugin_updates_checked_at'] = (int) strtotime($payload['generated_at'] . ' UTC') - 3600;
+        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F4']['status']);
+
+        $payload['plugin_updates_checked_at'] -= 3 * 86400;
+        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F4']['status'], 'a week-old check proves nothing');
+        unset($payload['plugin_updates_checked_at']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F4']['status']);
+    }
+
         public function testAvailabilityIsJudgedOnTheHomepageStatus(): void
     {
         $c3 = fn (int $code): string => $this->evaluate($this->payload(), ['http' => ['status_code' => $code, 'auth' => ['required' => false]]])['C3']['status'];
@@ -275,6 +316,8 @@ final class RuleBehaviourTest extends TestCase
         foreach ([['manage_options', 'edit_posts'], ['edit_others_posts'], ['publish_posts', 'edit_posts']] as $caps) {
             $this->assertSame('red', $m3($open($caps))['pastille'], implode(',', $caps));
         }
+        $this->assertSame('red', $m3($open(['promote_users']))['pastille'], 'a role that can promote users hands over the site');
+        $this->assertSame('red', $m3($open(['unfiltered_html']))['pastille']);
         $this->assertSame('orange', $m3($open(['edit_posts']))['pastille']);
         $this->assertSame('blue', $m3($open([]))['pastille']);
         $this->assertSame('Rôle', $m3($open([]))['data']['role']);

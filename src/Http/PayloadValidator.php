@@ -252,6 +252,9 @@ final class PayloadValidator
                 $this->optType($php, $key, 'php', 'scalar', self::MAX_SHORT);
             }
             $this->optType($php, 'upload_max_size', 'php', 'int');
+            $this->optStr($php, 'sapi', 'php', self::MAX_SHORT);
+            $this->optType($php, 'display_errors', 'php', 'bool');
+            $this->optType($php, 'opcache_enabled', 'php', 'bool');
         });
 
         $this->section($p, 'database', function (array $db): void {
@@ -305,6 +308,23 @@ final class PayloadValidator
             foreach (['sendmail_path', 'smtp', 'smtp_port', 'validation_hash'] as $key) {
                 $this->optStr($m, $key, 'mail', 1_024);
             }
+            // Present only when the extraction was sent with an email test.
+            $this->section($m, 'test', function (array $test): void {
+                $this->optStr($test, 'recipient', 'mail.test', self::MAX_SHORT);
+                $this->optType($test, 'sent', 'mail.test', 'bool');
+                $this->optStr($test, 'error', 'mail.test', 1_024);
+                $this->optStr($test, 'sent_at_gmt', 'mail.test', 32);
+            }, 'mail');
+        });
+
+        // The plugin's last failures (it keeps 20), caught so the site kept working.
+        $this->list($p, 'plugin_errors', '', 100, function ($error, int $i): void {
+            $this->object($error, "plugin_errors.{$i}", function (array $e, string $path): void {
+                $this->optStr($e, 'time_gmt', $path, 32);
+                $this->optStr($e, 'context', $path, self::MAX_SHORT);
+                $this->optStr($e, 'message', $path, 1_024);
+                $this->optStr($e, 'where', $path, self::MAX_SHORT);
+            });
         });
 
         $this->section($p, 'core_update', function (array $cu): void {
@@ -340,6 +360,9 @@ final class PayloadValidator
             $this->list($p, $key, '', self::MAX_PLUGINS, fn ($v, $i) => $this->scalar($v, "{$key}.{$i}", 'string', self::MAX_KEY));
         }
         $this->list($p, 'theme_updates', '', self::MAX_THEMES, fn ($v, $i) => $this->scalar($v, "theme_updates.{$i}", 'string', self::MAX_KEY));
+        foreach (['plugin_updates_checked_at', 'theme_updates_checked_at'] as $key) {
+            $this->optType($p, $key, '', '?int');
+        }
 
         foreach (['mu_plugins' => self::MAX_MU_PLUGINS, 'dropin_plugins' => self::MAX_DROPINS] as $key => $max) {
             $this->map($p, $key, '', $max, function ($headers, $file) use ($key): void {
@@ -427,6 +450,21 @@ final class PayloadValidator
                 }
                 $this->optType($c, 'hpos_enabled', $path, 'bool');
                 $this->optType($c, 'browser_redirect', $path, '?bool');
+                $this->optStr($c, 'error', $path, 1_024);
+                // Plugin-specific settings: flags, names, or a small list or map of them (add-ons => version).
+                $this->map($c, 'details', $path, 64, function ($value, string $key) use ($path): void {
+                    $at = "{$path}.details.{$key}";
+                    if (!is_array($value)) {
+                        $this->scalar($value, $at, '?scalar', self::MAX_SHORT);
+                        return;
+                    }
+                    if (count($value) > 100) {
+                        throw new InvalidArgumentException(self::label($at) . ': too many entries (max 100)');
+                    }
+                    foreach ($value as $k => $item) {
+                        $this->scalar($item, "{$at}.{$k}", 'scalar', self::MAX_SHORT);
+                    }
+                });
                 foreach (['active_gateways', 'active_languages'] as $field) {
                     $this->list($c, $field, $path, 1_000, fn ($v, $i) => $this->scalar($v, "{$path}.{$field}.{$i}", 'string', self::MAX_SHORT));
                 }

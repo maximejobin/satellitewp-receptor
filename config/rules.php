@@ -85,6 +85,15 @@ $debugLogExposed = static function (Context $c) use ($homepageReadable): ?bool {
 $dnsKnown = static fn (Context $c, string $field): bool => $c->probeRan('dns')
     && $c->get("probe.dns.{$field}") !== null;
 
+// "No update available" holds only if WordPress asked wordpress.org shortly
+// before the extraction (it checks twice a day while WP-Cron runs).
+$updatesCheckedRecently = static function (Context $c, string $field): bool {
+    $checked   = $c->number("payload.{$field}");
+    $generated = strtotime((string) $c->string('payload.generated_at') . ' UTC');
+
+    return $checked !== null && $generated !== false && $generated - $checked <= 48 * 3600;
+};
+
 // SPF/DKIM/DMARC verdicts come from the receiving server's own check of the
 // site's test email. Unknown when no message was found or the receiver hit a
 // transient error; anything else that is not "pass" is a failure.
@@ -586,7 +595,7 @@ return [
         },
     ],
     [
-        'id' => 'F3', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'F3', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High, 'web_runtime' => true,
         'check' => static function (Context $c) {
             $eol     = $c->reference('eol');
             $version = $c->string('payload.php.version');
@@ -605,14 +614,14 @@ return [
     ],
     [
         'id' => 'F4', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) use ($nameList) {
+        'check' => static function (Context $c) use ($nameList, $updatesCheckedRecently) {
             $plugins = $c->list('payload.plugins');
             if ($plugins === []) {
                 return Check::unknown();
             }
             $outdated = array_values(array_filter($plugins, static fn ($p): bool => is_array($p) && !empty($p['new_version'])));
             if ($outdated === []) {
-                return Check::pass(0);
+                return $updatesCheckedRecently($c, 'plugin_updates_checked_at') ? Check::pass(0) : Check::unknown();
             }
 
             return Check::fail(count($outdated), $nameList(array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated)));
@@ -620,21 +629,21 @@ return [
     ],
     [
         'id' => 'F5', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
-        'check' => static function (Context $c) use ($nameList) {
+        'check' => static function (Context $c) use ($nameList, $updatesCheckedRecently) {
             $themes = $c->list('payload.themes');
             if ($themes === []) {
                 return Check::unknown();
             }
             $outdated = array_values(array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version'])));
             if ($outdated === []) {
-                return Check::pass(0);
+                return $updatesCheckedRecently($c, 'theme_updates_checked_at') ? Check::pass(0) : Check::unknown();
             }
 
             return Check::fail(count($outdated), $nameList(array_map(static fn (array $t): string => (string) ($t['name'] ?? '?'), $outdated)));
         },
     ],
     [
-        'id' => 'F6', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'F6', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High, 'web_runtime' => true,
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
             $php     = $c->string('payload.php.version');
@@ -828,7 +837,7 @@ return [
     //  G. PHP & SERVER                                            [DATA]
     // ===================================================================
     [
-        'id' => 'G1', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'G1', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'web_runtime' => true,
         'check' => static function (Context $c) {
             $bytes = $c->bytes('payload.php.memory_limit');
             if ($bytes === null) {
@@ -851,7 +860,7 @@ return [
         // post_max_size bounds the whole request, so it must be at least
         // upload_max_filesize (larger is PHP's own advice); the smaller of the
         // two must clear a working size. post_max_size 0 means unlimited.
-        'id' => 'G2', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50,
+        'id' => 'G2', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 50, 'web_runtime' => true,
         'check' => static function (Context $c, Rule $rule) {
             $postRaw   = $c->string('payload.php.post_max_size');
             $uploadRaw = $c->string('payload.php.upload_max_filesize');
@@ -880,11 +889,11 @@ return [
         },
     ],
     [
-        'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 1000,
+        'id' => 'G3', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 1000, 'web_runtime' => true,
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
     ],
     [
-        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'G4', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'web_runtime' => true,
         'check' => static function (Context $c) {
             $extensions = $c->list('payload.php.extensions');
             if ($extensions === []) {
@@ -900,16 +909,19 @@ return [
         },
     ],
     [
-        'id' => 'G5', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'G5', 'category' => Category::PHP, 'source' => 'DATA', 'severity' => Severity::Medium, 'web_runtime' => true,
         'check' => static function (Context $c) {
             $extensions = $c->list('payload.php.extensions');
             if ($extensions === []) {
                 return Check::unknown();
             }
             $present = array_map('strtolower', array_map('strval', $extensions));
+            if (!in_array('zend opcache', $present, true) && !in_array('opcache', $present, true)) {
+                return Check::fail(false);
+            }
 
-            return in_array('zend opcache', $present, true) || in_array('opcache', $present, true)
-                ? Check::pass(true) : Check::fail(false);
+            // Loaded is not enabled: opcache.enable=0 leaves the extension idle.
+            return Check::isTrue($c->bool('payload.php.opcache_enabled'));
         },
     ],
 
@@ -1042,14 +1054,17 @@ return [
         },
     ],
     [
-        'id' => 'K2', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High,
+        'id' => 'K2', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::High, 'web_runtime' => true,
         'check' => static function (Context $c) {
-            $debug = $c->constant('WP_DEBUG');
-            if ($debug === null) {
-                return Check::unknown();
+            // The PHP setting as the site runs it, after WordPress applied WP_DEBUG_DISPLAY.
+            $shown = $c->bool('payload.php.display_errors');
+            if ($shown !== null) {
+                return Check::isFalse($shown);
             }
-
-            return $debug === false ? Check::pass(false) : Check::isFalse($c->constant('WP_DEBUG_DISPLAY'));
+            // Without it, only debug mode with display on proves a failure; php.ini decides otherwise.
+            return $c->constant('WP_DEBUG') === true && $c->constant('WP_DEBUG_DISPLAY') === true
+                ? Check::fail(true)
+                : Check::unknown();
         },
     ],
     [
@@ -1122,7 +1137,7 @@ return [
         },
     ],
     [
-        'id' => 'L2', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'L2', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium, 'web_runtime' => true,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
     ],
 
@@ -1171,7 +1186,10 @@ return [
             if ($role === '') {
                 return Check::unknown();
             }
-            if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
+            // Content rights, and the ones that hand over the site: users, code, raw HTML.
+            $privileged = ['manage_options', 'edit_others_posts', 'publish_posts', 'promote_users', 'edit_users', 'create_users',
+                'install_plugins', 'activate_plugins', 'unfiltered_html', 'edit_theme_options'];
+            if (array_intersect($privileged, $caps) !== []) {
                 return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
             }
             if (in_array('edit_posts', $caps, true)) {

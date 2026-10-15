@@ -52,7 +52,10 @@ final class RuleEngine
     private function evaluateRule(Rule $rule, Context $context): Finding
     {
         try {
-            $result = ($rule->check)($context, $rule);
+            // `wp swp send` reports the command-line PHP, which can differ from the site's.
+            $result = $rule->webRuntime && $context->string('payload.php.sapi') === 'cli'
+                ? new CheckResult(Status::Unknown, null, [])
+                : ($rule->check)($context, $rule);
         } catch (Throwable $e) {
             // The failure detail is neutral data, not prose.
             $result = new CheckResult(Status::Unknown, null, ['error' => $e->getMessage()]);

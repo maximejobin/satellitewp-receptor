@@ -635,7 +635,7 @@ return [
             'title' => 'Erreurs cachées aux visiteurs',
             'title_success' => 'Erreurs cachées aux visiteurs',
             'title_failure' => 'Erreurs affichées aux visiteurs',
-            'fail' => 'Les erreurs PHP s\'affichent directement sur vos pages (WP_DEBUG_DISPLAY) : vos visiteurs voient des messages techniques qui renseignent aussi les attaquants. Désactivez cet affichage.',
+            'fail' => 'Les erreurs PHP s\'affichent directement sur vos pages : vos visiteurs voient des messages techniques qui renseignent aussi les attaquants. Faites désactiver cet affichage (WP_DEBUG_DISPLAY ou le réglage PHP display_errors).',
             'pass' => 'Les erreurs PHP ne s\'affichent pas à vos visiteurs.',
         ],
         'K3' => [

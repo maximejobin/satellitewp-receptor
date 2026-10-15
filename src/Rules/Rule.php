@@ -23,6 +23,8 @@ final readonly class Rule
         public Closure $check,
         public mixed $threshold = null,
         public bool $clientAction = false,
+        // Reads the PHP serving the site: unknown when the extraction came from WP-CLI.
+        public bool $webRuntime = false,
     ) {
     }
 
@@ -56,6 +58,7 @@ final readonly class Rule
             check: $definition['check'],
             threshold: $thresholdOverride ?? ($definition['threshold'] ?? null),
             clientAction: (bool) ($definition['client_action'] ?? false),
+            webRuntime: (bool) ($definition['web_runtime'] ?? false),
         );
     }
 }

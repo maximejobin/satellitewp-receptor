@@ -704,14 +704,14 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** {observed} extensions ont une mise à jour en attente : {names}. Les mises à jour corrigent souvent des failles de sécurité ; appliquez-les après une sauvegarde.
 
 ```php
-        'check' => static function (Context $c) use ($nameList) {
+        'check' => static function (Context $c) use ($nameList, $updatesCheckedRecently) {
             $plugins = $c->list('payload.plugins');
             if ($plugins === []) {
                 return Check::unknown();
             }
             $outdated = array_values(array_filter($plugins, static fn ($p): bool => is_array($p) && !empty($p['new_version'])));
             if ($outdated === []) {
-                return Check::pass(0);
+                return $updatesCheckedRecently($c, 'plugin_updates_checked_at') ? Check::pass(0) : Check::unknown();
             }
 
             return Check::fail(count($outdated), $nameList(array_map(static fn (array $p): string => (string) ($p['name'] ?? '?'), $outdated)));
@@ -725,14 +725,14 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** {observed} thèmes ont une mise à jour en attente : {names}. Appliquez-les après une sauvegarde.
 
 ```php
-        'check' => static function (Context $c) use ($nameList) {
+        'check' => static function (Context $c) use ($nameList, $updatesCheckedRecently) {
             $themes = $c->list('payload.themes');
             if ($themes === []) {
                 return Check::unknown();
             }
             $outdated = array_values(array_filter($themes, static fn ($t): bool => is_array($t) && !empty($t['new_version'])));
             if ($outdated === []) {
-                return Check::pass(0);
+                return $updatesCheckedRecently($c, 'theme_updates_checked_at') ? Check::pass(0) : Check::unknown();
             }
 
             return Check::fail(count($outdated), $nameList(array_map(static fn (array $t): string => (string) ($t['name'] ?? '?'), $outdated)));
@@ -1071,9 +1071,12 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $present = array_map('strtolower', array_map('strval', $extensions));
+            if (!in_array('zend opcache', $present, true) && !in_array('opcache', $present, true)) {
+                return Check::fail(false);
+            }
 
-            return in_array('zend opcache', $present, true) || in_array('opcache', $present, true)
-                ? Check::pass(true) : Check::fail(false);
+            // Loaded is not enabled: opcache.enable=0 leaves the extension idle.
+            return Check::isTrue($c->bool('payload.php.opcache_enabled'));
         },
 ```
 
@@ -1236,16 +1239,19 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 - **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Les erreurs PHP ne s'affichent pas à vos visiteurs.
-- **Échec (FR) :** Les erreurs PHP s'affichent directement sur vos pages (WP_DEBUG_DISPLAY) : vos visiteurs voient des messages techniques qui renseignent aussi les attaquants. Désactivez cet affichage.
+- **Échec (FR) :** Les erreurs PHP s'affichent directement sur vos pages : vos visiteurs voient des messages techniques qui renseignent aussi les attaquants. Faites désactiver cet affichage (WP_DEBUG_DISPLAY ou le réglage PHP display_errors).
 
 ```php
         'check' => static function (Context $c) {
-            $debug = $c->constant('WP_DEBUG');
-            if ($debug === null) {
-                return Check::unknown();
+            // The PHP setting as the site runs it, after WordPress applied WP_DEBUG_DISPLAY.
+            $shown = $c->bool('payload.php.display_errors');
+            if ($shown !== null) {
+                return Check::isFalse($shown);
             }
-
-            return $debug === false ? Check::pass(false) : Check::isFalse($c->constant('WP_DEBUG_DISPLAY'));
+            // Without it, only debug mode with display on proves a failure; php.ini decides otherwise.
+            return $c->constant('WP_DEBUG') === true && $c->constant('WP_DEBUG_DISPLAY') === true
+                ? Check::fail(true)
+                : Check::unknown();
         },
 ```
 
@@ -1406,7 +1412,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if ($role === '') {
                 return Check::unknown();
             }
-            if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
+            // Content rights, and the ones that hand over the site: users, code, raw HTML.
+            $privileged = ['manage_options', 'edit_others_posts', 'publish_posts', 'promote_users', 'edit_users', 'create_users',
+                'install_plugins', 'activate_plugins', 'unfiltered_html', 'edit_theme_options'];
+            if (array_intersect($privileged, $caps) !== []) {
                 return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
             }
             if (in_array('edit_posts', $caps, true)) {

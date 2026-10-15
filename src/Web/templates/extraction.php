@@ -482,8 +482,15 @@ if ($status !== 'done'):
                     $mailFound ? (($mail[$key] ?? null) === 'pass' ? 'ok' : (($mail[$key] ?? null) === null ? null : 'warn')) : null,
                     'probe.mail.' . $key
                 );
+                // The test email the analyst asked for when sending this extraction:
+                // whether WordPress handed it to the mailer, not whether it arrived.
+                $mailTest = is_array($p['mail']['test'] ?? null) ? $p['mail']['test'] : null;
+                $mailSent = $mailTest === null ? null : (($mailTest['sent'] ?? false) === true
+                    ? trim('sent to ' . ($mailTest['recipient'] ?? '') . ' · ' . ($mailTest['sent_at_gmt'] ?? '') . ' UTC', ' ·')
+                    : trim('failed: ' . ($mailTest['error'] ?? ''), ' :'));
                 echo section('Email',
-                    $mailVerdict('SPF (test email)', 'spf')
+                    field('Test email (WordPress)', $mailSent, $mailTest === null ? null : (($mailTest['sent'] ?? false) === true ? 'ok' : 'error'), 'payload.mail.test')
+                    . $mailVerdict('SPF (test email)', 'spf')
                     . $mailVerdict('DKIM (test email)', 'dkim')
                     . $mailVerdict('DMARC (test email)', 'dmarc')
                     . field('Test email received', $mailFound ? trim(($mail['received_at'] ?? '') . ' · ' . ($mail['from_domain'] ?? ''), ' ·') : null, null, 'probe.mail.received_at')
@@ -507,11 +514,15 @@ if ($status !== 'done'):
                 <?php echo section('Server',
                     field('Web server', $p['web_server'] ?? null, null, 'payload.web_server')
                     . field('Operating system', $p['os_name'] ?? ($p['os_family'] ?? null), null, 'payload.os_name')
+                    . field('Kernel', $p['kernel_release'] ?? null, null, 'payload.kernel_release')
+                    . field('Architecture', $p['architecture'] ?? null, null, 'payload.architecture')
                     . field_raw('IP address (A / AAAA)', fmt_list($dns['a'] ?? []) . ' · ' . (($dns['aaaa'] ?? []) ? fmt_list($dns['aaaa']) : '<span class="val-muted">no IPv6</span>'), null, 'probe.dns.a')
                     . field('Document root', $p['document_root'] ?? null, null, 'payload.document_root')
                     . field_raw('Free disk', is_numeric($p['filesystem']['disk_free_bytes'] ?? null) ? fmt_bytes($p['filesystem']['disk_free_bytes']) . ' / ' . fmt_bytes($p['filesystem']['disk_total_bytes'] ?? null) : '', null, 'payload.filesystem.disk_free_bytes')
                     . field('Max execution time', ($p['php']['max_execution_time'] ?? null) !== null ? $p['php']['max_execution_time'] . ' s' : null, null, 'payload.php.max_execution_time')
                     . field('Post / upload max', ($p['php']['post_max_size'] ?? '?') . ' / ' . ($p['php']['upload_max_filesize'] ?? '?'), null, 'payload.php.post_max_size')
+                    // The smaller of the two above: what WordPress' media uploader allows.
+                    . field_raw('Upload limit (WordPress)', fmt_bytes($p['php']['upload_max_size'] ?? null), null, 'payload.php.upload_max_size')
                     . field('Max input vars', $p['php']['max_input_vars'] ?? null, null, 'payload.php.max_input_vars')
                 ); ?>
                 <?php
@@ -531,7 +542,15 @@ if ($status !== 'done'):
                 ); ?>
                 <?php echo section('PHP',
                     field_raw('Version', e($p['php']['version'] ?? '') . eol_annotation($eolPhp, $t), null, 'payload.php.version')
+                    // Sent with `wp swp send`, every PHP figure is the command line's, not the web server's.
+                    . field('Collected by', match ($p['php']['sapi'] ?? null) {
+                        null    => null,
+                        'cli'   => 'cli — WP-CLI: limits and extensions may differ from the web server\'s',
+                        default => $p['php']['sapi'],
+                    }, ($p['php']['sapi'] ?? null) === 'cli' ? 'warn' : null, 'payload.php.sapi')
                     . field('Memory limit', $p['php']['memory_limit'] ?? null, null, 'payload.php.memory_limit')
+                    . field('Errors shown to visitors', $p['php']['display_errors'] ?? null, ($p['php']['display_errors'] ?? null) === true ? 'error' : null, 'payload.php.display_errors')
+                    . field('OPcache enabled', $p['php']['opcache_enabled'] ?? null, ($p['php']['opcache_enabled'] ?? null) === false ? 'warn' : null, 'payload.php.opcache_enabled')
                     // Never truncated: the hidden tail is what an analyst needs to check.
                     . field_raw('Extensions (' . count($p['php']['extensions'] ?? []) . ')', fmt_list($p['php']['extensions'] ?? [], PHP_INT_MAX), null, 'payload.php.extensions')
                     . field_raw('Disabled functions (' . count($p['php']['disable_functions'] ?? []) . ')', fmt_list($p['php']['disable_functions'] ?? [], PHP_INT_MAX), null, 'payload.php.disable_functions')
@@ -583,12 +602,21 @@ if ($status !== 'done'):
             <div class="cards cards-full">
                 <?php
                 $isMultisite = ($p['is_multisite'] ?? false) === true;
+                $offset   = $p['timezone_offset'] ?? null;
+                $timezone = ($p['timezone_string'] ?? '') !== '' ? $p['timezone_string']
+                    // A site set to a UTC offset rather than a city has no timezone_string.
+                    : (is_numeric($offset) ? 'UTC' . ($offset >= 0 ? '+' : '−') . rtrim(rtrim(number_format(abs((float) $offset), 2, '.', ''), '0'), '.') : null);
+                $coreOffer = (string) ($p['core_update']['available_version'] ?? '');
                 echo section('Core & settings',
-                    field_raw('Version', e($p['wp_version'] ?? '') . eol_annotation($eolWp, $t), null, 'payload.wp_version')
+                    field('Site title', $p['site_title'] ?? null, null, 'payload.site_title')
+                    . field_raw('Version', e($p['wp_version'] ?? '') . eol_annotation($eolWp, $t), null, 'payload.wp_version')
                     // wordpress.org's stable-check omits some point releases: those stay empty.
                     . field_raw('Status', is_string($wpVersions[(string) ($p['wp_version'] ?? '')] ?? null)
                         ? wp_version_status_badge(WordPressVersions::status($wpVersions[(string) $p['wp_version']]))
                         : '', null, 'reference.wordpress_versions')
+                    // WordPress' own offer: "upgrade" when a newer release is available, "latest" otherwise.
+                    . field('Update offered', $coreOffer !== '' && $coreOffer !== ($p['wp_version'] ?? '') ? $coreOffer : (($p['core_update']['status'] ?? '') === 'latest' ? 'none (latest)' : null),
+                        $coreOffer !== '' && $coreOffer !== ($p['wp_version'] ?? '') ? 'warn' : null, 'payload.core_update.available_version')
                     . field('WP_AUTO_UPDATE_CORE', $p['core_update']['auto_update_core'] ?? null, null, 'payload.core_update.auto_update_core')
                     . field('Auto-update minor releases', $p['core_update']['auto_update_minor'] ?? null, null, 'payload.core_update.auto_update_minor')
                     . field('Auto-update major releases', $p['core_update']['auto_update_major'] ?? null, null, 'payload.core_update.auto_update_major')
@@ -598,18 +626,29 @@ if ($status !== 'done'):
                         . field_raw('Sites status', fmt_status_tally($p['multisite_sites_status'] ?? []), null, 'payload.multisite_sites_status') : '')
                     . field('Active theme', $p['active_theme'] ?? null, null, 'payload.active_theme')
                     . field('Language', $p['site_locale'] ?? null, null, 'payload.site_locale')
-                    . field('Timezone', $p['timezone_string'] ?? null, null, 'payload.timezone_string')
+                    . field('Timezone', $timezone, null, ($p['timezone_string'] ?? '') !== '' ? 'payload.timezone_string' : 'payload.timezone_offset')
                     . field('Admin email', $p['website_administrator_email'] ?? null, null, 'payload.website_administrator_email')
+                    . field_raw('Admin URL', link_or_text($p['admin_url'] ?? null, (string) ($p['admin_url'] ?? ''), true), null, 'payload.admin_url')
+                    . field('Configured for HTTPS', $p['is_ssl'] ?? null, ($p['is_ssl'] ?? null) === false ? 'warn' : null, 'payload.is_ssl')
                     . field('Permalinks', $p['permalink_structure'] ?? null, null, 'payload.permalink_structure')
                 ); ?>
                 <?php echo section('Cron',
                     field('WP-Cron', ($p['cron']['disabled'] ?? false) ? 'disabled' : 'enabled', null, 'payload.cron.disabled')
                     . field('Overdue events', $p['cron']['overdue_events'] ?? null, ($p['cron']['overdue_events'] ?? 0) > 0 ? 'warn' : 'ok', 'payload.cron.overdue_events')
+                    . field('Most overdue', match (true) {
+                        !is_int($p['cron']['overdue_minutes'] ?? null) => null,
+                        $p['cron']['overdue_minutes'] < 120            => $p['cron']['overdue_minutes'] . ' min',
+                        $p['cron']['overdue_minutes'] < 2_880          => intdiv($p['cron']['overdue_minutes'], 60) . ' h',
+                        default                                        => number_format(intdiv($p['cron']['overdue_minutes'], 1_440)) . ' days',
+                    }, null, 'payload.cron.overdue_minutes')
                     . field('Scheduled events', $p['cron']['scheduled_events'] ?? null, null, 'payload.cron.scheduled_events')
+                    . field('Distinct hooks', $p['cron']['distinct_hooks'] ?? null, null, 'payload.cron.distinct_hooks')
+                    . field('Next event (UTC)', $p['cron']['next_event_gmt'] ?? null, null, 'payload.cron.next_event_gmt')
                 ); ?>
                 <?php echo section('Cache',
                     field_raw('Autoload', fmt_bytes($p['autoload']['total_bytes'] ?? null) . ' <span class="val-muted">(' . e($p['autoload']['count'] ?? '?') . ' options)</span>', null, 'payload.autoload.total_bytes')
                     . field('Object cache', ($p['object_cache']['external'] ?? false) ? 'external' : 'none', ($p['object_cache']['external'] ?? false) ? 'ok' : 'warn', 'payload.object_cache.external')
+                    . field('Object cache drop-in', ($p['object_cache']['dropin'] ?? null) === null ? null : (($p['object_cache']['dropin'] ?? false) ? 'present' : 'absent'), null, 'payload.object_cache.dropin')
                     . field('Page cache drop-in', ($p['object_cache']['page_cache'] ?? false) ? 'present' : 'absent', null, 'payload.object_cache.page_cache')
                 ); ?>
                 <?php
@@ -618,8 +657,30 @@ if ($status !== 'done'):
                     $constRows .= field_raw($row['name'], e($row['display']), $row['flagged'] ? 'error' : null, 'payload.constants.' . $row['name']);
                 }
                 echo section('Constants', $constRows ?: field('constants', null), class: 'card-full');
+
+                // The plugin's own failures, caught so the site kept working: its last
+                // 20, older ones included — collector_errors (above) are this extraction's.
+                $pluginErrors = is_array($p['plugin_errors'] ?? null) ? array_values(array_filter($p['plugin_errors'], 'is_array')) : [];
+                echo section('SatelliteWP plugin',
+                    field('Extractor version', $p['extractor_version'] ?? null, null, 'payload.extractor_version')
+                    . field('Built on the site (UTC)', $p['generated_at'] ?? null, null, 'payload.generated_at')
+                    . field_raw('Recent plugin errors (' . count($pluginErrors) . ')', fmt_lines(array_map(
+                        static fn (array $pe): string => trim(($pe['time_gmt'] ?? '') . ' · ' . ($pe['context'] ?? '') . ' — ' . ($pe['message'] ?? '') . (($pe['where'] ?? '') !== '' ? ' (' . $pe['where'] . ')' : ''), ' ·—'),
+                        $pluginErrors
+                    )), $pluginErrors !== [] ? 'warn' : null, 'payload.plugin_errors')
+                , class: 'card-full');
                 ?>
             </div>
+            <?php
+            $autoloadTop = is_array($p['autoload']['top'] ?? null) ? array_values(array_filter($p['autoload']['top'], 'is_array')) : [];
+            if ($autoloadTop !== []): ?>
+                <h4 style="font-size:.9rem;margin:.9rem 0 .3rem" class="muted">Largest autoloaded options</h4>
+                <table><thead><tr><th>Option</th><th>Size</th></tr></thead><tbody>
+                <?php foreach (array_slice($autoloadTop, 0, 10) as $opt): ?>
+                    <tr><td class="mono"><?= e($opt['name'] ?? '?') ?></td><td class="num"><?= fmt_bytes($opt['bytes'] ?? null) ?></td></tr>
+                <?php endforeach; ?>
+                </tbody></table>
+            <?php endif; ?>
         </div>
 
         <div class="xt-subsection">
@@ -639,7 +700,10 @@ if ($status !== 'done'):
             if ($plugins !== []): ?>
                 <h4 style="font-size:.9rem;margin:0 0 .3rem" class="muted">Plugins — <?= count($plugins) ?> installed,
                     <?= count(array_filter($plugins, static fn ($x) => !empty($x['active']))) ?> active,
-                    <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update</h4>
+                    <?= count(array_filter($plugins, static fn ($x) => !empty($x['new_version']))) ?> with update<?php
+                    // "No update" is only as fresh as WordPress's last check with wordpress.org.
+                    if (is_int($p['plugin_updates_checked_at'] ?? null)): ?>
+                    · updates checked <?= e(gmdate('Y-m-d H:i', $p['plugin_updates_checked_at'])) ?> UTC<?php endif; ?></h4>
                 <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($plugins as $file => $pl):
                     $slug   = SoftwareCatalog::normalizeSlug('plugin', $str($pl['slug'] ?? null) ?? '');
@@ -665,7 +729,9 @@ if ($status !== 'done'):
                 </tbody></table>
             <?php endif; ?>
             <?php if ($themes !== []): ?>
-                <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed</h4>
+                <h4 style="font-size:.9rem;margin:1rem 0 .3rem" class="muted">Themes — <?= count($themes) ?> installed<?php
+                    if (is_int($p['theme_updates_checked_at'] ?? null)): ?>
+                    · updates checked <?= e(gmdate('Y-m-d H:i', $p['theme_updates_checked_at'])) ?> UTC<?php endif; ?></h4>
                 <table><thead><tr><th>Name</th><th>Version</th><th>Requires</th><th>Template</th><th>State</th><th>Licence</th></tr></thead><tbody>
                 <?php foreach ($orderThemes($themes) as $file => $th):
                     $slug   = SoftwareCatalog::normalizeSlug('theme', $str($th['slug'] ?? null) ?? '');
@@ -747,16 +813,51 @@ if ($status !== 'done'):
                     . field('Comments', wp_count($p['comments_count'] ?? null, 'approved', 'total_comments'), null, 'payload.comments_count')
                 ); ?>
                 <?php
-                $ml = \SatelliteWP\Manager\Web\Multilingual::fromPayload($p);
-                if ($ml !== null) {
-                    $src = 'payload.connectors.' . $ml['plugin'];
-                    echo section('Languages (' . $ml['label'] . ')',
-                        field('Default language', $ml['default_language'], null, $src . '.default_language')
-                        . field('Current language', $ml['current_language'], null, $src . '.current_language')
-                        . field_raw('Active languages', fmt_list($ml['active_languages']), null, $src . '.active_languages')
-                        . field($ml['label'] . ' version', $ml['version'], null, $src . '.version')
+                $multilinguals = \SatelliteWP\Manager\Web\Multilingual::all($p);
+                // Plugin-specific settings, by the connector's key; any other key shows as sent.
+                $mlDetailLabels = [
+                    'setup_complete'      => 'Setup wizard completed',
+                    'hide_default_in_url' => 'Default language without URL prefix',
+                    'media_translated'    => 'Media translated',
+                    'synchronized'        => 'Synchronized between translations',
+                    'machine_translation' => 'Machine translation',
+                    'translation_engine'  => 'Translation engine',
+                    'addons'              => 'Add-ons',
+                ];
+                $mlValue = static function (mixed $value): string {
+                    if (!is_array($value)) {
+                        return e(is_bool($value) ? ($value ? 'yes' : 'no') : (string) $value);
+                    }
+                    // A map is name => version (add-ons), a list is plain names.
+                    $lines = array_is_list($value)
+                        ? array_map('strval', array_filter($value, 'is_scalar'))
+                        : array_map(static fn ($k, $v): string => $k . (is_scalar($v) && (string) $v !== '' ? ' ' . $v : ''), array_keys($value), $value);
+
+                    return fmt_lines($lines);
+                };
+                foreach ($multilinguals as $ml) {
+                    $src       = 'payload.connectors.' . $ml['plugin'];
+                    $languages = array_map(
+                        static fn (string $code): string => trim($code . ' · ' . ($ml['locales'][$code] ?? '') . ' · ' . ($ml['language_urls'][$code] ?? ''), ' ·'),
+                        $ml['active_languages']
                     );
-                } else {
+                    $detailRows = '';
+                    foreach ($ml['details'] as $key => $value) {
+                        $detailRows .= field_raw($mlDetailLabels[$key] ?? (string) $key, $mlValue($value),
+                            $key === 'setup_complete' && $value === false ? 'warn' : null, $src . '.details.' . $key);
+                    }
+                    echo section('Languages (' . $ml['label'] . ')',
+                        ($ml['error'] !== '' ? field('Could not be read', $ml['error'], 'error', $src . '.error') : '')
+                        . field('Version', $ml['version'], null, $src . '.version')
+                        . field('Default language', $ml['default_language'], null, $src . '.default_language')
+                        . field_raw('Active languages', fmt_lines($languages), null, $src . '.active_languages')
+                        . field('Language in URLs', $ml['url_mode'], null, $src . '.url_mode')
+                        . field('Redirects by browser language', $ml['browser_redirect'], null, $src . '.browser_redirect')
+                        . $detailRows
+                        , count($multilinguals) > 1 ? '<span class="badge badge-warn">' . count($multilinguals) . ' multilingual plugins active</span>' : ''
+                    );
+                }
+                if ($multilinguals === []) {
                     echo '<div class="card"><h3>Languages</h3><div style="padding:1rem 1.1rem"><div class="pending-note">No multilingual plugin (WPML, Polylang, TranslatePress) detected on this site.</div></div></div>';
                 }
                 ?>

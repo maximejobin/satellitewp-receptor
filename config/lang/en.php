@@ -637,7 +637,7 @@ return [
             'title' => 'Errors hidden from visitors',
             'title_success' => 'Errors hidden from visitors',
             'title_failure' => 'Errors shown to visitors',
-            'fail' => 'PHP errors show directly on your pages (WP_DEBUG_DISPLAY): your visitors see technical messages that also inform attackers. Turn this display off.',
+            'fail' => 'PHP errors show directly on your pages: your visitors see technical messages that also inform attackers. Have this display turned off (WP_DEBUG_DISPLAY or the PHP display_errors setting).',
             'pass' => 'PHP errors are not shown to your visitors.',
         ],
         'K3' => [

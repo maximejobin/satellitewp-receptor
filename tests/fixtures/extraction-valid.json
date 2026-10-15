@@ -28,6 +28,7 @@
     "architecture": "x86_64",
     "php": {
         "version": "8.3.11",
+        "sapi": "fpm-fcgi",
         "extensions": ["curl", "gd", "imagick", "mbstring", "openssl", "zip"],
         "disable_functions": [],
         "max_execution_time": "300",
@@ -35,7 +36,9 @@
         "post_max_size": "64M",
         "upload_max_filesize": "64M",
         "memory_limit": "256M",
-        "upload_max_size": 67108864
+        "upload_max_size": 67108864,
+        "display_errors": false,
+        "opcache_enabled": true
     },
     "database_type": "mysql",
     "database_version": "8.0.36",
@@ -168,6 +171,8 @@
     },
     "plugin_updates": ["woocommerce/woocommerce.php"],
     "theme_updates": [],
+    "plugin_updates_checked_at": 1784714400,
+    "theme_updates_checked_at": 1784714400,
     "active_theme": "storefront-child",
     "themes": {
         "storefront": {

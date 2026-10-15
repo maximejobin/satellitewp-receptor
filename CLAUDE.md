@@ -201,7 +201,13 @@ also used by the UI), `F9`/`F10`/`F11` auto-updates (minor on, core major off, n
 plugin auto-updating; read from the policy the plugin resolves — constant,
 Dashboard options, filters — never from the constant alone), `F12` inactive
 plugins/themes, `M3` open sign-up graded on the default role's capabilities
-(`payload.registration`), never its name. Retired, don't re-add: table
+(`payload.registration`), never its name; content rights and the ones that
+hand over the site (users, plugins, raw HTML, theme options) are red. Rules
+flagged `web_runtime` (F3, F6, G1–G5, K2, L2) read the PHP serving the site:
+the engine makes them unknown when `payload.php.sapi` is `cli` (`wp swp send`).
+K2 reads the runtime `php.display_errors`, G5 `php.opcache_enabled`; F4/F5
+pass only when WordPress checked wordpress.org within 48 h of the extraction
+(`plugin_updates_checked_at`, `theme_updates_checked_at`). Retired, don't re-add: table
 overhead (InnoDB `DATA_FREE` is preallocated, reusable space), trash and
 draft counts (WordPress empties the trash; drafts are editorial), scheduled
 task count, the DNS CAA record, core files writable (managed hosts keep core writable so WordPress can update itself). Thresholds overridable via `rules.thresholds.<id>`.
