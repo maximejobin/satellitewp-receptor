@@ -127,6 +127,38 @@ $nameList = static function (array $names, int $max = 10): array {
     return $more > 0 ? $data + ['more' => $more, 'variant' => 'more'] : $data;
 };
 
+// F7/F13: wp.org "last updated" per plugin or theme. Only software hosted on
+// wp.org is checked; premium/custom items or ones the run couldn't fetch are skipped.
+$abandoned = static function (Context $c, Rule $rule, string $type) use ($nameList): CheckResult {
+    if (!$c->probeRan('wporg')) {
+        return Check::unknown();
+    }
+    $wporgData = (array) $c->get("probe.wporg.{$type}s", []);
+    $cutoff    = time() - ((int) $rule->threshold) * 86400;
+    $checked   = 0;
+    $stale     = [];
+    foreach ($c->list("payload.{$type}s") as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $slug  = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
+        $entry = $wporgData[$slug] ?? null;
+        if (!is_array($entry) || empty($entry['on_wporg']) || empty($entry['last_updated'])) {
+            continue;
+        }
+        $checked++;
+        $updatedAt = strtotime((string) $entry['last_updated']);
+        if ($updatedAt !== false && $updatedAt < $cutoff) {
+            $stale[] = (string) ($item['name'] ?? $slug);
+        }
+    }
+    if ($checked === 0) {
+        return Check::unknown();
+    }
+
+    return $stale === [] ? Check::pass(0) : Check::fail(count($stale), $nameList($stale));
+};
+
 // Lighthouse accessibility/SEO audits don't depend on the device: score on the lower of the two.
 $lowestScore = static function (Context $c, string $metric): ?float {
     $scores = array_filter(
@@ -671,42 +703,7 @@ return [
         // Only speaks to software hosted on wp.org: premium/custom items
         // (on_wporg false) or ones this run couldn't fetch are skipped.
         'id' => 'F7', 'category' => Category::UPDATES, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 365,
-        'check' => static function (Context $c, Rule $rule) use ($nameList) {
-            if (!$c->probeRan('wporg')) {
-                return Check::unknown();
-            }
-            $wporgPlugins = (array) $c->get('probe.wporg.plugins', []);
-            $wporgThemes  = (array) $c->get('probe.wporg.themes', []);
-            $cutoff       = time() - ((int) $rule->threshold) * 86400;
-            $checked      = 0;
-            $abandoned    = [];
-
-            $scan = static function (array $items, string $type, array $wporgData) use (&$checked, &$abandoned, $cutoff): void {
-                foreach ($items as $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $slug  = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
-                    $entry = $wporgData[$slug] ?? null;
-                    if (!is_array($entry) || empty($entry['on_wporg']) || empty($entry['last_updated'])) {
-                        continue;
-                    }
-                    $checked++;
-                    $updatedAt = strtotime((string) $entry['last_updated']);
-                    if ($updatedAt !== false && $updatedAt < $cutoff) {
-                        $abandoned[] = (string) ($item['name'] ?? $slug);
-                    }
-                }
-            };
-            $scan($c->list('payload.plugins'), 'plugin', $wporgPlugins);
-            $scan($c->list('payload.themes'), 'theme', $wporgThemes);
-
-            if ($checked === 0) {
-                return Check::unknown();
-            }
-
-            return $abandoned === [] ? Check::pass(0) : Check::fail(count($abandoned), $nameList($abandoned));
-        },
+        'check' => static fn (Context $c, Rule $rule) => $abandoned($c, $rule, 'plugin'),
     ],
     [
         // Counted once per vulnerability across both detectors, matched by CVE.
@@ -783,13 +780,11 @@ return [
         },
     ],
     [
-        // Inactive code stays reachable on disk. Exempt: the active theme's
-        // parent, and one default theme WordPress falls back to.
-        'id' => 'F12', 'category' => Category::SECURITY, 'source' => 'DATA', 'severity' => Severity::Medium,
+        // Inactive code stays reachable on disk.
+        'id' => 'F12', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
-            $themes  = $c->list('payload.themes');
-            if ($plugins === [] && $themes === []) {
+            if ($plugins === []) {
                 return Check::unknown();
             }
             // Per-site activation can't tell whether another network site uses it.
@@ -804,6 +799,26 @@ return [
                 }
             }
 
+            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
+        },
+    ],
+    [
+        'id' => 'F13', 'category' => Category::UPDATES, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 365,
+        'check' => static fn (Context $c, Rule $rule) => $abandoned($c, $rule, 'theme'),
+    ],
+    [
+        // Exempt: the active theme's parent, and one default (Twenty…) theme,
+        // which WordPress switches to when the active theme breaks.
+        'id' => 'F14', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) use ($nameList) {
+            $themes = $c->list('payload.themes');
+            if ($themes === []) {
+                return Check::unknown();
+            }
+            if ($c->bool('payload.is_multisite') === true) {
+                return Check::na();
+            }
+
             $required = [];
             foreach ($themes as $slug => $theme) {
                 if (is_array($theme) && !empty($theme['active'])) {
@@ -812,8 +827,9 @@ return [
                     $required[] = (string) ($theme['parent_slug'] ?? '');
                 }
             }
-            $keepsDefault = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
+            $hasFallback = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
 
+            $unused = [];
             foreach ($themes as $slug => $theme) {
                 if (!is_array($theme) || !empty($theme['active'])) {
                     continue;
@@ -822,14 +838,18 @@ return [
                 if (in_array($themeSlug, $required, true)) {
                     continue;
                 }
-                if (!$keepsDefault && str_starts_with($themeSlug, 'twenty')) {
-                    $keepsDefault = true; // the one fallback theme worth keeping
+                if (!$hasFallback && str_starts_with($themeSlug, 'twenty')) {
+                    $hasFallback = true;
                     continue;
                 }
                 $unused[] = (string) ($theme['name'] ?? $themeSlug);
             }
 
-            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
+            if ($unused !== []) {
+                return Check::fail(count($unused), $nameList($unused));
+            }
+
+            return $hasFallback ? Check::pass(0) : Check::fail(0, ['variant' => 'no_fallback']);
         },
     ],
 

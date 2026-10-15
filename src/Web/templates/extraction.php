@@ -35,8 +35,8 @@ $coreVulns = merge_vulnerabilities($bv['core']['vulnerabilities'] ?? [], $wf['co
 
 /**
  * State column: Active/Inactive, then Auto-update/Vulnerable/Abandoned badges.
- * "Abandoned" uses F7's default 365-day threshold, read from probe.wporg
- * directly (a rules.thresholds.F7 override is not reflected here).
+ * "Abandoned" uses F7/F13's default 365-day threshold, read from probe.wporg
+ * directly (a rules.thresholds override is not reflected here).
  *
  * @param list<array<string, mixed>> $merged
  * @param array<string, mixed>|null $wporgEntry probe.wporg.plugins[slug] / .themes[slug]
@@ -580,11 +580,11 @@ if ($status !== 'done'):
             $tables = $p['database']['tables'] ?? [];
             if (is_array($tables) && $tables !== []): ?>
                 <h4 style="font-size:.9rem;margin:.9rem 0 .3rem" class="muted">Largest tables</h4>
-                <table><thead><tr><th>Table</th><th>Rows</th><th>Size</th><th>Overhead</th></tr></thead><tbody>
+                <table><thead><tr><th>Table</th><th>Rows</th><th>Size</th></tr></thead><tbody>
                 <?php usort($tables, static fn ($a, $b) => ($b['size_bytes'] ?? 0) <=> ($a['size_bytes'] ?? 0));
                 foreach (array_slice($tables, 0, 10) as $tb): ?>
                     <tr><td class="mono"><?= e($tb['name'] ?? '?') ?></td><td class="num"><?= e($tb['row_count'] ?? '') ?></td>
-                        <td class="num"><?= fmt_bytes($tb['size_bytes'] ?? null) ?></td><td class="num"><?= fmt_bytes($tb['overhead_bytes'] ?? 0) ?></td></tr>
+                        <td class="num"><?= fmt_bytes($tb['size_bytes'] ?? null) ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>

@@ -614,20 +614,36 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['F11']['status'], 'a plugin release without the field cannot tell');
     }
 
-    public function testF12ListsInactiveSoftwareButSparesTheParentThemeAndOneDefault(): void
+    public function testF12ListsInactivePlugins(): void
     {
-        $payload = $this->payload(); // akismet inactive; storefront is the active child's parent
-        $payload['themes']['twentytwentyfour']  = ['name' => 'Twenty Twenty-Four', 'slug' => 'twentytwentyfour', 'active' => false];
-        $payload['themes']['twentytwentythree'] = ['name' => 'Twenty Twenty-Three', 'slug' => 'twentytwentythree', 'active' => false];
+        $payload = $this->payload(); // akismet inactive
 
         $f12 = $this->evaluate($payload)['F12'];
         $this->assertSame(Status::Fail->value, $f12['status']);
-        $this->assertSame(2, $f12['observed']);
+        $this->assertSame(1, $f12['observed']);
         $this->assertStringContainsString('Akismet', $f12['data']['names']);
-        $this->assertStringNotContainsString('Storefront', $f12['data']['names']);
 
         $payload['is_multisite'] = true;
         $this->assertSame(Status::NotApplicable->value, $this->evaluate($payload)['F12']['status']);
+    }
+
+    public function testF14SparesTheParentThemeAndOneDefaultAndWantsAFallback(): void
+    {
+        $payload = $this->payload(); // storefront is the active child's parent
+        $this->assertSame('no_fallback', $this->evaluate($payload)['F14']['data']['variant'] ?? null, 'no Twenty… theme to fall back on');
+        $this->assertSame(Status::Fail->value, $this->evaluate($payload)['F14']['status']);
+
+        $payload['themes']['twentytwentyfour'] = ['name' => 'Twenty Twenty-Four', 'slug' => 'twentytwentyfour', 'active' => false];
+        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F14']['status'], 'one default theme is the fallback');
+
+        $payload['themes']['twentytwentythree'] = ['name' => 'Twenty Twenty-Three', 'slug' => 'twentytwentythree', 'active' => false];
+        $f14 = $this->evaluate($payload)['F14'];
+        $this->assertSame(Status::Fail->value, $f14['status']);
+        $this->assertSame(1, $f14['observed']);
+        $this->assertSame('Twenty Twenty-Three', $f14['data']['names']);
+
+        $payload['is_multisite'] = true;
+        $this->assertSame(Status::NotApplicable->value, $this->evaluate($payload)['F14']['status']);
     }
 
     public function testLongNameListsAreTruncatedWithACount(): void
@@ -716,7 +732,7 @@ final class RuleBehaviourTest extends TestCase
             'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12',
             'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'D1', 'D2', 'D3', 'D4', 'W1',
             'PS1', 'PS2', 'PS3', 'PS4', 'PS5',
-            'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+            'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'F13', 'F14',
             'G1', 'G2', 'G3', 'G4', 'G5', 'H1', 'H2', 'I1', 'I2', 'J1',
             'K1', 'K2', 'K3', 'K4', 'K5', 'L1', 'L2', 'M1', 'M2', 'M3', 'BV1',
             'X1', 'X2', 'X3', 'X4', 'X5',

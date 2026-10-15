@@ -91,13 +91,13 @@ return [
         'wp_theme_version'       => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme_version'],
         'wp_parent_theme'        => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme_parent', 'default_label' => 'none_m'],
         'wp_themes_list'         => ['type' => 'table', 'source' => 'themes'],
-        'wp_themes_observations' => ['type' => 'observations', 'ids' => ['F5']],
+        'wp_themes_observations' => ['type' => 'observations', 'ids' => ['F5', 'F13', 'F14']],
 
         // Extensions.
         'wp_plugins_list'         => ['type' => 'table', 'source' => 'plugins'],
         'wp_plugins_list_mu'      => ['type' => 'table', 'source' => 'mu_plugins'],
         'wp_plugins_list_dropins' => ['type' => 'table', 'source' => 'dropins'],
-        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F6', 'F7', 'F11']],
+        'wp_plugins_observations' => ['type' => 'observations', 'ids' => ['F4', 'F6', 'F7', 'F11', 'F12']],
 
         // Sécurité et accès.
         'vulnerabilities'       => ['type' => 'table', 'source' => 'vulnerabilities'],
@@ -125,9 +125,10 @@ return [
         // Visibilité web — the template has no separate observations field here.
         'visibility' => ['type' => 'observations', 'categories' => ['SEO']],
 
-        // Every finding, every colour. A manual observation joins only the one
-        // field named in its 'section'; file it here to see it in the action plan.
-        'all_observations' => ['type' => 'observations'],
+        // Every finding, every colour. A manual observation joins only the field
+        // named in its 'section', except a purple one (a request to the client):
+        // the action list also gathers those, rendered as checkboxes.
+        'all_observations' => ['type' => 'observations', 'action_list' => true],
     ],
 
     // Observations every extraction starts with, editable and removable like

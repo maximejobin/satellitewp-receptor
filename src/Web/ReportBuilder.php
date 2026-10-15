@@ -155,7 +155,7 @@ final class ReportBuilder
      * @param list<array<string, mixed>>  $findings
      * @param array<string, mixed>        $spec
      * @param list<mixed>                 $observations
-     * @return array{type: string, items: list<array{title: string, message: string, color: string, severity: string}>}
+     * @return array{type: string, items: list<array{title: string, message: string, color: string, severity: string}>, checklist?: true}
      */
     private function buildObservationsField(string $fieldName, array $findings, array $spec, array $observations): array
     {
@@ -180,11 +180,16 @@ final class ReportBuilder
             ];
         }
 
+        $actionList = !empty($spec['action_list']);
         foreach ($observations as $r) {
-            if (!is_array($r) || ($r['section'] ?? null) !== $fieldName || empty($r['include'])) {
+            if (!is_array($r) || empty($r['include'])) {
                 continue;
             }
-            $color   = Pastille::isValid($r['color'] ?? null) ? (string) $r['color'] : Pastille::Grey->value;
+            $color = Pastille::isValid($r['color'] ?? null) ? (string) $r['color'] : Pastille::Grey->value;
+            // The action list gathers every client request, wherever it is filed.
+            if (($r['section'] ?? null) !== $fieldName && !($actionList && $color === Pastille::Purple->value)) {
+                continue;
+            }
             $items[] = [
                 'title'    => (string) ($r['title'] ?? ''),
                 'message'  => (string) ($r['description'] ?? ''),
@@ -204,7 +209,8 @@ final class ReportBuilder
         usort($items, static fn (array $a, array $b): int =>
             (self::OBSERVATION_COLOR_ORDER[$a['color']] ?? 99) <=> (self::OBSERVATION_COLOR_ORDER[$b['color']] ?? 99));
 
-        return ['type' => 'observations', 'items' => $items];
+        // The script renders purple items as checkboxes in the action list, as purple squares elsewhere.
+        return ['type' => 'observations', 'items' => $items] + ($actionList ? ['checklist' => true] : []);
     }
 
     // ------------------------------------------------------------ transforms
@@ -483,13 +489,16 @@ final class ReportBuilder
         $themes = array_filter((array) ($context['payload']['themes'] ?? []), 'is_array');
 
         $ordered = [];
+        $labels  = [];
         foreach ($themes as $key => $th) {
             if (!empty($th['active'])) {
                 $ordered[$key] = $th;
+                $labels[$key]  = 'theme_active';
                 $parentSlug    = self::parentSlugOf($th);
                 if ($parentSlug !== '' && isset($themes[$parentSlug])) {
                     // The active child theme runs on its parent: not an unused theme.
                     $ordered[$parentSlug] = ['active' => true] + (array) $themes[$parentSlug];
+                    $labels[$parentSlug]  = 'theme_active_parent';
                 }
                 break;
             }
@@ -497,25 +506,33 @@ final class ReportBuilder
         $rest = array_diff_key($themes, $ordered);
         uasort($rest, static fn (array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
 
-        return $this->componentTable('theme', array_values($ordered + $rest), $context);
+        $statuses = [];
+        foreach (array_keys($ordered + $rest) as $key) {
+            $statuses[] = $this->t->report($labels[$key] ?? 'theme_inactive');
+        }
+
+        return $this->componentTable('theme', array_values($ordered + $rest), $context, $statuses);
     }
 
     /**
      * Name, Version ("current → available" when an update exists) and a
      * Status cell carrying its icons as URLs the script inserts as images.
+     * With $statuses (one per component), the status is that text instead of
+     * the active/inactive dot, followed by the other icons.
      *
      * @param list<array<array-key, mixed>> $components
      * @param array<string, mixed>          $context
+     * @param list<string>                  $statuses
      * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string, icons?: list<string>}>>}
      */
-    private function componentTable(string $type, array $components, array $context): array
+    private function componentTable(string $type, array $components, array $context, array $statuses = []): array
     {
         $bvBySlug = array_column((array) ($context['probe']['blogvault'][$type . 's']['items'] ?? []), null, 'slug');
         $wfBySlug = array_column((array) ($context['probe']['wordfence'][$type . 's']['items'] ?? []), null, 'slug');
         $licenses = (array) ($context['licenses'] ?? []);
 
         $rows = [];
-        foreach ($components as $c) {
+        foreach ($components as $i => $c) {
             $update  = !empty($c['new_version']) ? (string) $c['new_version'] : '';
             $version = (string) ($c['version'] ?? '');
             $slug    = SoftwareCatalog::normalizeSlug($type, (string) ($c['slug'] ?? ''));
@@ -530,7 +547,12 @@ final class ReportBuilder
             $rows[] = [
                 self::cell((string) ($c['name'] ?? $c['slug'] ?? '?')),
                 self::cell($update !== '' ? "{$version} → {$update}" : $version, $update !== '' ? 'orange' : null),
-                self::iconCell($this->statusIcons(!empty($c['active']), $update !== '', $vulns !== [], is_string($license) ? $license : null)),
+                self::iconCell($this->statusIcons(
+                    isset($statuses[$i]) ? null : !empty($c['active']),
+                    $update !== '',
+                    $vulns !== [],
+                    is_string($license) ? $license : null
+                ), $statuses[$i] ?? ''),
             ];
         }
 
@@ -707,17 +729,14 @@ final class ReportBuilder
 
         $rows = [];
         foreach (array_slice($tables, 0, 10) as $table) {
-            $overhead = (int) ($table['overhead_bytes'] ?? 0);
             $rows[] = [
                 self::cell((string) ($table['name'] ?? '')),
                 self::cell($this->formatBytes((int) ($table['size_bytes'] ?? 0))),
                 self::cell($this->formatNumber((int) ($table['row_count'] ?? 0))),
-                // InnoDB reports preallocated, reusable space here: shown, never flagged.
-                self::cell($this->formatBytes($overhead)),
             ];
         }
 
-        return ['headers' => $this->headers('col_table', 'col_size', 'col_rows', 'col_overhead'), 'rows' => $rows];
+        return ['headers' => $this->headers('col_table', 'col_size', 'col_rows'), 'rows' => $rows];
     }
 
     /**
@@ -898,15 +917,16 @@ final class ReportBuilder
     }
 
     /**
-     * A cell of icons only. Icons travel as their own field, never as text the
-     * script parses, so a cell's site-controlled text can't summon an image.
+     * A cell of icons, optionally after a text. Icons travel as their own
+     * field, never as text the script parses, so a cell's site-controlled text
+     * can't summon an image.
      *
      * @param list<string> $icons
      * @return array{text: string, color: null, icons: list<string>}
      */
-    private static function iconCell(array $icons): array
+    private static function iconCell(array $icons, string $text = ''): array
     {
-        return ['text' => '', 'color' => null, 'icons' => $icons];
+        return ['text' => $text, 'color' => null, 'icons' => $icons];
     }
 
     /**
@@ -919,13 +939,14 @@ final class ReportBuilder
     }
 
     /**
-     * Icon URLs, in display order — the only place that decides which icon a status means.
+     * Icon URLs, in display order — the only place that decides which icon a
+     * status means. A null $active leaves the dot out (the status is text).
      *
      * @return list<string>
      */
-    private function statusIcons(bool $active, bool $hasUpdate, bool $hasVulnerability, ?string $licenseStatus): array
+    private function statusIcons(?bool $active, bool $hasUpdate, bool $hasVulnerability, ?string $licenseStatus): array
     {
-        $icons = [$active ? 'dot-green' : 'dot-red'];
+        $icons = $active === null ? [] : [$active ? 'dot-green' : 'dot-red'];
         if ($hasUpdate) {
             $icons[] = 'upgrade';
         }

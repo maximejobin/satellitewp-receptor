@@ -236,12 +236,14 @@ final class ReportBuilderTest extends TestCase
 
         self::assertSame(['text' => '1.0', 'color' => null], $table['rows'][0][1]); // active, no update offered
         self::assertSame(['text' => '2.0 → 2.1', 'color' => 'orange'], $table['rows'][1][1]); // parent, update offered
-        self::assertSame(['https://manager.test/assets/report-icons/dot-green.png'], $table['rows'][0][2]['icons']);
+        // A theme's status is text, not the active/inactive dot; the other icons follow it.
+        self::assertSame(['text' => 'Active', 'color' => null, 'icons' => []], $table['rows'][0][2]);
         self::assertSame(
-            // The active child theme runs on its parent: green, not an unused theme.
-            ['https://manager.test/assets/report-icons/dot-green.png', 'https://manager.test/assets/report-icons/upgrade.png'],
-            $table['rows'][1][2]['icons']
+            // The active child theme runs on its parent: active, not an unused theme.
+            ['text' => 'Active - Parent theme', 'color' => null, 'icons' => ['https://manager.test/assets/report-icons/upgrade.png']],
+            $table['rows'][1][2]
         );
+        self::assertSame('Inactive', $table['rows'][2][2]['text']);
     }
 
     public function testClientAndMaintenancePlanComeFromTheCrmSnapshot(): void
@@ -396,11 +398,33 @@ final class ReportBuilderTest extends TestCase
         $report = $this->builder()->build($contract, $this->context(), []);
         $rows   = $report['fields']['x']['rows'];
 
-        self::assertSame(['Table', 'Size', 'Rows', 'Overhead'], $report['fields']['x']['headers']);
+        // No DATA_FREE column: InnoDB reports preallocated, reusable space there, not space to reclaim.
+        self::assertSame(['Table', 'Size', 'Rows'], $report['fields']['x']['headers']);
         self::assertSame(['wp_big', 'wp_medium', 'wp_small'], array_column(array_column($rows, 0), 'text'));
         self::assertSame('5 MB', $rows[0][1]['text']);
-        self::assertSame(['text' => '1 MB', 'color' => null], $rows[0][3]); // preallocated InnoDB space: shown, never flagged
-        self::assertSame(['text' => '0 B', 'color' => null], $rows[1][3]); // wp_medium has none
+        self::assertCount(3, $rows[0]);
+    }
+
+    public function testTheActionListGathersPurpleObservationsFiledInAnySection(): void
+    {
+        $contract = ['fields' => [
+            'domain_observations' => ['type' => 'observations', 'categories' => ['DOMAIN']],
+            'all_observations'    => ['type' => 'observations', 'action_list' => true],
+        ]];
+        $observations = [
+            ['section' => 'domain_observations', 'color' => 'purple', 'title' => 'Check the registrar card', 'description' => 'd', 'include' => true],
+            ['section' => 'domain_observations', 'color' => 'orange', 'title' => 'Orange note', 'description' => 'd', 'include' => true],
+        ];
+
+        $report = $this->builder()->build($contract, $this->context(), [], $observations);
+
+        $section = $report['fields']['domain_observations'];
+        self::assertSame(['Check the registrar card', 'Orange note'], array_column($section['items'], 'title'));
+        self::assertArrayNotHasKey('checklist', $section, 'outside the action list a purple item is a square');
+
+        $all = $report['fields']['all_observations'];
+        self::assertSame(['Check the registrar card'], array_column($all['items'], 'title'), 'only the purple one joins');
+        self::assertTrue($all['checklist']);
     }
 
     public function testFilePermissionsFlagOnlyUnexpectedWritablePaths(): void

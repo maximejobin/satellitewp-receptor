@@ -190,7 +190,7 @@ optional calls need `try/catch`.
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
 
-**Rules (`src/Rules`, `config/rules.php`).** 75 active rules. Ids are the
+**Rules (`src/Rules`, `config/rules.php`).** 77 active rules. Ids are the
 category letter of the plugin's `.github/validations-techniques.txt` plus a
 number, sequential within each letter, no suffixes (that file's numbers are
 the original plan, not the current ids); a retired rule's successors are
@@ -199,8 +199,10 @@ Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F8` merged
 vulnerabilities (BlogVault + Wordfence by CVE, `Rules\VulnerabilityMerge`,
 also used by the UI), `F9`/`F10`/`F11` auto-updates (minor on, core major off, no
 plugin auto-updating; read from the policy the plugin resolves — constant,
-Dashboard options, filters — never from the constant alone), `F12` inactive
-plugins/themes, `M3` open sign-up graded on the default role's capabilities
+Dashboard options, filters — never from the constant alone), `F7`/`F13`
+abandoned plugins/themes (wp.org-hosted only, so a pass says "none found"),
+`F12` inactive plugins, `F14` unused themes (the active theme's parent and one
+Twenty… fallback are kept; no fallback at all fails), `M3` open sign-up graded on the default role's capabilities
 (`payload.registration`), never its name; content rights and the ones that
 hand over the site (users, plugins, raw HTML, theme options) are red. Rules
 flagged `web_runtime` (F3, F6, G1–G5, K2, L2) read the PHP serving the site:
@@ -242,7 +244,10 @@ under that field). A test enforces that every rule lands in a topic section.
 `Web\ReportBuilder` resolves it; `HardeningConstants` is shared with the UI.
 The Apps Script (Google Doc side) only renders: `{{field:colours:mode}}`
 filters colours (`red,orange`; empty = all) and `short` renders titles only,
-11 pt, two borderless columns; purple items render as a ☐ checkbox line. It is
+11 pt, two borderless columns, each title behind its marker (✓ green, ☐
+purple, ◼ other) with a hanging indent. Purple items render as a ☐ checkbox
+line only in a field with `action_list` (`all_observations`, which also gathers
+the purple observations filed in every section); elsewhere as a purple ◼. It is
 two files in `resources/apps-script/`: `loader.gs`, pasted once per Doc
 (deliver it as a full inline code block, never a file path), and `report-engine.gs`,
 the engine, served by `…/report-script.json` behind the same credentials as

@@ -13,13 +13,15 @@
  * Variable syntax in the Doc:
  *   {{name}}                     a value, a table or observations
  *   {{name:red,orange}}          observations filtered by colour
- *   {{name:red,orange:short}}    short form: titles only, in 2 columns
+ *   {{name:red,orange:short}}    short form: titles only, in 2 columns, each
+ *                                behind its marker (✓ green, ☐ purple, ◼ other)
  *   {{name::short}}              short form, every colour
  * Without a filter every colour is shown; the default form is "long".
  *
- * Observations (long form): a coloured ◼ + bold title, then the description;
- * a purple observation (client action) becomes a ☐ checkbox followed by the
- * title and description, to tick on paper.
+ * Observations (long form): a coloured ◼ + bold title, then the description.
+ * In the action list (field.checklist), a purple observation (client action)
+ * becomes a ☐ checkbox followed by the title and description, to tick on
+ * paper; elsewhere it is a purple ◼ like any other colour.
  *
  * Only an observation's title and message are markup (**bold**, _italic_,
  * [text](url)); Manager backslash-escapes \ * _ [ ] in text that must stay
@@ -27,7 +29,7 @@
  * in its own 'icons' list.
  */
 
-var VERSION = 30;
+var VERSION = 31;
 
 var COLORS = {
   red:    '#c0392f',
@@ -201,7 +203,7 @@ function insertObservations(body, occurrence, field) {
   }
 
   if (field.mode === 'short') {
-    insertObservationsShort(body, paragraph, field.items);
+    insertObservationsShort(body, paragraph, field.items, !!field.checklist);
     return true;
   }
 
@@ -209,7 +211,7 @@ function insertObservations(body, occurrence, field) {
   var offset   = 0;
 
   field.items.forEach(function (item, i) {
-    if (item.color === 'purple') {
+    if (item.color === 'purple' && field.checklist) {
       offset += insertActionItem(body, position + offset, item, i === 0);
       return;
     }
@@ -234,30 +236,44 @@ function insertObservations(body, occurrence, field) {
 
 /**
  * Short form: the title only (success or failure title by status), 11 pt, no
- * bold or colour, in 2 columns filled top to bottom, left first. A borderless
- * table: DocumentApp has no real page columns.
+ * bold, behind a coloured marker, in 2 columns filled top to bottom, left
+ * first. A borderless table: DocumentApp has no real page columns. The
+ * hanging indent lines a wrapped title up under its first word, like a bullet.
  */
-function insertObservationsShort(body, paragraph, items) {
-  var half = Math.ceil(items.length / 2);
-  var rows = [];
-  for (var r = 0; r < half; r++) {
-    rows.push([
-      unescapeMarkup(items[r].title),
-      items[r + half] ? unescapeMarkup(items[r + half].title) : ''
-    ]);
-  }
+var SHORT_INDENT = 14;
 
-  var table = body.insertTable(body.getChildIndex(paragraph), rows);
+function insertObservationsShort(body, paragraph, items, checklist) {
+  var half  = Math.ceil(items.length / 2);
+  var table = body.insertTable(body.getChildIndex(paragraph), [['', '']]);
   removeTopLevel(body, paragraph);
   table.setBorderWidth(0);
 
-  for (var row = 0; row < table.getNumRows(); row++) {
+  for (var r = 0; r < half; r++) {
+    var row = r === 0 ? table.getRow(0) : table.appendTableRow();
     for (var c = 0; c < 2; c++) {
-      var cell = table.getCell(row, c);
-      cell.setPaddingTop(2).setPaddingBottom(2);
-      cell.editAsText().setBold(false).setFontSize(11).setForegroundColor(TEXT_COLOR);
+      var cell = r === 0 ? row.getCell(c) : row.appendTableCell('');
+      cell.setPaddingTop(2).setPaddingBottom(2).setPaddingLeft(0);
+      var item = items[r + c * half];
+      if (item) { fillShortCell(cell, item, checklist); }
     }
   }
+}
+
+function shortMarker(color, checklist) {
+  if (color === 'green') { return '✓'; }
+  if (color === 'purple' && checklist) { return '☐'; }
+  return '◼';
+}
+
+function fillShortCell(cell, item, checklist) {
+  var marker = shortMarker(item.color, checklist);
+  var p      = cell.getChild(0).asParagraph();
+  p.setText(marker + ' ' + unescapeMarkup(item.title));
+  p.setIndentFirstLine(0).setIndentStart(SHORT_INDENT).setSpacingBefore(0).setSpacingAfter(0);
+
+  var text = p.editAsText();
+  text.setBold(false).setFontSize(11).setForegroundColor(TEXT_COLOR);
+  text.setBold(0, marker.length - 1, true).setForegroundColor(0, marker.length - 1, COLORS[item.color] || COLORS.grey);
 }
 
 /**

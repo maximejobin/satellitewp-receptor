@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
-75 règles, 16 groupes.
+77 règles, 16 groupes.
 
 ## A. TLS / SSL
 
@@ -770,49 +770,14 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F7 — Extensions et thèmes maintenus
+### F7 — Extensions maintenues
 
 - **Catégorie :** UPDATES · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 365
-- **Réussite (FR) :** Toutes les extensions et tous les thèmes vérifiés ont été mis à jour par leur auteur au cours des {threshold} derniers jours.
-- **Échec (FR) :** {observed} extensions ou thèmes n'ont reçu aucune mise à jour de leur auteur depuis plus de {threshold} jours : {names}. Un logiciel abandonné ne reçoit plus de correctifs de sécurité ; envisagez de le remplacer.
+- **Réussite (FR) :** Nous n'avons trouvé aucune indication qu'une de vos extensions soit abandonnée : celles publiées sur WordPress.org ont été mises à jour par leur auteur au cours des {threshold} derniers jours. Cela ne garantit pas qu'aucune ne l'est : une extension commerciale ou sur mesure ne peut pas être vérifiée de cette façon.
+- **Échec (FR) :** {observed} extensions n'ont reçu aucune mise à jour de leur auteur depuis plus de {threshold} jours : {names}. Une extension abandonnée ne reçoit plus de correctifs de sécurité ; envisagez de la remplacer.
 
 ```php
-        'check' => static function (Context $c, Rule $rule) use ($nameList) {
-            if (!$c->probeRan('wporg')) {
-                return Check::unknown();
-            }
-            $wporgPlugins = (array) $c->get('probe.wporg.plugins', []);
-            $wporgThemes  = (array) $c->get('probe.wporg.themes', []);
-            $cutoff       = time() - ((int) $rule->threshold) * 86400;
-            $checked      = 0;
-            $abandoned    = [];
-
-            $scan = static function (array $items, string $type, array $wporgData) use (&$checked, &$abandoned, $cutoff): void {
-                foreach ($items as $item) {
-                    if (!is_array($item)) {
-                        continue;
-                    }
-                    $slug  = SoftwareCatalog::normalizeSlug($type, (string) ($item['slug'] ?? ''));
-                    $entry = $wporgData[$slug] ?? null;
-                    if (!is_array($entry) || empty($entry['on_wporg']) || empty($entry['last_updated'])) {
-                        continue;
-                    }
-                    $checked++;
-                    $updatedAt = strtotime((string) $entry['last_updated']);
-                    if ($updatedAt !== false && $updatedAt < $cutoff) {
-                        $abandoned[] = (string) ($item['name'] ?? $slug);
-                    }
-                }
-            };
-            $scan($c->list('payload.plugins'), 'plugin', $wporgPlugins);
-            $scan($c->list('payload.themes'), 'theme', $wporgThemes);
-
-            if ($checked === 0) {
-                return Check::unknown();
-            }
-
-            return $abandoned === [] ? Check::pass(0) : Check::fail(count($abandoned), $nameList($abandoned));
-        },
+        'check' => static fn (Context $c, Rule $rule) => $abandoned($c, $rule, 'plugin'),
 ```
 
 ### F8 — Vulnérabilités connues
@@ -909,17 +874,16 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12 — Extensions et thèmes inutilisés
+### F12 — Extensions inutilisées
 
-- **Catégorie :** SECURITY · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Aucune extension ni aucun thème inutilisé n'est installé.
-- **Échec (FR) :** {observed} extensions ou thèmes sont installés mais désactivés : {names}. Même inactifs, leurs fichiers restent sur le serveur et peuvent contenir des failles ; supprimez ceux dont vous n'avez pas besoin.
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Aucune extension inutilisée n'est installée.
+- **Échec (FR) :** {observed} extensions sont installées mais désactivées : {names}. Même inactives, leurs fichiers restent sur le serveur et peuvent contenir des failles ; supprimez celles dont vous n'avez pas besoin.
 
 ```php
         'check' => static function (Context $c) use ($nameList) {
             $plugins = $c->list('payload.plugins');
-            $themes  = $c->list('payload.themes');
-            if ($plugins === [] && $themes === []) {
+            if ($plugins === []) {
                 return Check::unknown();
             }
             // Per-site activation can't tell whether another network site uses it.
@@ -934,6 +898,36 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 }
             }
 
+            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
+        },
+```
+
+### F13 — Thèmes maintenus
+
+- **Catégorie :** UPDATES · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 365
+- **Réussite (FR) :** Nous n'avons trouvé aucune indication qu'un de vos thèmes soit abandonné : ceux publiés sur WordPress.org ont été mis à jour par leur auteur au cours des {threshold} derniers jours. Cela ne garantit pas qu'aucun ne l'est : un thème commercial ou sur mesure ne peut pas être vérifié de cette façon.
+- **Échec (FR) :** {observed} thèmes n'ont reçu aucune mise à jour de leur auteur depuis plus de {threshold} jours : {names}. Un thème abandonné ne reçoit plus de correctifs de sécurité ; envisagez de le remplacer.
+
+```php
+        'check' => static fn (Context $c, Rule $rule) => $abandoned($c, $rule, 'theme'),
+```
+
+### F14 — Thèmes inutilisés
+
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** Aucun thème inutilisé n'est installé, et un thème par défaut de WordPress reste disponible en secours si le thème actif tombe en panne.
+- **Échec (FR) :** {observed} thèmes sont installés sans être utilisés : {names}. Même inactifs, leurs fichiers restent sur le serveur et peuvent contenir des failles ; supprimez-les en conservant un seul thème par défaut de WordPress (Twenty…), sur lequel le site se rabat si le thème actif tombe en panne.
+
+```php
+        'check' => static function (Context $c) use ($nameList) {
+            $themes = $c->list('payload.themes');
+            if ($themes === []) {
+                return Check::unknown();
+            }
+            if ($c->bool('payload.is_multisite') === true) {
+                return Check::na();
+            }
+
             $required = [];
             foreach ($themes as $slug => $theme) {
                 if (is_array($theme) && !empty($theme['active'])) {
@@ -942,8 +936,9 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                     $required[] = (string) ($theme['parent_slug'] ?? '');
                 }
             }
-            $keepsDefault = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
+            $hasFallback = (bool) array_filter($required, static fn (string $s): bool => str_starts_with($s, 'twenty'));
 
+            $unused = [];
             foreach ($themes as $slug => $theme) {
                 if (!is_array($theme) || !empty($theme['active'])) {
                     continue;
@@ -952,14 +947,18 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 if (in_array($themeSlug, $required, true)) {
                     continue;
                 }
-                if (!$keepsDefault && str_starts_with($themeSlug, 'twenty')) {
-                    $keepsDefault = true; // the one fallback theme worth keeping
+                if (!$hasFallback && str_starts_with($themeSlug, 'twenty')) {
+                    $hasFallback = true;
                     continue;
                 }
                 $unused[] = (string) ($theme['name'] ?? $themeSlug);
             }
 
-            return $unused === [] ? Check::pass(0) : Check::fail(count($unused), $nameList($unused));
+            if ($unused !== []) {
+                return Check::fail(count($unused), $nameList($unused));
+            }
+
+            return $hasFallback ? Check::pass(0) : Check::fail(0, ['variant' => 'no_fallback']);
         },
 ```
 

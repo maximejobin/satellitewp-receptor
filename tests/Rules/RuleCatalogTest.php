@@ -347,54 +347,58 @@ final class RuleCatalogTest extends TestCase
         $this->assertSame('MySQL 8.0', $findings['H1']['observed']);
     }
 
-    /** F7 flags only wp.org-hosted software idle past the threshold; premium/custom items are skipped. */
-    public function testF7FlagsOnlyAWporgHostedPluginOrThemeIdleBeyondTheThreshold(): void
+    /** F7 (plugins) and F13 (themes) flag only wp.org-hosted software idle past the threshold; premium/custom items are skipped. */
+    public function testF7AndF13FlagOnlyAWporgHostedPluginOrThemeIdleBeyondTheThreshold(): void
     {
         $payload = $this->fixtureArray('extraction-valid.json');
-        // Fixture: plugins woocommerce/woocommerce.php + akismet/akismet.php,
-        // theme storefront (+ storefront-child, no 'slug' collision risk).
-        $f7 = function (array $wporgData) use ($payload): array {
-            $probes   = ['wporg' => ['status' => 'ok', 'data' => $wporgData]];
-            $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
+        // Fixture: plugins woocommerce/woocommerce.php + akismet/akismet.php, theme storefront.
+        $evaluate = function (array $wporgData) use ($payload): array {
+            $probes = ['wporg' => ['status' => 'ok', 'data' => $wporgData]];
 
-            return $findings['F7'];
+            return array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
         };
 
-        $this->assertSame(Status::Unknown->value, $f7([])['status'], 'the probe never ran / nothing matched');
+        $none = $evaluate([]);
+        $this->assertSame(Status::Unknown->value, $none['F7']['status'], 'the probe never ran / nothing matched');
+        $this->assertSame(Status::Unknown->value, $none['F13']['status']);
 
         $recent = gmdate('Y-m-d\TH:i:s\Z', time() - 30 * 86400);
         $stale  = gmdate('Y-m-d\TH:i:s\Z', time() - 400 * 86400);
 
-        $allRecent = $f7([
+        $allRecent = $evaluate([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => true, 'last_updated' => $recent],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
             ],
             'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
         ]);
-        $this->assertSame(Status::Pass->value, $allRecent['status']);
+        $this->assertSame(Status::Pass->value, $allRecent['F7']['status']);
+        $this->assertSame(Status::Pass->value, $allRecent['F13']['status']);
 
-        $oneStale = $f7([
+        $staleTheme = $evaluate([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => true, 'last_updated' => $stale],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
             ],
-            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
+            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $stale]],
         ]);
-        $this->assertSame(Status::Fail->value, $oneStale['status']);
-        $this->assertSame(1, $oneStale['observed']);
-        $this->assertStringContainsString('WooCommerce', $oneStale['data']['names']);
+        $this->assertSame(Status::Fail->value, $staleTheme['F7']['status']);
+        $this->assertSame(1, $staleTheme['F7']['observed']);
+        $this->assertStringContainsString('WooCommerce', $staleTheme['F7']['data']['names']);
+        $this->assertSame(Status::Fail->value, $staleTheme['F13']['status']);
+        $this->assertStringContainsString('Storefront', $staleTheme['F13']['data']['names']);
 
         // Not on wp.org at all (a premium plugin) — skipped, not flagged,
         // even though it has no last_updated to check.
-        $notOnWporg = $f7([
+        $notOnWporg = $evaluate([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => false, 'last_updated' => null],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
             ],
-            'themes' => ['storefront' => ['on_wporg' => true, 'last_updated' => $recent]],
+            'themes' => ['storefront' => ['on_wporg' => false, 'last_updated' => null]],
         ]);
-        $this->assertSame(Status::Pass->value, $notOnWporg['status']);
+        $this->assertSame(Status::Pass->value, $notOnWporg['F7']['status']);
+        $this->assertSame(Status::Unknown->value, $notOnWporg['F13']['status'], 'no theme could be checked');
     }
 
     public function testF2IgnoresAMajorReleaseOfferAndFailsOnlyOnABranchPatch(): void
