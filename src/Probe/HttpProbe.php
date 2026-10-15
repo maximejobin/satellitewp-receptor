@@ -50,6 +50,9 @@ final class HttpProbe extends AbstractProbe
         'backup.sql'           => '/(?:CREATE TABLE|INSERT INTO|-- (?:MySQL|MariaDB) dump)/i',
     ];
 
+    /** Sensitive files that sit next to WordPress's own files rather than at the web root. */
+    private const array CORE_RELATIVE_PATHS = ['wp-config.php.bak', 'wp-config.php~', 'wp-content/debug.log'];
+
     /** Only the start of a sensitive file is read — enough for its signature, never a multi-GB dump. */
     private const string XMLRPC_LIST_METHODS = '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName><params></params></methodCall>';
 
@@ -146,7 +149,11 @@ final class HttpProbe extends AbstractProbe
         // Servers often compress the HTML document but not their static assets.
         $asset       = $this->assetCheck($client, $finalUrl);
         $robots      = $this->robotsCheck($client, $finalUrl);
-        $exposure    = $this->exposureCheck($client, $finalUrl, ($soft404['is_soft_404'] ?? false) === true, $authRequired);
+        // Probing paths behind an auth gate, a WAF challenge or an error page proves nothing.
+        $mainCode    = $main['status_code'] ?? null;
+        $exposure    = $authRequired || !is_int($mainCode) || $mainCode < 200 || $mainCode >= 300
+            ? self::uncheckedExposureResult($authRequired)
+            : $this->exposureCheck($client, $finalUrl, $site->siteUrl, ($soft404['is_soft_404'] ?? false) === true);
         $compression = $this->compressionSupportCheck($client, $finalUrl);
         $protocols = $this->protocolSupportCheck($client, $finalUrl, $main['http_version'] ?? null, $main['alt_svc'] ?? null);
 
@@ -714,21 +721,21 @@ final class HttpProbe extends AbstractProbe
      *
      * @return array<string, mixed>
      */
-    private function exposureCheck(Client $client, string $finalUrl, bool $isSoft404, bool $authRequired): array
+    private function exposureCheck(Client $client, string $finalUrl, string $siteUrl, bool $isSoft404): array
     {
-        if ($authRequired) {
-            return self::authGatedExposureResult();
-        }
-
         $origin = $this->origin($finalUrl);
+        // WordPress may live in a subdirectory: core files sit under site_url,
+        // the REST API and author archives under home_url (the final URL).
+        $coreBase = $origin . self::basePath($siteUrl !== '' ? $siteUrl : $finalUrl);
+        $homeBase = $origin . self::basePath($finalUrl);
 
-        $xmlrpcUrl = $origin . '/xmlrpc.php';
+        $xmlrpcUrl = $coreBase . '/xmlrpc.php';
         $xmlrpc    = $this->probeXmlrpc($client, $xmlrpcUrl);
 
-        $restUrl   = $origin . '/wp-json/wp/v2/users';
+        $restUrl   = $homeBase . '/wp-json/wp/v2/users';
         $restUsers = $this->probeExposure($client, $restUrl);
 
-        $authorUrl = $origin . '/?author=1';
+        $authorUrl = $homeBase . '/?author=1';
         $author    = $this->probeExposure($client, $authorUrl);
 
         $directoryListing  = null;
@@ -737,14 +744,14 @@ final class HttpProbe extends AbstractProbe
         $sensitiveEvidence = null;
         if (!$isSoft404) {
             $sensitiveEvidence = ['checked' => array_keys(self::SENSITIVE_PATHS), 'found' => [], 'unverified' => []];
-            $uploadsUrl = $origin . '/wp-content/uploads/';
+            $uploadsUrl = $coreBase . '/wp-content/uploads/';
             $uploads    = $this->probeExposure($client, $uploadsUrl);
             $directoryListing = $uploads === null ? null : self::isDirectoryListing($uploads['status'], $uploads['body']);
             $uploadsEvidence  = ['url' => $uploadsUrl, 'status' => $uploads['status'] ?? null];
 
             $sensitiveFiles = [];
             foreach (array_keys(self::SENSITIVE_PATHS) as $path) {
-                $head = $this->fetchHead($client, $origin . '/' . $path);
+                $head = $this->fetchHead($client, (in_array($path, self::CORE_RELATIVE_PATHS, true) ? $coreBase : $origin) . '/' . $path);
                 if ($head === null) {
                     $sensitiveEvidence['unverified'][] = $path;
                     continue;
@@ -824,21 +831,23 @@ final class HttpProbe extends AbstractProbe
     }
 
     /**
-     * exposureCheck() for a site that requires auth we lack: every field null
-     * ("not checked"), never false ("checked, clean").
+     * exposureCheck() when the homepage is not the site (auth gate, WAF
+     * challenge, error page): every field null ("not checked"), never false
+     * ("checked, clean").
      *
      * @return array<string, mixed>
      */
-    public static function authGatedExposureResult(): array
+    public static function uncheckedExposureResult(bool $authRequired): array
     {
         return [
+            'skipped'               => true,
             'xmlrpc_enabled'        => null,
             'rest_user_enumeration' => null,
             'author_enumeration'    => null,
             'directory_listing'     => null,
             'sensitive_files'       => null,
             'trace_enabled'         => null,
-            'auth_required'         => true,
+            'auth_required'         => $authRequired,
             'evidence'              => [],
         ];
     }
@@ -1046,6 +1055,12 @@ final class HttpProbe extends AbstractProbe
         $lower = strtolower($body);
 
         return str_contains($lower, 'index of /') || str_contains($lower, 'parent directory');
+    }
+
+    /** The URL's path without its trailing slash: '' for a site at the root. */
+    public static function basePath(string $url): string
+    {
+        return rtrim((string) parse_url($url, PHP_URL_PATH), '/');
     }
 
     private function origin(string $url): string

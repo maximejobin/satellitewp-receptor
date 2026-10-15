@@ -867,6 +867,12 @@ if ($status !== 'done'):
                         . 'would also 401 regardless of what it is testing for — that is not the same thing as '
                         . '"nothing exposed". Add this site\'s Basic Auth credentials under "⚙ Site settings" on '
                         . 'its page to let these checks actually run.</div></div></div>';
+                } elseif (($exp['skipped'] ?? false) === true) {
+                    echo '<div class="card card-full"><h3>Exposure</h3><div style="padding:1rem 1.1rem">'
+                        . '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">'
+                        . '<b>Checks could not run.</b> The homepage answered <span class="mono">HTTP '
+                        . e($http['status_code'] ?? '?') . '</span> instead of a page (firewall challenge or error): '
+                        . 'probing paths behind it would prove nothing.</div></div></div>';
                 } else {
                 echo section('Exposure',
                     $exposureRow('xmlrpc.php', $exp['xmlrpc_enabled'] ?? null, 'exposed', 'blocked',

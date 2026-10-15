@@ -267,7 +267,7 @@ final class HttpProbeTest extends TestCase
     /** A 401 on every path is "not checked", never "checked, clean". */
     public function testAuthGatedExposureResultLeavesEveryCheckUnknown(): void
     {
-        $result = HttpProbe::authGatedExposureResult();
+        $result = HttpProbe::uncheckedExposureResult(true);
 
         $this->assertTrue($result['auth_required']);
         foreach (['xmlrpc_enabled', 'rest_user_enumeration', 'author_enumeration', 'directory_listing', 'sensitive_files', 'trace_enabled'] as $key) {
@@ -315,7 +315,38 @@ final class HttpProbeTest extends TestCase
         $this->assertFalse($called, 'the request must never reach the handler');
     }
 
-    public function testASubCheckThatCouldNotCompleteIsUnknownAndListedInErrors(): void
+    public function testExposureIsNotCheckedBehindAFirewallChallenge(): void
+    {
+        $handler = static fn (\Psr\Http\Message\RequestInterface $request) => \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(403, ['Content-Type' => 'text/html'], 'challenge'));
+        $probe   = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+
+        $exposure = $probe->run(new SiteContext('s', 'https://example.com/', 'https://example.com/', 'example.com', 'example.com'))->data['exposure'];
+
+        $this->assertTrue($exposure['skipped']);
+        $this->assertFalse($exposure['auth_required']);
+        $this->assertNull($exposure['xmlrpc_enabled']);
+    }
+
+    public function testCoreFilesAreProbedUnderTheSubdirectoryWordPressLivesIn(): void
+    {
+        $seen    = [];
+        $handler = static function (\Psr\Http\Message\RequestInterface $request) use (&$seen) {
+            $seen[] = $request->getMethod() . ' ' . $request->getUri()->getPath() . ($request->getUri()->getQuery() !== '' ? '?' . $request->getUri()->getQuery() : '');
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new \GuzzleHttp\Psr7\Response(200, ['Content-Type' => 'text/html'], '<html></html>'));
+        };
+        $probe = new HttpProbe(5, 10, 'test-agent', $handler, static fn (string $h): string => '93.184.216.34');
+
+        $probe->run(new SiteContext('s', 'https://example.com/wp/', 'https://example.com/blog/', 'example.com', 'example.com'));
+
+        $this->assertContains('POST /wp/xmlrpc.php', $seen);
+        $this->assertContains('GET /blog/wp-json/wp/v2/users', $seen);
+        $this->assertContains('GET /blog/?author=1', $seen);
+        $this->assertSame('/wp', HttpProbe::basePath('https://example.com/wp/'));
+        $this->assertSame('', HttpProbe::basePath('https://example.com/'));
+    }
+
+        public function testASubCheckThatCouldNotCompleteIsUnknownAndListedInErrors(): void
     {
         $handler = static function (\Psr\Http\Message\RequestInterface $request) {
             if ($request->getHeaderLine('Accept-Encoding') === 'br') {

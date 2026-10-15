@@ -249,6 +249,7 @@ final class RuleCatalogTest extends TestCase
     {
         $payload = $this->fixtureArray('extraction-valid.json');
         $probes  = ['http' => ['status' => 'ok', 'data' => [
+            'status_code'      => 200,
             'auth'             => ['required' => true, 'configured' => false],
             'security_headers' => [],
         ]]];

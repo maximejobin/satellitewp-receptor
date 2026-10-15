@@ -1023,14 +1023,20 @@ final class ReportBuilderTest extends TestCase
     public function testConstantsTableFlagsOnlyDebugOutputLeaks(): void
     {
         $context = $this->context();
-        $context['payload']['constants'] = ['WP_DEBUG' => true, 'WP_DEBUG_LOG' => true, 'DISALLOW_FILE_EDIT' => false, 'MULTISITE' => 'N/A'];
+        $context['payload']['constants'] = ['WP_DEBUG' => true, 'WP_DEBUG_LOG' => true, 'DISALLOW_FILE_EDIT' => false, 'MULTISITE' => 'N/A', 'WP_DEBUG_DISPLAY' => true];
 
         $rows = $this->builder()->build(['fields' => ['x' => ['type' => 'table', 'source' => 'constants']]], $context, [])['fields']['x']['rows'];
 
         self::assertSame([['text' => 'WP_DEBUG', 'color' => null], ['text' => 'true', 'color' => 'red']], $rows[0]);
         self::assertSame(['text' => 'true', 'color' => null], $rows[1][1]);
         self::assertSame(['text' => 'false', 'color' => null], $rows[2][1]);
-        self::assertSame(['text' => 'N/A', 'color' => null], $rows[3][1]);
+        self::assertSame(['text' => '', 'color' => null], $rows[3][1]);
+        self::assertSame(['text' => 'true', 'color' => 'red'], $rows[4][1]);
+
+        // Core's own default (WP_DEBUG_DISPLAY true) shows nothing while WP_DEBUG is off.
+        $context['payload']['constants'] = ['WP_DEBUG' => false, 'WP_DEBUG_DISPLAY' => true];
+        $rows = $this->builder()->build(['fields' => ['x' => ['type' => 'table', 'source' => 'constants']]], $context, [])['fields']['x']['rows'];
+        self::assertSame(['text' => 'true', 'color' => null], $rows[1][1]);
     }
 
     public function testObservationReadingOrderCoversEveryPastille(): void

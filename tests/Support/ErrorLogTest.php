@@ -30,7 +30,14 @@ final class ErrorLogTest extends TestCase
         return array_map(static fn (string $l): array => (array) json_decode($l, true), array_values($lines));
     }
 
-    public function testTheLogDirectoryIsCreatedOnFirstWrite(): void
+    public function testTheReportTokenIsMaskedInTheLoggedUri(): void
+    {
+        $this->assertSame('/site/x/report.json?lang=fr&token=[redacted]', ErrorLog::maskToken('/site/x/report.json?lang=fr&token=abc123'));
+        $this->assertSame('/a?token=[redacted]&b=1', ErrorLog::maskToken('/a?token=abc&b=1'));
+        $this->assertSame('/extractions', ErrorLog::maskToken('/extractions'));
+    }
+
+        public function testTheLogDirectoryIsCreatedOnFirstWrite(): void
     {
         self::assertDirectoryDoesNotExist($this->tmpDir . '/logs');
 

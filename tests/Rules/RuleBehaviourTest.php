@@ -186,7 +186,19 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('blue', $without['C1']['pastille']);
     }
 
-    public function testRobotsAndSitemapAreUnknownWhenTheirRequestFailed(): void
+    public function testAvailabilityIsJudgedOnTheHomepageStatus(): void
+    {
+        $c3 = fn (int $code): string => $this->evaluate($this->payload(), ['http' => ['status_code' => $code, 'auth' => ['required' => false]]])['C3']['status'];
+
+        $this->assertSame(Status::Pass->value, $c3(200));
+        $this->assertSame(Status::Fail->value, $c3(500));
+        $this->assertSame(Status::Unknown->value, $c3(301));
+        $this->assertSame(Status::Unknown->value, $c3(401));
+        // A 403 homepage is not the site: nothing read from it is a verdict.
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => ['status_code' => 403, 'security_headers' => []]])['B7']['status']);
+    }
+
+        public function testRobotsAndSitemapAreUnknownWhenTheirRequestFailed(): void
     {
         $http = fn (array $robots): array => $this->evaluate($this->payload(), ['http' => [
             'status_code' => 200, 'auth' => ['required' => false], 'soft_404' => ['checked' => true, 'is_soft_404' => false], 'robots' => $robots,
@@ -565,7 +577,7 @@ final class RuleBehaviourTest extends TestCase
         $payload = $this->payload();
         $payload['constants']['WP_DEBUG']     = true;
         $payload['constants']['WP_DEBUG_LOG'] = true;
-        $k3 = fn (array $found): string => $this->evaluate($payload, ['http' => ['exposure' => ['sensitive_files' => $found]]])['K3']['status'];
+        $k3 = fn (array $found): string => $this->evaluate($payload, ['http' => ['status_code' => 200, 'exposure' => ['sensitive_files' => $found]]])['K3']['status'];
 
         $this->assertSame(Status::Pass->value, $k3([]));
         $this->assertSame(Status::Fail->value, $k3(['wp-content/debug.log']));

@@ -23,12 +23,14 @@ use SatelliteWP\Manager\Rules\Severity;
 use SatelliteWP\Manager\Rules\Status;
 use SatelliteWP\Manager\Rules\VulnerabilityMerge;
 
-// Behind HTTP Basic Auth the probe sees the auth gate, not the site: anything
-// read from the homepage response is unknown, never a failure. A bare 401
-// counts too — probe data predating the auth flag only carries the status.
-$homepageReadable = static fn (Context $c): bool => $c->probeRan('http')
-    && $c->get('probe.http.auth.required') !== true
-    && $c->number('probe.http.status_code') !== 401.0;
+// Only a 2xx homepage is the site itself: behind Basic Auth, a WAF challenge
+// or an error page, anything read from the response is unknown, never a verdict.
+$homepageReadable = static function (Context $c): bool {
+    $code = $c->number('probe.http.status_code');
+
+    return $c->probeRan('http') && $c->get('probe.http.auth.required') !== true
+        && $code !== null && $code >= 200 && $code < 300;
+};
 
 // An empty header value enforces nothing: browsers ignore it.
 $headerPresent = static function (Context $c, string $name): bool {
@@ -354,9 +356,11 @@ return [
     ],
     [
         'id' => 'C3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static function (Context $c) use ($homepageReadable) {
+        'check' => static function (Context $c) {
             $code = $c->number('probe.http.status_code');
-            if ($code === null || !$homepageReadable($c)) {
+            // A 401 is the auth gate; a 3xx means the redirect chain could not be followed to its end.
+            if (!$c->probeRan('http') || $code === null || $code === 401.0 || $c->get('probe.http.auth.required') === true
+                || ($code >= 300 && $code < 400)) {
                 return Check::unknown();
             }
 

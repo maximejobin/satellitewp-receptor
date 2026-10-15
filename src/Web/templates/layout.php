@@ -206,7 +206,8 @@ $nav = $nav ?? 'sites';
   function xtEscapeHtml(value) {
     var d = document.createElement('div');
     d.textContent = value === null || value === undefined ? '' : String(value);
-    return d.innerHTML;
+    // innerHTML escapes <, > and & only: quotes must be escaped too for attribute values.
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function initExplicitSearch(tableId, dt) {

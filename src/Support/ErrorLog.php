@@ -144,6 +144,12 @@ final class ErrorLog
         return $described;
     }
 
+    /** The report data key travels as ?token=: a 500 must not write a live bearer token to disk. */
+    public static function maskToken(mixed $uri): mixed
+    {
+        return is_string($uri) ? (string) preg_replace('/([?&]token=)[^&#]*/i', '$1[redacted]', $uri) : $uri;
+    }
+
     /**
      * What the request was, from $_SERVER only. The site id is the plugin's
      * X-SWP-Site header — an opaque uuid, and the one thing that ties a
@@ -155,7 +161,7 @@ final class ErrorLog
     {
         $fields = [
             'method'     => $_SERVER['REQUEST_METHOD'] ?? null,
-            'uri'        => $_SERVER['REQUEST_URI'] ?? null,
+            'uri'        => self::maskToken($_SERVER['REQUEST_URI'] ?? null),
             'ip'         => $_SERVER['REMOTE_ADDR'] ?? null,
             'site'       => $_SERVER['HTTP_X_SWP_SITE'] ?? null,
             'type'       => $_SERVER['HTTP_X_SWP_TYPE'] ?? null,
