@@ -258,8 +258,8 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('Care Gold', $fields['maintenance_plan']['value']);
 
         $fields = $this->builder()->build($contract, ['probe' => ['crm' => ['linked' => false, 'reason' => 'website_not_found']]] + $this->context(), [])['fields'];
-        self::assertSame('—', $fields['client']['value']);
-        self::assertSame('—', $fields['maintenance_plan']['value']);
+        self::assertSame('', $fields['client']['value']);
+        self::assertSame('', $fields['maintenance_plan']['value']);
     }
 
     public function testAdministratorsTableShowsRoleAndIncludesSuperAdmins(): void

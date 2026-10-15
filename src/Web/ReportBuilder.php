@@ -565,7 +565,7 @@ final class ReportBuilder
         $rows = [];
         foreach ((array) ($context['payload']['dropin_plugins'] ?? []) as $file => $dropin) {
             $header = is_array($dropin) ? trim((string) ($dropin['Description'] ?? '')) : '';
-            $rows[] = [self::cell((string) $file), self::cell($this->t->dropin((string) $file) ?? ($header !== '' ? $header : '—'))];
+            $rows[] = [self::cell((string) $file), self::cell($this->t->dropin((string) $file) ?? $header)];
         }
 
         return ['headers' => $this->headers('col_file', 'col_description'), 'rows' => $rows];
@@ -661,7 +661,7 @@ final class ReportBuilder
     {
         $p    = (array) ($context['payload'] ?? []);
         $rows = [
-            [self::cell($this->t->report('setting_admin_email')), self::cell((string) ($p['website_administrator_email'] ?? '—'))],
+            [self::cell($this->t->report('setting_admin_email')), self::cell((string) ($p['website_administrator_email'] ?? ''))],
             // An empty structure is WordPress's "Plain" setting; a missing field is unknown.
             [self::cell($this->t->report('setting_permalinks')), self::cell(is_string($p['permalink_structure'] ?? null)
                 ? ($p['permalink_structure'] !== '' ? $p['permalink_structure'] : $this->t->report('permalinks_plain'))
@@ -670,7 +670,7 @@ final class ReportBuilder
 
         $multilingual = Multilingual::fromPayload($p);
         if ($multilingual !== null) {
-            $rows[] = [self::cell($this->t->report('setting_default_language')), self::cell($this->languageName($multilingual['default_language']) ?: '—')];
+            $rows[] = [self::cell($this->t->report('setting_default_language')), self::cell($this->languageName($multilingual['default_language']))];
             $rows[] = [self::cell($this->t->report('setting_active_languages')), self::cell(implode(', ', array_map(
                 fn (string $code): string => $this->languageName($code),
                 $multilingual['active_languages']
@@ -829,8 +829,8 @@ final class ReportBuilder
             $patched = $v['patched_version'] ?? null;
             $fixed   = $patched !== null && $patched !== '';
             $rows[]  = [
-                self::cell((string) ($v['title'] ?? '—')),
-                self::cell(isset($v['cvss_score']) ? $this->formatNumber((float) $v['cvss_score'], 1) : '—', match (true) {
+                self::cell((string) ($v['title'] ?? '')),
+                self::cell(isset($v['cvss_score']) ? $this->formatNumber((float) $v['cvss_score'], 1) : '', match (true) {
                     in_array($rating, ['critical', 'high'], true) => 'red',
                     $rating === 'medium'                          => 'orange',
                     default                                       => 'grey', // a vulnerability is never green

@@ -422,7 +422,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### C6 — Exploration du site autorisée
 
-- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Le fichier robots.txt n'empêche pas l'exploration du site.
 - **Échec (FR) :** Le fichier robots.txt interdit aux moteurs de recherche d'explorer tout le site : il n'apparaîtra pas dans Google. Si ce n'est pas voulu (site de test), retirez la règle « Disallow: / ».
 
@@ -472,7 +472,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-## D. Délivrabilité e-mail (DNS)
+## D. Délivrabilité e-mail
 
 ### D1 — Autorisation d'envoi des courriels (SPF)
 
@@ -646,7 +646,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### F2 — Correctifs de sécurité de WordPress
 
-- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** WordPress {observed} a tous les correctifs de sécurité de sa version.
 - **Échec (FR) :** La mise à jour de sécurité {available} de WordPress est disponible mais n'est pas installée. Appliquez-la sans tarder.
 
@@ -1418,7 +1418,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-## BV. BlogVault
+## BV. BlogVault (antivirus)
 
 ### BV1 — Site exempt de piratage
 

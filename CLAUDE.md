@@ -147,8 +147,9 @@ optional calls need `try/catch`.
 - `WordfenceProbe` makes no network call: it matches the local index against
   the payload's plugins/themes/core (empty versions skipped). `WordfenceIndex`
   is a JSON Lines cache streamed per component (a full decode OOMs), refreshed
-  daily under a strict rate limit; a refresh where every feed fails writes
-  nothing. The `scanner` feed has no CVE ids; `production` does. Some
+  daily from the `production` feed only (the API refuses a second feed
+  request right after the first, and `scanner` has no CVE ids for F8); a
+  failed refresh writes nothing. Some
   production records are open-ended and unpatched on every version (e.g. two
   core entries): that is upstream data, deliberately not filtered.
 - `WporgProbe`: wp.org "last updated" per slug, 5 concurrent requests; 404 =
@@ -278,8 +279,8 @@ count on Catalogue of unclassified entries, an "Alert" tag on Status
 HubSpot or Teamwork id, orphan subscriptions, CRM database unreachable; cached 5 min in
 `data/reference/status-alert.json`, refreshed whenever /status is viewed).
 An absent value renders as an empty cell in the web UI, never a dash. In the
-client report, a value whose source was never read stays empty (or the
-contract's `default`); "None"/"0" is only said of a source that was read.
+client report too, a value whose source was never read stays empty, never
+a dash; "None"/"0" is only said of a source that was read.
 Observations are added and edited in a native `<dialog>` (one form for both, prefilled from the row's `data-obs`); they can also be appended from a CSV (`Web\ObservationsCsv`: header
 `section,color,title,description,include`, comma or semicolon, UTF-8; one
 invalid row and nothing is imported, the errors are flashed per line) and

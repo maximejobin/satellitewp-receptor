@@ -404,7 +404,7 @@ return [
         },
     ],
     [
-        'id' => 'C6', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'id' => 'C6', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) use ($homepageReadable) {
             $robots = $c->get('probe.http.robots');
             if (!$homepageReadable($c)) {
@@ -563,7 +563,7 @@ return [
         // WordPress backports security fixes to older branches, so a branch's
         // endoflife.date "eol" is not the signal: a missing same-branch patch
         // (minor_update_version) or wordpress.org's own "insecure" verdict is.
-        'id' => 'F2', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::Medium,
+        'id' => 'F2', 'category' => Category::UPDATES, 'source' => 'DATA', 'severity' => Severity::High,
         'check' => static function (Context $c) {
             $version = $c->string('payload.wp_version');
             if ($version === null) {

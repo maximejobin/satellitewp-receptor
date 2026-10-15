@@ -31,26 +31,26 @@ return [
         'site_url'        => ['type' => 'value', 'from' => 'site.site_url'],
         'extraction_id'   => ['type' => 'value', 'from' => 'extraction_id'],
         'extraction_date' => ['type' => 'value', 'from' => 'meta.received_at', 'transform' => 'date'],
-        'report_by'       => ['type' => 'value', 'from' => 'report_by', 'default' => '—'],
+        'report_by'       => ['type' => 'value', 'from' => 'report_by'],
         'date'            => ['type' => 'value', 'from' => 'today', 'transform' => 'date'],
         // From the CRM snapshot (probes/crm.json); empty when the site isn't linked or has no single active plan.
-        'client'           => ['type' => 'value', 'from' => 'probe.crm.clients', 'transform' => 'crm_client_labels', 'default' => '—'],
-        'maintenance_plan' => ['type' => 'value', 'from' => 'probe.crm.maintenance_plan.name', 'default' => '—'],
+        'client'           => ['type' => 'value', 'from' => 'probe.crm.clients', 'transform' => 'crm_client_labels'],
+        'maintenance_plan' => ['type' => 'value', 'from' => 'probe.crm.maintenance_plan.name'],
 
         // Nom de domaine.
-        'domain_name'            => ['type' => 'value', 'from' => 'host', 'transform' => 'registrable_domain', 'default' => '—'],
-        'domain_registrar'       => ['type' => 'value', 'from' => 'probe.rdap.registrar', 'default' => '—'],
-        'domain_date_creation'   => ['type' => 'value', 'from' => 'probe.rdap.created_at', 'transform' => 'date', 'default' => '—'],
-        'domain_date_update'     => ['type' => 'value', 'from' => 'probe.rdap.updated_at', 'transform' => 'date', 'default' => '—'],
-        'domain_date_expiration' => ['type' => 'value', 'from' => 'probe.rdap.expires_at', 'transform' => 'date', 'default' => '—'],
-        'domain_nameservers'     => ['type' => 'value', 'from' => 'probe.rdap.nameservers', 'transform' => 'join_lines', 'default' => '—'],
-        'email_spf_record'       => ['type' => 'value', 'from' => 'probe.dns.spf.record', 'default' => '—'],
-        'email_dmarc_policy'     => ['type' => 'value', 'from' => 'probe.dns.dmarc.policy', 'default' => '—'],
+        'domain_name'            => ['type' => 'value', 'from' => 'host', 'transform' => 'registrable_domain'],
+        'domain_registrar'       => ['type' => 'value', 'from' => 'probe.rdap.registrar'],
+        'domain_date_creation'   => ['type' => 'value', 'from' => 'probe.rdap.created_at', 'transform' => 'date'],
+        'domain_date_update'     => ['type' => 'value', 'from' => 'probe.rdap.updated_at', 'transform' => 'date'],
+        'domain_date_expiration' => ['type' => 'value', 'from' => 'probe.rdap.expires_at', 'transform' => 'date'],
+        'domain_nameservers'     => ['type' => 'value', 'from' => 'probe.rdap.nameservers', 'transform' => 'join_lines'],
+        'email_spf_record'       => ['type' => 'value', 'from' => 'probe.dns.spf.record'],
+        'email_dmarc_policy'     => ['type' => 'value', 'from' => 'probe.dns.dmarc.policy'],
         'domain_observations'    => ['type' => 'observations', 'categories' => ['DOMAIN', 'DNS', 'EMAIL']],
 
         // Infrastructure web.
-        'os_name'     => ['type' => 'value', 'from' => 'payload.os_name', 'default' => '—'],
-        'http_server' => ['type' => 'value', 'from' => 'payload.web_server', 'default' => '—'],
+        'os_name'     => ['type' => 'value', 'from' => 'payload.os_name'],
+        'http_server' => ['type' => 'value', 'from' => 'payload.web_server'],
         // The same compression/protocol tests as rules B1–B5, never the
         // single encoding or version the main request happened to negotiate.
         'gzip'   => ['type' => 'value', 'from' => 'probe.http.compression.gzip', 'transform' => 'enabled_label', 'color_transform' => 'bool_green_orange'],
@@ -58,37 +58,37 @@ return [
         'http1'  => ['type' => 'value', 'from' => 'probe.http.protocols.http1_1', 'transform' => 'yes_no', 'color_transform' => 'bool_green_blue'],
         'http2'  => ['type' => 'value', 'from' => 'probe.http.protocols.http2', 'transform' => 'yes_no', 'color_transform' => 'bool_green_orange'],
         'http3'  => ['type' => 'value', 'from' => 'probe.http.protocols.http3_advertised', 'transform' => 'yes_no', 'color_transform' => 'bool_green_orange'],
-        'post_max'   => ['type' => 'value', 'from' => 'payload.php.post_max_size', 'transform' => 'php_size', 'default' => '—'],
-        'upload_max' => ['type' => 'value', 'from' => 'payload.php.upload_max_filesize', 'transform' => 'php_size', 'default' => '—'],
+        'post_max'   => ['type' => 'value', 'from' => 'payload.php.post_max_size', 'transform' => 'php_size'],
+        'upload_max' => ['type' => 'value', 'from' => 'payload.php.upload_max_filesize', 'transform' => 'php_size'],
 
-        'php_version'            => ['type' => 'value', 'from' => 'payload.php.version', 'default' => '—'],
+        'php_version'            => ['type' => 'value', 'from' => 'payload.php.version'],
         'php_status'             => ['type' => 'value', 'from' => 'reference.php_eol', 'transform' => 'eol_status_label', 'color_transform' => 'eol_red_green'],
         'php_extensions'         => ['type' => 'value', 'from' => 'payload.php.extensions', 'transform' => 'join_comma', 'default_label' => 'none_f'],
         'php_disabled_functions' => ['type' => 'value', 'from' => 'payload.php.disable_functions', 'transform' => 'join_lines', 'default_label' => 'none_f'],
 
-        'database'                => ['type' => 'value', 'from' => ['payload.database_type', 'payload.database_version'], 'transform' => 'database_label', 'default' => '—'],
-        'database_type'           => ['type' => 'value', 'from' => 'payload.database_type', 'transform' => 'database_type', 'default' => '—'],
-        'database_version'        => ['type' => 'value', 'from' => 'payload.database_version', 'transform' => 'database_version', 'default' => '—'],
+        'database'                => ['type' => 'value', 'from' => ['payload.database_type', 'payload.database_version'], 'transform' => 'database_label'],
+        'database_type'           => ['type' => 'value', 'from' => 'payload.database_type', 'transform' => 'database_type'],
+        'database_version'        => ['type' => 'value', 'from' => 'payload.database_version', 'transform' => 'database_version'],
         'database_status'         => ['type' => 'value', 'from' => ['reference.database_eol', 'reference.database_eol_date'], 'transform' => 'database_status_label', 'color_transform' => 'eol_red_green'],
-        'database_prefix'         => ['type' => 'value', 'from' => 'payload.db_table_prefix', 'default' => '—'],
+        'database_prefix'         => ['type' => 'value', 'from' => 'payload.db_table_prefix'],
         'database_largest_tables' => ['type' => 'table', 'source' => 'database_tables'],
 
         // F3 is an UPDATES rule about the PHP runtime, placed here with the rest of PHP.
         'infrastructure_observations' => ['type' => 'observations', 'categories' => ['HOSTING', 'PHP', 'DATABASE', 'SSL', 'HTTP'], 'ids' => ['F3']],
 
         // WordPress.
-        'wp_core_version'      => ['type' => 'value', 'from' => 'payload.wp_version', 'default' => '—'],
+        'wp_core_version'      => ['type' => 'value', 'from' => 'payload.wp_version'],
         'wp_core_status'       => ['type' => 'value', 'from' => 'reference.wordpress_status', 'transform' => 'wordpress_status_label', 'color_transform' => 'wordpress_status_color'],
         // Manager's own wordpress.org cache — the site's self-report can be stale.
-        'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version', 'default' => '—'],
+        'wp_latest_version'    => ['type' => 'value', 'from' => 'reference.wordpress_latest_version'],
         'wp_install_type'      => ['type' => 'value', 'from' => ['payload.is_multisite', 'payload.multisite_type'], 'transform' => 'install_type'],
         // The policy the plugin resolved (constant, options, filters), as rules F9/F10 read it.
         'wp_core_auto_update'  => ['type' => 'value', 'from' => 'payload.core_update', 'transform' => 'auto_update_core'],
         'wp_core_observations' => ['type' => 'observations', 'ids' => ['F1', 'F2', 'F9', 'F10']],
 
         // Thèmes.
-        'wp_theme'               => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme', 'default' => '—'],
-        'wp_theme_version'       => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme_version', 'default' => '—'],
+        'wp_theme'               => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme'],
+        'wp_theme_version'       => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme_version'],
         'wp_parent_theme'        => ['type' => 'value', 'from' => 'payload.themes', 'transform' => 'active_theme_parent', 'default_label' => 'none_m'],
         'wp_themes_list'         => ['type' => 'table', 'source' => 'themes'],
         'wp_themes_observations' => ['type' => 'observations', 'ids' => ['F5']],
@@ -105,14 +105,14 @@ return [
         'file_permissions'      => ['type' => 'table', 'source' => 'file_permissions'],
         'security_observations' => ['type' => 'observations', 'categories' => ['SECURITY']],
         // Same sources as the extraction page's Users card.
-        'wp_users_count'        => ['type' => 'value', 'from' => 'payload.users_count.total_users', 'default' => '—'],
+        'wp_users_count'        => ['type' => 'value', 'from' => 'payload.users_count.total_users'],
         'wp_admins_count'       => ['type' => 'value', 'from' => 'payload.administrators', 'transform' => 'count'],
         'wp_users_admins'       => ['type' => 'table', 'source' => 'administrators'],
         'wp_users_observations' => ['type' => 'observations', 'categories' => ['USERS']],
 
         // Performance.
-        'performance_desktop_score' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse', 'default' => '—'],
-        'performance_mobile_score'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse', 'default' => '—'],
+        'performance_desktop_score' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_mobile_score'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
         'performance_observations'  => ['type' => 'observations', 'categories' => ['PERFORMANCE', 'CACHE']],
 
         // Contenu et réglages.
