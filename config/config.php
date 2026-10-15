@@ -49,8 +49,9 @@ return [
     // Probes executed by the pipeline, in order.
     'probes' => [
         'enabled' => ['http', 'dns', 'tls', 'rdap', 'pagespeed', 'blogvault', 'crm', 'wordfence', 'wporg', 'mail', 'seranking'],
-        'connect_timeout' => 5,
-        'timeout' => 15,
+        'connect_timeout' => 15,
+        // cURL counts the connection inside the total: it must leave room after a slow connect.
+        'timeout' => 30,
         'user_agent' => 'SatelliteWP-Manager/1.0',
     ],
 

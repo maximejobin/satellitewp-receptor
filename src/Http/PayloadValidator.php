@@ -389,6 +389,13 @@ final class PayloadValidator
             });
         }
 
+        $this->section($p, 'registration', function (array $r): void {
+            $this->optType($r, 'open', 'registration', 'bool');
+            $this->optStr($r, 'default_role', 'registration', self::MAX_SHORT);
+            $this->optStr($r, 'default_role_name', 'registration', self::MAX_SHORT);
+            $this->list($r, 'default_role_caps', 'registration', 50, fn ($v, $i) => $this->scalar($v, "registration.default_role_caps.{$i}", 'string', self::MAX_SHORT));
+        });
+
         // wp_count_posts()/wp_count_comments()/wp_count_attachments() objects:
         // counts arrive as ints or numeric strings depending on the database driver.
         foreach (['posts_count', 'comments_count', 'media_count'] as $key) {

@@ -202,6 +202,26 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Fail->value, $http(['present' => false])['C9']['status']);
     }
 
+    public function testOpenRegistrationIsGradedOnWhatTheDefaultRoleCanDo(): void
+    {
+        $m7 = function (?array $registration): array {
+            $payload = $this->payload();
+            $payload['registration'] = $registration;
+
+            return $this->evaluate($payload)['M7'];
+        };
+        $open = static fn (array $caps): array => ['open' => true, 'default_role' => 'x', 'default_role_name' => 'Rôle', 'default_role_caps' => $caps];
+
+        $this->assertSame('green', $m7(['open' => false, 'default_role' => 'subscriber', 'default_role_caps' => []])['pastille']);
+        foreach ([['manage_options', 'edit_posts'], ['edit_others_posts'], ['publish_posts', 'edit_posts']] as $caps) {
+            $this->assertSame('red', $m7($open($caps))['pastille'], implode(',', $caps));
+        }
+        $this->assertSame('orange', $m7($open(['edit_posts']))['pastille']);
+        $this->assertSame('blue', $m7($open([]))['pastille']);
+        $this->assertSame('Rôle', $m7($open([]))['data']['role']);
+        $this->assertSame(Status::Unknown->value, $m7(null)['status']);
+    }
+
     public function testMailAuthRulesFollowTheReceiversVerdicts(): void
     {
         $evaluate = fn (array $mail): array => $this->evaluate($this->payload(), ['mail' => $mail]);
@@ -575,14 +595,14 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Severity::Medium, $rules['F12b']);
         $this->assertSame(Severity::Medium, $rules['F12c']);
         // Green when present, coloured when missing: an Info severity would paint even a pass blue.
-        $this->assertSame(Severity::High, $rules['B4']);
-        foreach (['B3', 'B5', 'B7d', 'B7e', 'C9a', 'C1', 'I4'] as $id) {
+        foreach (['B3', 'B4', 'B5', 'B7d', 'B7e', 'C9a', 'C1', 'I4'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
         $this->assertArrayNotHasKey('X6', $rules);
         $this->assertArrayNotHasKey('H4', $rules);
         $this->assertArrayNotHasKey('N2', $rules);
         $this->assertArrayNotHasKey('N4', $rules);
+        $this->assertArrayNotHasKey('J3', $rules);
         $this->assertArrayNotHasKey('BV2', $rules);
         $this->assertArrayNotHasKey('WF1', $rules);
         $this->assertArrayNotHasKey('PS2a', $rules);

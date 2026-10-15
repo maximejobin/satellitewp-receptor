@@ -225,8 +225,16 @@ return [
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http2')),
     ],
     [
-        'id' => 'B4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http1_1')),
+        // Low stakes: green when supported, informational (blue) when not.
+        'id' => 'B4', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) {
+            $http11 = $c->bool('probe.http.protocols.http1_1');
+            if ($http11 === null) {
+                return Check::unknown();
+            }
+
+            return $http11 ? Check::pass(true) : Check::fail(false, [], Severity::Info);
+        },
     ],
     [
         // Read from the Alt-Svc header the site advertises, not a live QUIC handshake.
@@ -988,10 +996,6 @@ return [
             };
         },
     ],
-    [
-        'id' => 'J3', 'category' => Category::CRON, 'source' => 'DATA', 'severity' => Severity::Medium, 'threshold' => 100,
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.cron.scheduled_events'), (float) $rule->threshold),
-    ],
 
     // ===================================================================
     //  K. CONFIGURATION & HARDENING                               [DATA]
@@ -1130,6 +1134,31 @@ return [
             }
 
             return Check::pass('none');
+        },
+    ],
+
+    [
+        // Judged on what the default role grants, so a custom or renamed role counts too.
+        'id' => 'M7', 'category' => Category::USERS, 'source' => 'DATA', 'severity' => Severity::High,
+        'check' => static function (Context $c) {
+            $registration = $c->get('payload.registration');
+            if (!is_array($registration) || !is_bool($registration['open'] ?? null) || !is_array($registration['default_role_caps'] ?? null)) {
+                return Check::unknown();
+            }
+            if (!$registration['open']) {
+                return Check::pass('closed');
+            }
+            $role = (string) ($registration['default_role_name'] ?? '') ?: (string) ($registration['default_role'] ?? '');
+            $caps = $registration['default_role_caps'];
+            if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
+                return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
+            }
+            if (in_array('edit_posts', $caps, true)) {
+                return Check::fail('contributor', ['role' => $role, 'variant' => 'contributor'], Severity::Medium);
+            }
+
+            // Open sign-up for subscribers or customers is a normal shop or members' area.
+            return Check::fail('open', ['role' => $role], Severity::Info);
         },
     ],
 

@@ -518,7 +518,7 @@ return [
             'pass' => 'No known vulnerability affects WordPress, your plugins or your themes.',
         ],
         'F12a' => [
-            'title' => 'WordPress security fixes',
+            'title' => 'Automatic security updates',
             'title_success' => 'Automatic security fixes enabled',
             'title_failure' => 'Automatic security fixes disabled',
             'fail' => 'WordPress minor updates, which carry the security fixes, do not install automatically: a fixed flaw stays open on your site until someone steps in. Have automatic minor updates turned back on.',
@@ -626,13 +626,6 @@ return [
             'fail_stopped' => 'WordPress scheduled tasks no longer run: {events} {events|task is|tasks are} overdue, the oldest by {days} {days|day|days}. Scheduled posts, backups and update checks no longer happen. Have a cron job set up on the server.',
             'pass' => 'WordPress scheduled tasks run on time.',
         ],
-        'J3' => [
-            'title' => 'Number of scheduled tasks',
-            'title_success' => 'Reasonable number of scheduled tasks',
-            'title_failure' => 'Too many scheduled tasks',
-            'fail' => '{observed} scheduled tasks are registered (threshold: {threshold}), often a sign of plugins piling them up. Have them cleaned up.',
-            'pass' => '{observed} scheduled tasks are registered, which is reasonable.',
-        ],
         'K1' => [
             'title' => 'Debug mode',
             'title_success' => 'Debug mode under control',
@@ -705,6 +698,15 @@ return [
             'title_failure' => '"admin" login in use',
             'fail' => 'An administrator account uses the "admin" login, the first one attack bots try. Replace it with a unique login.',
             'pass' => 'No administrator account uses the "admin" login.',
+        ],
+        'M7' => [
+            'title' => 'Public sign-up',
+            'title_success' => 'Public sign-up closed',
+            'title_failure' => 'Public sign-up open',
+            'fail' => 'Anyone can create an account on the site, with the "{role}" role. That is normal for a shop or a members\' area; otherwise, close sign-up.',
+            'fail_contributor' => 'Anyone can create an account with the "{role}" role, which can write posts submitted for review. Close sign-up or pick a role that cannot write, such as Subscriber.',
+            'fail_privileged' => 'Anyone can create an account with the "{role}" role, which can publish or change the site\'s content, or even run the site. Close sign-up or switch to the Subscriber role right away.',
+            'pass' => 'Nobody can create an account without being invited.',
         ],
         'BV1' => [
             'title' => 'Site free of hacking',

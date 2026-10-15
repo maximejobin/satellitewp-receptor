@@ -133,7 +133,7 @@ final class App
         if (!isset($this->services[ProbeRegistry::class])) {
             $registry = new ProbeRegistry((array) $this->config->get('probes.enabled', []));
 
-            $connectTimeout = (int) $this->config->get('probes.connect_timeout', 5);
+            $connectTimeout = (int) $this->config->get('probes.connect_timeout', 15);
             $timeout        = (int) $this->config->get('probes.timeout', 15);
             $userAgent      = (string) $this->config->get('probes.user_agent', 'SatelliteWP-Manager/1.0');
 

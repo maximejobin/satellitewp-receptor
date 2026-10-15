@@ -811,6 +811,8 @@ if ($status !== 'done'):
                     . field('Administrators', count($admins), count($admins) > 5 ? 'warn' : 'ok', 'payload.administrators')
                     . field_raw('Admin logins', fmt_lines(array_map($adminLabel, $admins)), null, 'payload.administrators')
                     . field_raw('Super admins (network)', fmt_lines(array_map($adminLabel, (array) ($p['super_admins'] ?? []))), null, 'payload.super_admins')
+                    . field('Public sign-up', is_bool($p['registration']['open'] ?? null) ? ($p['registration']['open'] ? 'Open' : 'Closed') : null, null, 'payload.registration')
+                    . field('Default role', ($p['registration']['default_role_name'] ?? null) ?: ($p['registration']['default_role'] ?? null), null, 'payload.registration')
                 );
                 ?>
             </div>

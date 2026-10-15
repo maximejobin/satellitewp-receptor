@@ -516,7 +516,7 @@ return [
             'pass' => 'Aucune vulnérabilité connue ne touche WordPress, vos extensions ni vos thèmes.',
         ],
         'F12a' => [
-            'title' => 'Correctifs de sécurité de WordPress',
+            'title' => 'Mises à jour de sécurité automatiques',
             'title_success' => 'Correctifs de sécurité automatiques actifs',
             'title_failure' => 'Correctifs de sécurité automatiques désactivés',
             'fail' => 'Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, ne s\'installent pas automatiquement : une faille corrigée reste ouverte sur votre site jusqu\'à une intervention manuelle. Faites réactiver les mises à jour mineures automatiques.',
@@ -624,13 +624,6 @@ return [
             'fail_stopped' => 'Les tâches planifiées de WordPress ne s\'exécutent plus : {events} {events|tâche est|tâches sont} en retard, la plus ancienne depuis {days} {days|jour|jours}. Publications programmées, sauvegardes et vérifications de mises à jour ne se font plus. Faites configurer une tâche cron sur le serveur.',
             'pass' => 'Les tâches planifiées de WordPress s\'exécutent à temps.',
         ],
-        'J3' => [
-            'title' => 'Nombre de tâches planifiées',
-            'title_success' => 'Nombre de tâches planifiées raisonnable',
-            'title_failure' => 'Trop de tâches planifiées',
-            'fail' => '{observed} tâches planifiées sont enregistrées (seuil : {threshold}), souvent le signe d\'extensions qui en accumulent. Faites faire le ménage.',
-            'pass' => '{observed} tâches planifiées sont enregistrées, ce qui est raisonnable.',
-        ],
         'K1' => [
             'title' => 'Mode débogage',
             'title_success' => 'Mode débogage maîtrisé',
@@ -703,6 +696,15 @@ return [
             'title_failure' => 'Identifiant « admin » utilisé',
             'fail' => 'Un compte administrateur utilise l\'identifiant « admin », le premier que testent les robots d\'attaque. Remplacez-le par un identifiant unique.',
             'pass' => 'Aucun compte administrateur n\'utilise l\'identifiant « admin ».',
+        ],
+        'M7' => [
+            'title' => 'Inscriptions publiques',
+            'title_success' => 'Inscriptions publiques fermées',
+            'title_failure' => 'Inscriptions publiques ouvertes',
+            'fail' => 'N\'importe qui peut se créer un compte sur le site, avec le rôle « {role} ». C\'est normal pour une boutique ou un espace membre ; sinon, fermez les inscriptions.',
+            'fail_contributor' => 'N\'importe qui peut se créer un compte avec le rôle « {role} », qui permet de rédiger des articles soumis à révision. Fermez les inscriptions ou choisissez un rôle sans droit de rédaction, comme Abonné.',
+            'fail_privileged' => 'N\'importe qui peut se créer un compte avec le rôle « {role} », qui permet de publier ou de modifier le contenu du site, voire de l\'administrer. Fermez les inscriptions ou choisissez le rôle Abonné sans tarder.',
+            'pass' => 'Personne ne peut se créer de compte sans y être invité.',
         ],
         'BV1' => [
             'title' => 'Site exempt de piratage',

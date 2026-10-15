@@ -169,12 +169,19 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ### B4 — Compatibilité HTTP/1.1
 
-- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le serveur répond aussi en HTTP/1.1, pour les navigateurs et outils plus anciens.
 - **Échec (FR) :** Le serveur ne répond pas en HTTP/1.1 : d'anciens navigateurs ou outils pourraient ne pas accéder au site.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http1_1')),
+        'check' => static function (Context $c) {
+            $http11 = $c->bool('probe.http.protocols.http1_1');
+            if ($http11 === null) {
+                return Check::unknown();
+            }
+
+            return $http11 ? Check::pass(true) : Check::fail(false, [], Severity::Info);
+        },
 ```
 
 ### B5 — Protocole HTTP/3
@@ -836,7 +843,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### F12a — Correctifs de sécurité de WordPress
+### F12a — Mises à jour de sécurité automatiques
 
 - **Catégorie :** UPDATES · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
 - **Réussite (FR) :** Les mises à jour mineures de WordPress, qui apportent les correctifs de sécurité, s'installent automatiquement.
@@ -1186,16 +1193,6 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### J3 — Nombre de tâches planifiées
-
-- **Catégorie :** CRON · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 100
-- **Réussite (FR) :** {observed} tâches planifiées sont enregistrées, ce qui est raisonnable.
-- **Échec (FR) :** {observed} tâches planifiées sont enregistrées (seuil : {threshold}), souvent le signe d'extensions qui en accumulent. Faites faire le ménage.
-
-```php
-        'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.cron.scheduled_events'), (float) $rule->threshold),
-```
-
 ## K. Configuration & durcissement
 
 ### K1 — Mode débogage
@@ -1372,6 +1369,35 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
 
             return Check::pass('none');
+        },
+```
+
+### M7 — Inscriptions publiques
+
+- **Catégorie :** USERS · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
+- **Réussite (FR) :** Personne ne peut se créer de compte sans y être invité.
+- **Échec (FR) :** N'importe qui peut se créer un compte sur le site, avec le rôle « {role} ». C'est normal pour une boutique ou un espace membre ; sinon, fermez les inscriptions.
+
+```php
+        'check' => static function (Context $c) {
+            $registration = $c->get('payload.registration');
+            if (!is_array($registration) || !is_bool($registration['open'] ?? null) || !is_array($registration['default_role_caps'] ?? null)) {
+                return Check::unknown();
+            }
+            if (!$registration['open']) {
+                return Check::pass('closed');
+            }
+            $role = (string) ($registration['default_role_name'] ?? '') ?: (string) ($registration['default_role'] ?? '');
+            $caps = $registration['default_role_caps'];
+            if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
+                return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
+            }
+            if (in_array('edit_posts', $caps, true)) {
+                return Check::fail('contributor', ['role' => $role, 'variant' => 'contributor'], Severity::Medium);
+            }
+
+            // Open sign-up for subscribers or customers is a normal shop or members' area.
+            return Check::fail('open', ['role' => $role], Severity::Info);
         },
 ```
 

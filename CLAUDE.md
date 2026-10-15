@@ -184,7 +184,7 @@ Lighthouse, `BV*` BlogVault, `X*` passive exposure, `F10` merged
 vulnerabilities (BlogVault + Wordfence by CVE, `Rules\VulnerabilityMerge`,
 also used by the UI), `F12a/b/c` auto-updates (minor on, core major off, no
 plugin auto-updating; read from the policy the plugin resolves — constant,
-Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes. `H4` (table overhead) is retired: InnoDB `DATA_FREE` is preallocated, reusable space that OPTIMIZE does not reclaim. `N2` (trash) and `N4` (drafts) are retired: WordPress empties the trash itself and drafts are editorial, not site health.
+Dashboard options, filters — never from the constant alone), `F13` inactive plugins/themes. `H4` (table overhead) is retired: InnoDB `DATA_FREE` is preallocated, reusable space that OPTIMIZE does not reclaim. `N2` (trash) and `N4` (drafts) are retired: WordPress empties the trash itself and drafts are editorial, not site health; `J3` (scheduled task count) too: a count says nothing. `M7` grades open sign-up on the default role's capabilities (`payload.registration`), never its name.
 `F9` is reserved. Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges

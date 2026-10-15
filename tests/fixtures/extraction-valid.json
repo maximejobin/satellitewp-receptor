@@ -204,6 +204,12 @@
     },
     "administrators": [{ "id": 1, "login": "maxadmin", "email": "max@example.com" }],
     "super_admins": [],
+    "registration": {
+        "open": false,
+        "default_role": "subscriber",
+        "default_role_name": "Abonné",
+        "default_role_caps": []
+    },
     "posts_count": {
         "publish": "1200",
         "future": "0",
