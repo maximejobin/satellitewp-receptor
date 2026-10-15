@@ -40,7 +40,9 @@ framework.
   stylesheet, WP count objects, all 22 constants with the `"N/A"` sentinel).
 - **`data/` holds raw data + analysis only**: `payload.json`, `meta.json`,
   `probes/*.json`, `findings.json`, plus analyst inputs `observations.json`
-  and `licenses.json`. No derived files. HTTP 500s go to `logs/`.
+  and `licenses.json`. No derived files. HTTP 500s go to `logs/`. Also
+  written on purpose: `site.json`, `events/*.jsonl`, `integrity/*.json`,
+  `*.lock` files and the replay/report-token caches.
 - **Source files are language-neutral.** Findings and probes carry ids,
   status, observed values and data — never prose. Sentences live in
   `config/lang/{fr,en}.php`, rendered by `Rules\Translator`.
@@ -75,7 +77,7 @@ JSON files are the source of truth; `data/index.sqlite` is a rebuildable index
 **`PayloadValidator` is the trust boundary.** A signature proves only key
 possession: a hijacked plugin signs anything. Every known section is
 shape-checked (types, plugin-file/stylesheet keys without `..`, slug = key,
-http(s) URLs without credentials, non-empty `home_url`) and the whole tree is
+http(s) URLs without credentials, absolute http(s) `site_url` and `home_url`) and the whole tree is
 capped (nodes counted before decoding, depth, string/key lengths, map/list
 sizes) — refused with 422, never rewritten (the raw body is stored). A new
 payload field the server reads gets its check there. Extractions are capped
@@ -119,20 +121,29 @@ optional calls need `try/catch`.
   vhost can be broken independently of the real site. Redirects are followed
   manually with GET, hop by hop, each hop through `HostGuard` (non-global
   addresses refused, connection pinned to the vetted IP via `CURLOPT_RESOLVE`,
-  no DNS rebinding). A homepage 401 means "not public": exposure checks are
-  skipped (`null` = not checked), never reported clean; per-site Basic Auth
+  no DNS rebinding). Only a 2xx homepage is the site: behind a 401 (auth
+  gate), a WAF challenge or an error page, exposure checks are skipped
+  (`skipped`, `null` = not checked) and every rule read from the homepage is
+  unknown (`$homepageReadable`), never reported clean; per-site Basic Auth
   credentials live in `keys.json` and are only sent over https to the site's
   own host. On a soft-404 site, file checks are skipped. A sensitive file only
   counts as exposed when its content matches the file's signature (streamed,
   ≤ 4 KB). Cookie flags are true only if every cookie carries them. Top-level
   `gzip`/`brotli` describe the main request only; `compression.*` is what the
-  server can produce.
+  server can produce. xmlrpc.php and wp-content are probed under `site_url`'s
+  path, the REST API and `?author` under `home_url`'s (WordPress in a
+  subdirectory). Any sub-request that fails (network, or a non-2xx where a
+  page was expected) is `null` and its message is appended to the envelope
+  `errors`; the extraction page lists every probe's `errors` ("Some checks did
+  not complete"). robots.txt is absent only on 404/410.
 - `TlsProbe`: legacy TLS 1.0/1.1 is tested at `security_level=0` (the local
   OpenSSL refuses them at the default level); `null` = not testable.
-  `chain_valid` is the chain alone, `hostname_covered` the name.
+  `chain_valid` is any verify failure (A3 is n/a when the certificate is
+  expired or self-signed), `hostname_covered` the name (CN only without SANs).
 - `DnsProbe`: a failed lookup is `null` (unknown), never an empty "absent".
-  WHOIS/RDAP/NS/MX/DMARC use `SiteContext::registrableDomain()` (last two
-  labels + curated `TWO_LABEL_SUFFIXES`, incl. Canadian provinces).
+  WHOIS/RDAP/NS/MX/DMARC use `SiteContext::registrableDomain()` (public
+  suffix plus one label; curated `MULTI_LABEL_SUFFIXES`, incl. Canadian
+  provinces and `gouv.qc.ca`).
 - `WordfenceProbe` makes no network call: it matches the local index against
   the payload's plugins/themes/core (empty versions skipped). `WordfenceIndex`
   is a JSON Lines cache streamed per component (a full decode OOMs), refreshed
@@ -257,13 +268,18 @@ show its provenance (`src_note()`: payload = as reported by the plugin, probe
 filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `license_select()` saves via `fetch()` (`requestSubmit()`, since
 `form.submit()` fires no submit event). Assets are vendored, no CDN, no build.
-`debugging_tools` (config, dev only) adds a re-run panel on done extractions.
+`debugging_tools` (config, dev only) adds a re-run panel on done or failed extractions.
+Run and Abort are conditional updates (409 when the worker moved the
+extraction meanwhile); an abort is also stored in `meta.json` so
+`index:rebuild` keeps it.
 Menu indicators: a yellow dot on Extractions while one is `pending`, a red
 count on Catalogue of unclassified entries, an "Alert" tag on Status
 (`Web\StatusChecks`: stale/failed sync, active clients without company,
-HubSpot or Teamwork id, orphan subscriptions; cached 5 min in
+HubSpot or Teamwork id, orphan subscriptions, CRM database unreachable; cached 5 min in
 `data/reference/status-alert.json`, refreshed whenever /status is viewed).
-An absent value renders as an empty cell, never a dash.
+An absent value renders as an empty cell in the web UI, never a dash. In the
+client report, a value whose source was never read stays empty (or the
+contract's `default`); "None"/"0" is only said of a source that was read.
 Observations are added and edited in a native `<dialog>` (one form for both, prefilled from the row's `data-obs`); they can also be appended from a CSV (`Web\ObservationsCsv`: header
 `section,color,title,description,include`, comma or semicolon, UTF-8; one
 invalid row and nothing is imported, the errors are flashed per line) and

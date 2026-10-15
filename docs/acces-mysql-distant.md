@@ -1,6 +1,7 @@
 # Accès MySQL à la base « Zone Client » (CRM)
 
-Manager lit la base `clients` et n'écrit que dans quelques tables. On crée
+Manager lit la base `clients` et n'écrit que dans `swp_subscriptions_websites`
+(rattachement d'un abonnement à un site). On crée
 l'utilisateur `umanager` dans RunCloud, puis on remplace ses droits hérités par
 des droits table par table.
 
@@ -18,15 +19,12 @@ GRANT SELECT ON `clients`.swp_licenses             TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_maintenance_plans    TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_products             TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_subscriptions        TO 'umanager'@'<IP_MANAGER>';
-GRANT SELECT ON `clients`.swp_vulnerabilities      TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_website_items        TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_website_tags         TO 'umanager'@'<IP_MANAGER>';
 GRANT SELECT ON `clients`.swp_websites             TO 'umanager'@'<IP_MANAGER>';
 
--- 3. Lecture / écriture
-GRANT SELECT, INSERT, UPDATE, DELETE ON `clients`.swp_licenses_missing           TO 'umanager'@'<IP_MANAGER>';
-GRANT SELECT, INSERT, UPDATE, DELETE ON `clients`.swp_subscriptions_websites     TO 'umanager'@'<IP_MANAGER>';
-GRANT SELECT, INSERT, UPDATE, DELETE ON `clients`.swp_vulnerabilities_management TO 'umanager'@'<IP_MANAGER>';
+-- 3. Lecture / écriture (la seule table que le code modifie)
+GRANT SELECT, INSERT, DELETE ON `clients`.swp_subscriptions_websites TO 'umanager'@'<IP_MANAGER>';
 
 FLUSH PRIVILEGES;
 

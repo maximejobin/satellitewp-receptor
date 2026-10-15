@@ -15,7 +15,9 @@ tout seul. L'Extractor est joignable depuis Internet, donc un site inconnu qui s
 présente est refusé, pas enregistré.
 
 L'identifiant de site est un UUID v4 généré côté WordPress au premier chargement
-du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
+du plugin. Il est lu d'abord dans le fichier de configuration du plugin
+(`site_id`), l'option `swp_site_id` ne servant que de repli. Il faut donc partir
+du site, pas du serveur.
 
 1. **Sur le site WordPress** — Réglages → SatelliteWP, relever l'« Identifiant de
    site ». C'est l'UUID que le plugin enverra dans `X-SWP-Site`.
@@ -26,8 +28,8 @@ du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
    bin/swpmgr keys:add <uuid>
    ```
 
-   ou depuis l'interface web : sur la page **Sites** (`/`), déplier « Pair a
-   new site » et coller le même UUID (et, en option, l'origine). Les deux font
+   ou depuis l'interface web : sur la page **Extractions** (`/extractions`),
+   déplier « Pair a new site » et coller le même UUID (et, en option, l'origine). Les deux font
    exactement la même chose sur le même `data/keys.json` — l'UI est pratique
    pour un appairage ponctuel, la CLI pour un script. La clé nouvellement créée
    s'affiche ensuite sur la page du site (`/site/<uuid>`), qui existe déjà à ce
@@ -37,14 +39,15 @@ du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
    UI. Elle est stockée dans `data/keys.json`, en clair, en `0600`.
 
 3. **Retour sur le site**, coller la clé dans **Réglages → SatelliteWP → Appairage**.
-   Elle est écrite dans `.satellitewp-maintenance.php`, à la racine WordPress, à côté
-   de `wp-config.php` — jamais en base, donc elle ne voyage pas dans un export SQL.
+   Elle est écrite dans `wp-content/.satellitewp-maintenance.php` (emplacement
+   modifiable par le filtre `swp_config_file_path`) — jamais en base, donc elle ne
+   voyage pas dans un export SQL.
 
-   Si la racine n'est pas inscriptible, l'écran affiche le contenu exact du fichier à
+   Si le dossier n'est pas inscriptible, l'écran affiche le contenu exact du fichier à
    déposer par SFTP. Alternative équivalente, à préférer si tu as l'accès disque :
 
    ```php
-   define( 'SWP_API_KEY', '<la clé>' );
+   define( 'SWP_MAINTENANCE_PLUGIN_API_KEY', '<la clé>' );
    ```
 
    La constante l'emporte sur le fichier ; quand elle est définie, le champ s'affiche
@@ -54,10 +57,11 @@ du plugin (option `swp_site_id`). Il faut donc partir du site, pas du serveur.
    signifie que l'extraction est arrivée et attend en `pending` — c'est un analyste qui
    la met en file avec « Lancer l'analyse ».
 
-Sans clé, le plugin **n'envoie aucun en-tête `X-SWP-Signature`** (il ne signe que si une
-clé est configurée) et l'Extractor répond `401 Unsigned payloads are not accepted`,
-puisque `allow_unsigned` vaut `false` dans `config/config.php`. Ne le passe à `true`
-qu'en développement local.
+Sans clé, le plugin **n'envoie rien** : il s'arrête localement avec « This site is not
+paired yet: no signing key is configured, so nothing was sent. » La réponse
+`401 Unsigned payloads are not accepted` ne vient que d'un autre client qui posterait
+sans signature, puisque `allow_unsigned` vaut `false` dans `config/config.php`. Ne le
+passe à `true` qu'en développement local.
 
 ### L'appairage lie le site à son adresse
 
@@ -108,7 +112,8 @@ où le reste de son historique vit déjà.
 
 Une clé révoquée se comporte exactement comme une clé absente : un push signé
 reçoit `401 No API key registered for this site`. Après une rotation, mettre à jour la
-clé sur le site **avant** le prochain envoi — écran d'appairage, ou `SWP_API_KEY`.
+clé sur le site **avant** le prochain envoi — écran d'appairage, ou
+`SWP_MAINTENANCE_PLUGIN_API_KEY`.
 
 Enregistrer une nouvelle clé depuis l'écran ré-inscrit aussi l'adresse courante : c'est
 la manière de ré-appairer délibérément une copie pour qu'elle rapporte sous sa propre
@@ -118,22 +123,22 @@ identité.
 
 ## 2. L'endpoint
 
-L'URL de l'Extractor se règle dans **Réglages → SatelliteWP → « Extractor URL »** (écrite
-dans `.satellitewp-maintenance.php`), ou par constante quand elle doit être épinglée par
-l'infrastructure :
+L'URL de l'Extractor ne se règle **pas** dans l'interface : le champ « Extractor URL »
+des réglages est en lecture seule. Ordre de résolution, le dernier l'emporte :
 
-```php
-define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://extractor.exemple.com' );
-```
+1. la valeur par défaut, `https://extractor.satellitewp.com` ;
+2. une clé `endpoint` ajoutée à la main dans `wp-content/.satellitewp-maintenance.php` ;
+3. la constante, quand l'infrastructure doit l'épingler :
 
-La constante l'emporte sur le fichier. Champ vide = valeur par défaut,
-`https://extractor.satellitewp.com`. Dans tous les cas, **sans barre oblique finale ni
-chemin**.
+   ```php
+   define( 'SWP_MAINTENANCE_PLUGIN_EXTRACTION_ENDPOINT_URL', 'https://extractor.exemple.com' );
+   ```
 
-Dès que l'endpoint effectif n'est pas celui par défaut, l'écran de réglages du site
-affiche un **encadré orange** nommant l'URL utilisée, l'URL par défaut, et d'où vient la
-surcharge (constante ou fichier). C'est le repère visuel pour ne pas confondre un site
-pointé sur un Extractor de test avec un site en production. Les trois types de payload (`extraction`, `event`, `integrity`) vont à
+4. le filtre `swp_extraction_endpoint_url`.
+
+Dans tous les cas, **sans barre oblique finale ni chemin**. Quand le code impose la
+valeur, l'écran l'indique (« Value overwritten via code ») : c'est le repère pour ne pas
+confondre un site pointé sur un Extractor de test avec un site en production. Les trois types de payload (`extraction`, `event`, `integrity`) vont à
 cette même URL ; c'est l'en-tête `X-SWP-Type` qui les distingue.
 
 Côté serveur, le vhost doit servir `public/receptor/` comme racine :
@@ -185,13 +190,15 @@ ci-dessous relie chaque message à sa cause.
 | Code | `message` | Cause |
 |---|---|---|
 | 404 | `Not found` (texte brut) | requête non-POST, ou `X-SWP-Type` absent — souvent une redirection du vhost |
-| 413 | `Payload too large` | corps > 10 Mio |
+| 413 | `Payload too large` | corps > 10 Mio (> 1 Mio pour un `event`) |
+| 429 | `Too many extractions this hour` / `Too many integrity reports this hour` | plus de 30 envois de ce type dans l'heure pour ce site |
+| 429 | `Event quota for this month reached` | journal d'événements du mois plein |
 | 400 | `Empty body` | corps vide |
 | 400 | `Missing or malformed X-SWP-Site` | l'en-tête n'est pas un UUID |
 | 400 | `Missing or unknown X-SWP-Type` | autre que extraction / event / integrity |
 | 400 | `Missing or malformed X-SWP-Timestamp` | vide ou non numérique |
 | 401 | `X-SWP-Timestamp outside the accepted window` | horloge décalée de plus de 300 s |
-| 401 | `Unsigned payloads are not accepted` | `SWP_API_KEY` non défini sur le site |
+| 401 | `Unsigned payloads are not accepted` | envoi sans signature d'un client autre que le plugin (le plugin, lui, n'envoie rien sans clé) |
 | 401 | `No API key registered for this site` | site inconnu du `keys:add`, ou clé révoquée |
 | 401 | `Missing X-SWP-Signature` | clé connue du serveur mais en-tête absent |
 | 401 | `Invalid X-SWP-Signature` | clés différentes de part et d'autre, ou corps modifié en transit |
@@ -201,6 +208,7 @@ ci-dessous relie chaque message à sa cause.
 | 422 | `Body site_id does not match X-SWP-Site header` | comparaison stricte, sensible à la casse |
 | 422 | `Event payload requires an "events" array` | payload `event` mal formé |
 | 422 | `Integrity payload requires an "integrity" object` | payload `integrity` mal formé |
+| 422 | `<chemin>: …` (ex. `registration.open: expected bool`) | un champ du payload n'a pas la forme attendue — le chemin désigne le champ refusé |
 | 409 | `This site is registered as … but reported from …` | l'extraction vient d'une autre adresse que celle liée à la clé — copie restaurée, ou déménagement réel (voir `keys:rebind`) |
 | 500 | `Storage failure (ref …)` | écriture impossible sous `data/` — le détail est dans `logs/`, voir ci-dessous |
 
@@ -319,10 +327,10 @@ Ce que le plugin envoie, et que l'Extractor attend — identique des deux côté
 | `X-SWP-Site` | UUID v4 minuscule, doit être égal au `site_id` du corps |
 | `X-SWP-Type` | `extraction`, `event` ou `integrity` |
 | `X-SWP-Timestamp` | secondes Unix, chiffres uniquement |
-| `X-SWP-Signature` | `hash_hmac('sha256', "<timestamp>.<corps brut>", clé)` — hexadécimal minuscule, **sans préfixe** (`sha256=` n'est pas attendu), omis si aucune clé n'est configurée |
+| `X-SWP-Signature` | `hash_hmac('sha256', "<timestamp>.<corps brut>", clé)` — hexadécimal minuscule, **sans préfixe** (`sha256=` n'est pas attendu) ; toujours présent, puisque sans clé le plugin n'envoie rien |
 | Corps | le payload JSON directement, sans enveloppe ; stocké tel quel dans `payload.json` |
 | Enveloppe | `schema_version` (chaîne) + `site_id` obligatoires ; `events[]` pour `event`, `integrity{}` pour `integrity` |
-| Succès | tout 2xx ; le plugin ignore le corps de la réponse |
+| Succès | 2xx avec le corps `{"status":"received"}` ; toute autre réponse est un échec |
 
 La signature ne couvre que `timestamp` + corps : `X-SWP-Site` et `X-SWP-Type`
 sont hors signature.
@@ -342,11 +350,12 @@ Appliqué dans `satellitewp-plugin-maintenance` en même temps que ce document.
    signale maintenant comme « HTTP 301 », explicite, au lieu d'un GET silencieux répondu
    par un 404 en texte brut.
 
-3. **L'endpoint et la clé sont dans `.satellitewp-maintenance.php`**, éditables depuis
-   Réglages → SatelliteWP. Rien en base : la clé ne voyage pas dans un export SQL et ne
+3. **La clé est dans `wp-content/.satellitewp-maintenance.php`**, éditable depuis
+   Réglages → SatelliteWP (l'endpoint s'y ajoute seulement à la main). Rien en base : la clé ne voyage pas dans un export SQL et ne
    se lit pas avec un accès SQL seul. Le fichier est en `0600`, protégé par
-   `defined( 'ABSPATH' ) || exit;`, et supprimé à la désinstallation. Quand la racine
-   n'est pas inscriptible, l'écran affiche le contenu exact à déposer par SFTP.
+   `defined( 'ABSPATH' ) || exit;`, et conservé à la désinstallation (une réinstallation
+   retrouve l'appairage ; le supprimer pour désappairer). Quand le dossier n'est pas
+   inscriptible, l'écran affiche le contenu exact à déposer par SFTP.
 
 4. **Un tableau Status sur l'écran d'appairage** : Extractor effectif et sa provenance,
    présence et provenance de la clé, état du fichier, adresse courante contre adresse

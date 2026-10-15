@@ -2,9 +2,9 @@
 
 Contrepartie serveur du plugin **SatelliteWP Maintenance** : reçoit les payloads
 signés du plugin (extractions, événements, intégrité), les stocke en JSON dans
-`data/`, exécute un pipeline de probes de validation (DNS, WHOIS/RDAP, TLS, HTTP)
-et produit des fichiers JSON exploitables pour l'affichage brut et les rapports
-(bilan de santé, etc.).
+`data/`, exécute un pipeline de probes (DNS, RDAP, TLS, HTTP, PageSpeed,
+BlogVault, CRM, Wordfence, wp.org, courriel, SE Ranking), évalue un catalogue de
+règles et produit les données du rapport client (bilan de santé).
 
 ## Principes
 
@@ -19,9 +19,17 @@ et produit des fichiers JSON exploitables pour l'affichage brut et les rapports
 ## Installation
 
 ```bash
-composer install
+composer install --no-dev --optimize-autoloader            # en production
 cp config/config.local.php.dist config/config.local.php   # puis ajuster
+chmod 600 config/config.local.php                          # il contient les secrets
+./bin/swpmgr users:add <courriel> admin                    # le premier inscrit est l'admin ; sans lui, personne n'entre
 ```
+
+`config/config.local.php` en production doit définir : `app.base_url` (URL de
+l'admin, sinon les liens du rapport et le retour OAuth suivent l'en-tête Host),
+`auth.google.*`, les clés `pagespeed`, `blogvault`, `wordfence`, `seranking`,
+`mail.*` et `crm_db.*`. Il ne doit **jamais** contenir `debugging_tools`,
+`allow_unsigned`, `auth.open_mode` ni `web.*` (secours de développement).
 
 **Deux applications, deux vhosts, qui ne se parlent pas.** Elles partagent le
 code et `data/`, rien d'autre :
@@ -68,11 +76,19 @@ server {
 }
 ```
 
-Crontab (worker de la file d'analyse + relance des runs plantés) :
+Sur le vhost de l'Extractor, `client_max_body_size 12m` (le serveur refuse
+au-delà de 10 Mo) ; sur les deux, HSTS au niveau de nginx.
+
+Crontab complète :
 
 ```cron
-* * * * * php /var/www/manager/bin/swpmgr ingest:process --requeue-stale=30 >> /var/www/manager/data/manager.log 2>&1
+* * * * * php /var/www/manager/bin/swpmgr ingest:process --requeue-stale=30 >> /var/www/manager/logs/manager-cron.log 2>&1
+0 * * * * php /var/www/manager/bin/swpmgr reference:refresh --product=wordpress,php,mysql,mariadb >> /var/www/manager/logs/manager-cron.log 2>&1
+0 5 * * * php /var/www/manager/bin/swpmgr wordfence:refresh >> /var/www/manager/logs/manager-cron.log 2>&1
 ```
+
+`ingest:process` interroge aussi les audits SE Ranking en attente : pas de cron
+séparé. Il ne journalise rien quand il n'y a rien à faire (`-v` pour le voir).
 
 **Une extraction reçue n'est jamais analysée toute seule.** Elle est stockée en
 `pending` et attend qu'un analyste presse « Lancer l'analyse » dans l'interface,
@@ -81,9 +97,20 @@ pousse de lui-même ne coûte donc qu'un fichier sur disque : aucune sonde, aucu
 quota PageSpeed ou BlogVault. Le cron existe uniquement pour que les ~20 s
 d'analyse tournent hors de la requête web, sans risque de timeout.
 
-Cycle de vie : `pending` → *(clic analyste)* → `queued` → `running` → `done`.
-Un run planté depuis plus de N minutes retourne en `queued` (pas en `pending`,
-sinon plus personne ne le reprendrait).
+Cycle de vie : `pending` → *(clic analyste)* → `queued` → `running` → `done`,
+ou `error` si une exception survient après `running`. « Interrompre » passe
+une extraction `pending` ou `queued` en `aborted`. Un run planté depuis plus de
+N minutes retourne en `queued` (pas en `pending`, sinon plus personne ne le
+reprendrait).
+
+### Exploitation
+
+- **Sauvegarde** : `data/` est la source de vérité (`keys.json`, `users.json`,
+  `sites/**`, `catalog/`) ; une copie nocturne suffit. `data/reference/` et
+  `index.sqlite` se reconstruisent (`reference:refresh`, `index:rebuild`).
+- **Journaux** : `logs/*.log` (cron et une erreur 500 par ligne dans
+  `error-<date>.log`) n'ont pas de rotation intégrée : ajouter une entrée
+  logrotate.
 
 ### PageSpeed Insights
 
@@ -109,11 +136,14 @@ réessaie 3 fois avec backoff, et un run partiel est signalé `warn` (jamais `ok
 ./bin/swpmgr keys:add <site_id> --origin="https://client-x.example.com"
 ```
 
-La clé affichée (une seule fois) va dans le `wp-config.php` du site :
+La clé affichée (une seule fois) se colle dans les réglages du plugin, qui
+l'écrit dans `wp-content/.satellitewp-maintenance.php`. Elle peut aussi être
+imposée dans le `wp-config.php` du site (détail dans
+[docs/PAIRING.md](docs/PAIRING.md)) :
 
 ```php
-define( 'SWP_API_KEY', '…' );
-define( 'SWP_EXTRACTION_ENDPOINT_URL', 'https://extractor.satellitewp.com' );
+define( 'SWP_MAINTENANCE_PLUGIN_API_KEY', '…' );
+define( 'SWP_MAINTENANCE_PLUGIN_EXTRACTION_ENDPOINT_URL', 'https://extractor.satellitewp.com' ); // facultatif
 ```
 
 Le plugin ne connaît que l'hôte de l'Extractor. L'interface analyste vit ailleurs
@@ -127,10 +157,14 @@ et n'est jamais joignable depuis un site client.
 | `pipeline:run <site_id> [extraction] [--probe=a,b]` | Pipeline complet ou partiel (défaut : dernière extraction) |
 | `probe:run <probe> <site_id> [extraction]` | Une probe seule, imprime l'enveloppe JSON |
 | `probe:list` | Probes enregistrées |
-| `rules:evaluate <site_id> [extraction] [--all] [--json]` | Ré-évalue le catalogue (sans réseau) |
-| `rules:list [--category=…]` | Catalogue de règles |
+| `rules:evaluate <site_id> [extraction] [--all] [--json] [--lang=fr]` | Évalue le catalogue et l'affiche (sans réseau) ; n'écrit que pour une extraction `done` |
+| `rules:reevaluate [site_id] [--extraction=…] [--dry-run]` | Ré-évalue les extractions stockées après un changement de règles (`--dry-run` d'abord) |
+| `rules:list [--category=…]` / `rules:doc` | Catalogue de règles ; `rules:doc > docs/rules-catalog.md` |
 | `sites:list [--search=…]` / `extractions:list <site_id>` | Listes |
-| `keys:add/list/revoke` | Gestion des clés API par site |
+| `keys:add/list/revoke/rebind` | Clés API par site ; `rebind` après un déménagement |
+| `users:add` / `users:set-role` | Accès à l'interface |
+| `catalog:list/set/suggest/reindex` | Catalogue des licences plugins/thèmes |
+| `seranking:poll [--force]` | Relève les audits SE Ranking en attente (aussi fait par `ingest:process`) |
 | `index:rebuild` | Régénère SQLite depuis `data/` |
 | `reference:refresh [--product=php,wordpress]` | Rafraîchit les tables EOL depuis endoflife.date |
 | `wordfence:refresh` | Rafraîchit l'index Wordfence Intelligence — **quotidien**, jamais plus (API à débit strict) |
@@ -155,10 +189,12 @@ data/sites/<site_id>/
 ├── site.json                      # infos dénormalisées du site
 ├── extractions/<AAAAMMJJTHHMMSSZ>/
 │   ├── payload.json               # payload brut, tel que reçu
-│   ├── meta.json                  # réception (ip, signature, taille)
-│   ├── probes/{dns,rdap,tls,http,pagespeed,blogvault,wordfence}.json
-│   └── findings.json              # constats du moteur de règles
-├── extractions/latest             # symlink
+│   ├── meta.json                  # réception (ip, signature, taille, langue)
+│   ├── probes/{dns,rdap,tls,http,pagespeed,blogvault,crm,wordfence,wporg,mail,seranking}.json
+│   ├── findings.json              # constats du moteur de règles
+│   ├── observations.json          # saisie analyste
+│   └── licenses.json              # saisie analyste
+├── extractions/latest             # symlink si symlink() est permis ; rien ne le lit
 ├── events/AAAA-MM.jsonl           # événements, append-only
 └── integrity/<horodatage>.json
 ```
@@ -176,23 +212,22 @@ Le catalogue vit dans [`config/rules.php`](config/rules.php) et suit
 `.github/validations-techniques.txt` du repo plugin — mêmes lettres de
 catégorie, numérotées à la suite dans chaque lettre (`A1`, `B7`, `I1`…, sans
 suffixe), mêmes sévérités **(C)ritique / (É)levée /
-(M)oyenne / (I)nfo**. Quatre préfixes sont des ajouts hors catalogue,
-volontairement distincts pour ne jamais entrer en collision : `W*` (domaine
-WHOIS/RDAP), `PS*` (scores Lighthouse), `BV*` (BlogVault) et `WF*` (Wordfence
-Intelligence). `BV2` et `WF1` sont deux détecteurs de vulnérabilités
-**indépendants** — un site peut échouer l'un, l'autre, les deux, ou aucun ; ils
-ne sont jamais fusionnés au niveau des règles, seulement à l'affichage (voir
-plus bas).
+(M)oyenne / (I)nfo**. Quatre préfixes sont des ajouts hors catalogue : `W*`
+(domaine, RDAP), `PS*` (scores Lighthouse), `BV*` (BlogVault : `BV1`, site
+piraté) et `X*` (exposition passive). Les vulnérabilités de BlogVault et de
+Wordfence sont fusionnées par `cve_id` dans la règle `F8`
+(`Rules\VulnerabilityMerge`, aussi utilisée par l'interface).
 
-Chaque constat porte : id, catégorie, source, sévérité, statut, valeur observée,
-seuil, message d'action et badge rapport (rouge/jaune/bleu).
+Chaque constat est neutre en langue : id, catégorie, source, sévérité,
+pastille (rouge, orange, violet, bleu, vert, gris), statut, valeur observée,
+seuil et `data`. Les phrases vivent dans `config/lang/{fr,en}.php`.
 
 Quatre statuts, et la distinction compte pour un rapport client :
 
 | Statut | Sens |
 | --- | --- |
 | `pass` | Conforme |
-| `fail` | À corriger — seul cas qui porte un message d'action |
+| `fail` | À corriger |
 | `na` | Non applicable (ex. aucun asset CSS/JS à compresser) |
 | `unknown` | Donnée absente ou sonde en échec — **jamais** présenté comme un problème |
 
@@ -200,7 +235,7 @@ Seuils ajustables **sans toucher au catalogue**, par identifiant :
 
 ```php
 // config/config.local.php
-'rules' => ['thresholds' => ['I1' => 1048576, 'M1' => 3, 'A2' => 45]],
+'rules' => ['thresholds' => ['J1' => 60, 'M1' => 3, 'A2' => 45]],
 ```
 
 ```bash
@@ -248,8 +283,8 @@ Les listes se sérialisent en `site_ids[]=…` et les filtres en
 
 **Câblé** via la probe `blogvault` : elle apparie le site sur l'hôte, puis
 collecte vulnérabilités (CVE + score CVSS), statut piraté, pare-feu, sauvegardes,
-2FA des administrateurs et durcissement `wp-config` — 7 appels par extraction.
-Alimente les règles `BV1`–`BV6`. Les identifiants HTTP du site renvoyés par
+2FA des administrateurs et durcissement `wp-config` — 1 recherche + 7 appels
+par extraction. Alimente `BV1` et `F8`. Les identifiants HTTP du site renvoyés par
 `GET /sites/{id}` sont supprimés avant écriture — jamais dans `data/`.
 
 Quand le scan signale un problème non résolu (`scanner.status === 'hacked'` ou
@@ -286,20 +321,15 @@ le tout premier rafraîchissement (les deux variantes en 429) ne laisse **aucun
 fichier** derrière plutôt qu'un cache vide mais « présent » — sinon la sonde
 croirait le site propre alors que l'index n'a jamais existé.
 
-```cron
-0 5 * * * php /var/www/manager/bin/swpmgr wordfence:refresh >> /var/www/manager/data/manager.log 2>&1
-```
-
 **Câblée** via la probe `wordfence` — la seule sans appel réseau : elle
 recoupe localement les extensions/thèmes/version du cœur du site (payload de
-l'extraction, porté par `SiteContext`) contre l'index en cache. Alimente la
-règle `WF1`, indépendante de `BV2` (voir plus haut).
+l'extraction, porté par `SiteContext`) contre l'index en cache. Alimente `F8`.
 
-`merge_vulnerabilities()` ([src/Web/helpers.php](src/Web/helpers.php))
-réconcilie les deux sources **à l'affichage seulement** — jamais au niveau des
-règles — en associant par égalité stricte de `cve_id` (jamais par
-recoupement approximatif de plage de version, qui produirait de faux
-« confirmé par les deux »). Chaque vulnérabilité affichée porte son badge de
+`Rules\VulnerabilityMerge` réconcilie les deux sources, pour la règle `F8`
+comme pour l'affichage (`merge_vulnerabilities()` dans
+[src/Web/helpers.php](src/Web/helpers.php) n'en est qu'une enveloppe), par
+égalité stricte de `cve_id` — jamais par recoupement approximatif de plage de
+version, qui produirait de faux « confirmé par les deux ». Chaque vulnérabilité affichée porte son badge de
 source : BlogVault, Wordfence, ou les deux.
 
 > ⚠️ **Le flux `scanner` ne porte aucun `cve_id`** — mesuré sur l'index réel :
@@ -321,7 +351,8 @@ croissance de la base.
 Référentiel transversal (tous sites) de chaque plugin/thème vu, pour repérer
 ceux qui risquent une **licence payante**. Chaque extraction enregistre les
 slugs vus ; un analyste classe ensuite chacun : `free` / `premium` / `mixed`
-(gratuit mais connectable à une licence, ex. MailPoet) / `unknown`.
+(gratuit mais connectable à une licence, ex. MailPoet) / `custom` (code sur
+mesure) / `unknown`.
 
 ```bash
 ./bin/swpmgr catalog:suggest              # présence wp.org -> suggère free/premium
@@ -332,7 +363,7 @@ slugs vus ; un analyste classe ensuite chacun : `free` / `premium` / `mixed`
 Stocké dans `data/catalog/software.json`. Vu aussi dans l'UI web (`/catalog`,
 + colonne Licence sur la page d'extraction). La suggestion (`catalog:suggest`)
 interroge api.wordpress.org : présent → `free` (l'analyste affine en `mixed` au
-besoin), absent → `premium`.
+besoin), absent (404) → `premium` ; une erreur réseau laisse l'entrée intacte.
 
 ## Ajouter une probe
 
@@ -345,7 +376,8 @@ besoin), absent → `premium`.
 ## Tests
 
 ```bash
-composer test              # sans réseau
+composer check             # PHPUnit (sans réseau) + PHPStan niveau 6
+composer test:mysql        # le SQL du CRM sur un vrai MySQL jetable (SWPMGR_TEST_MYSQL_*)
 vendor/bin/phpunit --group network   # probes live (optionnel)
 ```
 
@@ -355,4 +387,5 @@ POST JSON, headers `X-SWP-Site` (UUID), `X-SWP-Type`
 (`extraction|event|integrity`), `X-SWP-Timestamp` (unix),
 `X-SWP-Signature` = `hash_hmac('sha256', timestamp . '.' . body, api_key)`.
 Fenêtre anti-rejeu : ±300 s (configurable). Corps : toujours `site_id` +
-`schema_version`. Le plugin considère tout 2xx comme un succès.
+`schema_version`. Le plugin ne considère un envoi réussi que sur une réponse
+`{"status":"received"}`.
