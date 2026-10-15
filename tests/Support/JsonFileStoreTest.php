@@ -23,7 +23,21 @@ final class JsonFileStoreTest extends TestCase
         self::assertSame([], glob($file . '.tmp*') ?: []);
     }
 
-    public function testANullDocumentWritesNothing(): void
+    public function testACorruptFileIsNeverOverwritten(): void
+    {
+        $file = $this->tmpDir . '/doc.json';
+        file_put_contents($file, '{"a": 1');
+
+        try {
+            (new JsonFileStore($file))->mutate(static fn (array $doc): array => [null, ['b' => 2]]);
+            self::fail('expected a RuntimeException');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame('{"a": 1', file_get_contents($file));
+    }
+
+        public function testANullDocumentWritesNothing(): void
     {
         $file  = $this->tmpDir . '/doc.json';
         $store = new JsonFileStore($file);

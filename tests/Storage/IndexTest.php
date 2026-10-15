@@ -363,4 +363,30 @@ final class IndexTest extends TestCase
         $this->assertSame('error', $this->index->getExtraction(self::SITE_A, $partial)['status'], 'stopped part-way');
         $this->assertSame('done', $this->index->getExtraction(self::SITE_A, $done)['status']);
     }
+
+    public function testAnAbortedExtractionStaysAbortedAfterARebuild(): void
+    {
+        $store = new DataStore($this->tmpDir);
+        $id    = $store->storeExtraction(self::SITE_A, '{}', ['received_at' => '2026-07-22T14:30:00Z']);
+        $store->updateMeta(self::SITE_A, $id, ['aborted' => true]);
+
+        $this->index->rebuildFrom($store);
+
+        $this->assertSame('aborted', $this->index->getExtraction(self::SITE_A, $id)['status']);
+    }
+
+    public function testATransitionOnlyAppliesFromTheExpectedStatuses(): void
+    {
+        $this->seedExtraction(self::SITE_A, 'e1');
+        $this->index->setExtractionStatus(self::SITE_A, 'e1', Index::STATUS_QUEUED);
+        // The worker claimed it between the analyst's page load and the click on Abort.
+        $this->index->claimQueued(self::SITE_A, 'e1');
+
+        $this->assertFalse($this->index->transitionStatus(self::SITE_A, 'e1', [Index::STATUS_PENDING, Index::STATUS_QUEUED], Index::STATUS_ABORTED));
+        $this->assertSame('running', $this->index->getExtraction(self::SITE_A, 'e1')['status']);
+
+        $this->seedExtraction(self::SITE_A, 'e2');
+        $this->assertTrue($this->index->transitionStatus(self::SITE_A, 'e2', [Index::STATUS_PENDING, Index::STATUS_ERROR], Index::STATUS_QUEUED));
+        $this->assertSame('queued', $this->index->getExtraction(self::SITE_A, 'e2')['status']);
+    }
 }

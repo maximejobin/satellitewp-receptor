@@ -238,7 +238,8 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['text' => '2.0 → 2.1', 'color' => 'orange'], $table['rows'][1][1]); // parent, update offered
         self::assertSame(['https://manager.test/assets/report-icons/dot-green.png'], $table['rows'][0][2]['icons']);
         self::assertSame(
-            ['https://manager.test/assets/report-icons/dot-red.png', 'https://manager.test/assets/report-icons/upgrade.png'],
+            // The active child theme runs on its parent: green, not an unused theme.
+            ['https://manager.test/assets/report-icons/dot-green.png', 'https://manager.test/assets/report-icons/upgrade.png'],
             $table['rows'][1][2]['icons']
         );
     }

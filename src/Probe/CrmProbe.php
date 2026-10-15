@@ -45,12 +45,12 @@ final class CrmProbe extends AbstractProbe
             return ['target' => 'crm', 'data' => ['linked' => false, 'reason' => 'no_blogvault_id']];
         }
 
-        $repository = ($this->repository)();
-        if ($repository === null) {
-            return ['target' => 'crm', 'status' => ProbeResult::STATUS_ERROR, 'errors' => ['CRM database is not configured (crm_db)']];
-        }
-
         try {
+            // Connecting is part of the query: a refused login carries the user and host too.
+            $repository = ($this->repository)();
+            if ($repository === null) {
+                return ['target' => 'crm', 'status' => ProbeResult::STATUS_ERROR, 'errors' => ['CRM database is not configured (crm_db)']];
+            }
             $websites      = $repository->websitesByBlogvaultSiteId($blogvaultId);
             $subscriptions = count($websites) === 1 ? $repository->subscriptionsForWebsite((int) $websites[0]['id']) : [];
         } catch (PDOException $e) {

@@ -106,6 +106,13 @@ final class DataStore
         return count(glob($this->siteDir($siteId) . '/extractions/' . $prefix . '*', GLOB_ONLYDIR) ?: []);
     }
 
+    public function countIntegrityInHour(string $siteId, string $receivedAt): int
+    {
+        $prefix = substr($this->timestampId($receivedAt), 0, 11);
+
+        return count(glob($this->siteDir($siteId) . '/integrity/' . $prefix . '*.json') ?: []);
+    }
+
     /** @param array<string, mixed> $payload */
     public function storeIntegrity(string $siteId, array $payload, string $receivedAt): string
     {

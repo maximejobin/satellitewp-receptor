@@ -33,14 +33,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' || !isset($_SERVER['HTTP_X_
     exit;
 }
 
-$result = Bootstrap::app()->extractor()->handle(
+ini_set('display_errors', '0');
+
+$app     = Bootstrap::app();
+$maxBody = (int) $app->config->get('max_body_bytes', 10 * 1024 * 1024);
+if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $maxBody) {
+    http_response_code(413);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['status' => 'error', 'message' => 'Payload too large']);
+    exit;
+}
+
+$result = $app->extractor()->handle(
     [
         'site'      => $_SERVER['HTTP_X_SWP_SITE'] ?? null,
         'type'      => $_SERVER['HTTP_X_SWP_TYPE'] ?? null,
         'timestamp' => $_SERVER['HTTP_X_SWP_TIMESTAMP'] ?? null,
         'signature' => $_SERVER['HTTP_X_SWP_SIGNATURE'] ?? null,
     ],
-    (string) file_get_contents('php://input'),
+    // At most one byte past the cap: an oversized body gets its 413 without being held in memory.
+    (string) file_get_contents('php://input', false, null, 0, $maxBody + 1),
     $_SERVER['REMOTE_ADDR'] ?? null
 );
 

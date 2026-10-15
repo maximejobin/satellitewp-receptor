@@ -58,7 +58,8 @@ final class IngestProcessCommand extends Command
             $queued   = $index->queuedExtractions((int) $input->getOption('limit'));
 
             if ($queued === []) {
-                $output->writeln('No queued extractions.');
+                // Runs every minute from cron: an idle run writes nothing unless -v.
+                $output->writeln('No queued extractions.', OutputInterface::VERBOSITY_VERBOSE);
 
                 return $failures === 0 ? Command::SUCCESS : Command::FAILURE;
             }

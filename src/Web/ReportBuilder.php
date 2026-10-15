@@ -484,7 +484,8 @@ final class ReportBuilder
                 $ordered[$key] = $th;
                 $parentSlug    = self::parentSlugOf($th);
                 if ($parentSlug !== '' && isset($themes[$parentSlug])) {
-                    $ordered[$parentSlug] = $themes[$parentSlug];
+                    // The active child theme runs on its parent: not an unused theme.
+                    $ordered[$parentSlug] = ['active' => true] + (array) $themes[$parentSlug];
                 }
                 break;
             }

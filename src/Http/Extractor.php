@@ -88,6 +88,10 @@ final class Extractor
             && $this->store->countExtractionsInHour($siteId, $receivedAt) >= self::MAX_EXTRACTIONS_PER_HOUR) {
             return $this->error(429, 'Too many extractions this hour');
         }
+        if ($type === PayloadValidator::TYPE_INTEGRITY
+            && $this->store->countIntegrityInHour($siteId, $receivedAt) >= self::MAX_EXTRACTIONS_PER_HOUR) {
+            return $this->error(429, 'Too many integrity reports this hour');
+        }
         if ($type === PayloadValidator::TYPE_EVENT
             && $this->store->eventFileBytes($siteId, $receivedAt) >= self::MAX_EVENT_FILE_BYTES) {
             return $this->error(429, 'Event quota for this month reached');

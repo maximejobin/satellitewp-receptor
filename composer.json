@@ -4,8 +4,10 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": ">=8.4",
+        "php": "^8.4",
+        "ext-curl": "*",
         "ext-json": "*",
+        "ext-mbstring": "*",
         "ext-openssl": "*",
         "ext-pdo_sqlite": "*",
         "guzzlehttp/guzzle": "^7.9",

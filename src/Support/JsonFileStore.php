@@ -33,6 +33,32 @@ final class JsonFileStore
     }
 
     /**
+     * Like read(), but an existing file that cannot be read or decoded throws:
+     * writing over it would wipe every record it holds.
+     *
+     * @return array<mixed>
+     */
+    private function readForWrite(): array
+    {
+        if (!is_file($this->file)) {
+            return [];
+        }
+        $raw = @file_get_contents($this->file);
+        if ($raw === false) {
+            throw new RuntimeException("Cannot read {$this->file}");
+        }
+        if (trim($raw) === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException("{$this->file} is not valid JSON");
+        }
+
+        return $decoded;
+    }
+
+    /**
      * Runs $change on the freshly re-read document under the lock. It returns
      * [result, new document]; a null document means "nothing to write".
      *
@@ -57,7 +83,7 @@ final class JsonFileStore
         }
 
         try {
-            [$result, $document] = $change($this->read());
+            [$result, $document] = $change($this->readForWrite());
             if ($document !== null) {
                 $this->write($document);
             }

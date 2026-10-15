@@ -187,6 +187,29 @@ final class Index
      *
      * @return bool false when the extraction was no longer queued
      */
+    /**
+     * Sets $to only while the status is still one of $from: an analyst's
+     * click must not overwrite what the worker did in between.
+     *
+     * @param list<string> $from
+     */
+    public function transitionStatus(string $siteId, string $extractionId, array $from, string $to): bool
+    {
+        $placeholders = implode(', ', array_map(static fn (int $i): string => ':from' . $i, array_keys($from)));
+        $params       = ['status' => $to, 'site_id' => $siteId, 'id' => $extractionId];
+        foreach ($from as $i => $status) {
+            $params['from' . $i] = $status;
+        }
+        $stmt = $this->pdo()->prepare(<<<SQL
+            UPDATE extractions
+            SET status = :status, attempts = CASE WHEN :status = 'queued' THEN 0 ELSE attempts END, previous_status = NULL
+            WHERE site_id = :site_id AND id = :id AND status IN ({$placeholders})
+            SQL);
+        $stmt->execute($params);
+
+        return $stmt->rowCount() === 1;
+    }
+
     public function claimQueued(string $siteId, string $extractionId): bool
     {
         $stmt = $this->pdo()->prepare(<<<'SQL'
@@ -440,6 +463,7 @@ final class Index
                 // probes without findings = stopped part-way. A queued-only
                 // extraction leaves no trace and comes back pending.
                 $status = match (true) {
+                    ($meta['aborted'] ?? false) === true && $probes === []   => self::STATUS_ABORTED,
                     $probes === []                                           => self::STATUS_PENDING,
                     $store->readFindings($siteId, $extractionId) !== null    => self::STATUS_DONE,
                     default                                                  => self::STATUS_ERROR,

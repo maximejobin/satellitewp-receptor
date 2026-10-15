@@ -64,6 +64,10 @@ final class ClientsDb
             $this->pdo = new PDO($this->dsn(), $this->username, $this->password, [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                // An unreachable host must not stall the page (the Status check runs on every one) or the worker.
+                PDO::ATTR_TIMEOUT            => 5,
+                // Queries reuse a named placeholder, which only emulated prepares accept.
+                PDO::ATTR_EMULATE_PREPARES   => true,
             ]);
         }
 

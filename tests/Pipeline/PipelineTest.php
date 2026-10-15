@@ -182,7 +182,7 @@ final class PipelineTest extends TestCase
         $this->assertSame('done', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
     }
 
-    public function testAFailureMidRunMarksTheExtractionErrorNotRunning(): void
+    public function testAnUnknownProbeNameLeavesTheExtractionStatusUntouched(): void
     {
         $registry = new ProbeRegistry(['a']);
         $registry->register(new StubProbe('a', ProbeResult::STATUS_OK));
@@ -193,7 +193,7 @@ final class PipelineTest extends TestCase
         } catch (\InvalidArgumentException) {
         }
 
-        $this->assertSame('error', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+        $this->assertSame('pending', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
     }
 
     public function testOnlyProbesRunInTheRequestedOrder(): void

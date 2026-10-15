@@ -23,6 +23,11 @@ use SatelliteWP\Manager\Support\ErrorLog;
 // Before anything else, including the config load: a 500 raised while booting
 // is exactly the one nobody would otherwise see.
 ErrorHandler::install(new ErrorLog(ErrorLog::defaultDir()), 'admin');
+ini_set('display_errors', '0');
+
+// The admin is never framed, and its URLs (report keys) never leak to another site.
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: same-origin');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path   = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');

@@ -46,6 +46,8 @@ final class Pipeline
     public function run(string $siteId, string $extractionId, ?array $onlyProbes = null): array
     {
         $payload = $this->readPayload($siteId, $extractionId);
+        // An unknown probe name must fail before the extraction leaves its status.
+        $this->selectProbes($onlyProbes);
         $this->index->markManualRun($siteId, $extractionId);
 
         return $this->process($siteId, $extractionId, $payload, $onlyProbes);
@@ -212,7 +214,8 @@ final class Pipeline
                 ranAt: gmdate('Y-m-d\TH:i:s\Z'),
                 durationMs: 0,
                 status: ProbeResult::STATUS_ERROR,
-                errors: [get_class($e) . ': ' . $e->getMessage()],
+                // A driver message can carry host and user names: keep the SQLSTATE only.
+                errors: [$e instanceof \PDOException ? 'Database error (SQLSTATE ' . (string) $e->getCode() . ')' : get_class($e) . ': ' . $e->getMessage()],
             );
         }
     }

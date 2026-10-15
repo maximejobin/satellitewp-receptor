@@ -405,10 +405,11 @@ if ($status !== 'done'):
             ];
             $crmPlan = $crm['maintenance_plan'] ?? null;
             $crmNote = ($crm['linked'] ?? false) ? (is_array($crmPlan) ? null : 'No single active maintenance plan') : ($crmReasons[$crm['reason'] ?? ''] ?? null);
-            if ($crm === []) : ?>
-                <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
-            <?php elseif (($probes['crm']['status'] ?? '') === 'error') : ?>
+            // A failed snapshot has no data: test the error before the empty case.
+            if (($probes['crm']['status'] ?? '') === 'error') : ?>
                 <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">CRM snapshot failed: <?= e(implode(' ', (array) ($probes['crm']['errors'] ?? []))) ?></div>
+            <?php elseif ($crm === []) : ?>
+                <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
             <?php else : ?>
                 <div class="cards">
                     <?php echo section('Client & plan',
@@ -1283,7 +1284,7 @@ if ($status !== 'done'):
 </div>
 <?php endif; // status === 'done' ?>
 
-<?php if ($debuggingTools): ?>
+<?php if ($debuggingTools && in_array($status, ['done', 'error'], true)): ?>
     <details class="section" style="margin-top:1.5rem">
         <summary style="padding:.8rem 1.1rem;cursor:pointer"><b>Debugging tools</b> <span class="muted">(debugging_tools is on)</span></summary>
         <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/rerun"

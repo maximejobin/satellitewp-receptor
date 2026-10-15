@@ -153,7 +153,11 @@ final class ExtractionController extends Controller
             $this->app->dataStore()->updateMeta($siteId, $extractionId, ['language' => $language]);
         }
 
-        $this->app->index()->setExtractionStatus($siteId, $extractionId, Index::STATUS_QUEUED);
+        if (!$this->app->index()->transitionStatus($siteId, $extractionId, [Index::STATUS_PENDING, Index::STATUS_ERROR], Index::STATUS_QUEUED)) {
+            $this->response->text(409, "The extraction's status changed meanwhile: reload the page.");
+
+            return;
+        }
         $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
     }
 
@@ -167,15 +171,21 @@ final class ExtractionController extends Controller
             return;
         }
 
-        $this->app->index()->setExtractionStatus($siteId, $extractionId, Index::STATUS_ABORTED);
+        if (!$this->app->index()->transitionStatus($siteId, $extractionId, [Index::STATUS_PENDING, Index::STATUS_QUEUED], Index::STATUS_ABORTED)) {
+            $this->response->text(409, "The extraction's status changed meanwhile: reload the page.");
+
+            return;
+        }
+        // Kept on disk too, so index:rebuild does not bring it back as pending.
+        $this->app->dataStore()->updateMeta($siteId, $extractionId, ['aborted' => true]);
         $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
     }
 
     /**
      * POST …/rerun — config `debugging_tools` only (a dev escape hatch):
-     * re-runs the chosen probes synchronously, whatever the status, the one
-     * deliberate bypass of the frozen-snapshot rule. Absent (404) when the
-     * flag is off.
+     * re-runs the chosen probes synchronously on a done or failed extraction,
+     * the one deliberate bypass of the frozen-snapshot rule. Absent (404)
+     * when the flag is off.
      *
      * @param array<string, string> $params
      */
@@ -188,7 +198,9 @@ final class ExtractionController extends Controller
         }
 
         [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
-        if (!$this->requireCapability('extraction_run') || !$this->requireExtractionStatus($siteId, $extractionId, null)) {
+        // Pending or queued belongs to the worker: a partial run would mark it done.
+        if (!$this->requireCapability('extraction_run')
+            || !$this->requireExtractionStatus($siteId, $extractionId, [Index::STATUS_DONE, Index::STATUS_ERROR])) {
             return;
         }
 

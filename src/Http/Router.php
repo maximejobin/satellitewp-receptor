@@ -243,9 +243,8 @@ final class Router
     {
         $target = is_string($target) ? $target : '';
 
-        return (str_starts_with($target, '/') && !str_starts_with($target, '//') && !str_starts_with($target, '/\\'))
-            ? $target
-            : $fallback;
+        // Browsers strip tabs and newlines, so "/\t/host" would become "//host": no control or space characters.
+        return preg_match('#^/(?![/\\\\])[^\x00-\x20\x7f]*$#', $target) === 1 ? $target : $fallback;
     }
 
     /** Adds or replaces one query parameter, keeping the existing query and #fragment. */
