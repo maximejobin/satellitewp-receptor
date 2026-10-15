@@ -1,4 +1,6 @@
 /**
+ * @OnlyCurrentDoc
+ *
  * SatelliteWP report — loader. Paste it once into the Google Doc
  * (Extensions → Apps Script); it does not change afterwards.
  *
@@ -16,6 +18,13 @@ var TRUSTED_DOMAIN = 'satellitewp.com';
 // in UTF-8: the engine is split into 2,000-character chunks.
 var CHUNK_SIZE = 2000;
 var KEY_PREFIX = 'engine|';
+
+// Apps Script grants the permissions its scan finds in this project's source,
+// and the engine is downloaded at run time: every service call the engine
+// makes is named here, never run.
+function engineServices_() {
+  DocumentApp.getActiveDocument();
+}
 
 function onOpen() {
   DocumentApp.getUi()

@@ -65,6 +65,20 @@ final class ReportScriptRouteTest extends TestCase
         $this->assertStringContainsString("var TRUSTED_DOMAIN = 'satellitewp.com';", $loader);
     }
 
+    public function testTheLoaderNamesEveryServiceCallOfTheEngine(): void
+    {
+        $dir    = dirname(__DIR__, 2) . '/resources/apps-script/';
+        $engine = (string) file_get_contents($dir . 'report-engine.gs');
+        $loader = (string) file_get_contents($dir . 'loader.gs');
+
+        // Lower-case members are calls (each may need its own permission); upper-case ones are enums.
+        preg_match_all('/\b(?:[A-Z][A-Za-z]*App|[A-Z][A-Za-z]*Service)\.[a-z][A-Za-z]*/', $engine, $calls);
+        $this->assertNotEmpty($calls[0]);
+        foreach (array_unique($calls[0]) as $call) {
+            $this->assertStringContainsString($call, $loader, $call . ' is not granted to the downloaded engine.');
+        }
+    }
+
     private function get(App $app, string $extractionId): RecordingResponse
     {
         $response = new RecordingResponse();
