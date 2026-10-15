@@ -61,7 +61,7 @@ final class EndOfLifeTest extends TestCase
 
     public function testUnknownBranchReturnsNull(): void
     {
-        $eol = $this->seed('php', [['cycle' => '8.3', 'eol' => '2027-12-31']]);
+        $eol = $this->seed('php', [['cycle' => '8.3', 'eol' => '2999-12-31']]);
 
         $this->assertNull($eol->eolStatus('php', '5.6.40'));
     }

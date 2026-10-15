@@ -38,7 +38,30 @@ final class PayloadValidatorTest extends TestCase
         $this->assertArrayHasKey('integrity', $integrity);
     }
 
-    public function testNonJsonBodyRejected(): void
+    /** @return array<string, array{0: array<string, mixed>}> */
+    public static function badRegistrations(): array
+    {
+        return [
+            'open as a string'   => [['open' => '1']],
+            'a non-string cap'   => [['default_role_caps' => [42]]],
+            'too many caps'      => [['default_role_caps' => array_fill(0, 51, 'edit_posts')]],
+            'an over-long name'  => [['default_role_name' => str_repeat('x', 5000)]],
+        ];
+    }
+
+    /** @param array<string, mixed> $patch */
+    #[DataProvider('badRegistrations')]
+    public function testAMalformedRegistrationSectionIsRefused(array $patch): void
+    {
+        $payload = $this->fixtureArray('extraction-valid.json');
+        $payload['registration'] = $patch + $payload['registration'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('registration');
+        $this->validator->validate((string) json_encode($payload), 'extraction', self::SITE);
+    }
+
+        public function testNonJsonBodyRejected(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('JSON');

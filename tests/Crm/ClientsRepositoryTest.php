@@ -308,9 +308,9 @@ class ClientsRepositoryTest extends TestCase
 
     public function testClientLabelPrefersCompanyThenNameThenEmail(): void
     {
-        $this->assertSame('Acme Inc', ClientsRepository::clientLabel(['company' => 'Acme Inc', 'first_name' => 'Ann', 'email' => 'a@x.com']));
-        $this->assertSame('Bob Builder', ClientsRepository::clientLabel(['company' => '', 'first_name' => 'Bob', 'last_name' => 'Builder', 'email' => 'b@x.com']));
-        $this->assertSame('c@x.com', ClientsRepository::clientLabel(['email' => 'c@x.com']));
+        $this->assertSame('Acme Inc', ClientsRepository::clientLabel(['company' => 'Acme Inc', 'first_name' => 'Ann', 'email' => 'a@example.com']));
+        $this->assertSame('Bob Builder', ClientsRepository::clientLabel(['company' => '', 'first_name' => 'Bob', 'last_name' => 'Builder', 'email' => 'b@example.com']));
+        $this->assertSame('c@example.com', ClientsRepository::clientLabel(['email' => 'c@example.com']));
     }
 
     public function testSubscriptionsForClientJoinsProductLicenseAndWebsite(): void

@@ -29,7 +29,7 @@ final class WordfenceProbeTest extends TestCase
 
     private function site(array $plugins = [], array $themes = [], ?string $wpVersion = null): SiteContext
     {
-        return new SiteContext('site-1', 'https://ex.com', 'https://ex.com', 'ex.com', 'ex.com', $plugins, $themes, $wpVersion);
+        return new SiteContext('site-1', 'https://example.com', 'https://example.com', 'example.com', 'example.com', $plugins, $themes, $wpVersion);
     }
 
     public function testUnconfiguredReportsError(): void

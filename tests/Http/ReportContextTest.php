@@ -40,7 +40,7 @@ final class ReportContextTest extends TestCase
         mkdir($this->tmpDir . '/reference', 0775, true);
         file_put_contents($this->tmpDir . '/reference/wordpress-versions.json', (string) json_encode(['6.8.1' => 'latest', '6.7.2' => 'insecure']));
         file_put_contents($this->tmpDir . '/reference/php.json', (string) json_encode([
-            ['cycle' => '8.3', 'eol' => '2027-12-31'],
+            ['cycle' => '8.3', 'eol' => '2999-12-31'],
             ['cycle' => '7.4', 'eol' => '2022-11-28'],
         ]));
         $eol        = new EndOfLife($this->tmpDir . '/reference');

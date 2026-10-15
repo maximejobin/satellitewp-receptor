@@ -16,6 +16,6 @@ final class HelpersSiteDisplayTest extends TestCase
 {
     public function testDelegatesToSiteDisplay(): void
     {
-        $this->assertSame('rds.ca', \site_display('https://www.rds.ca'));
+        $this->assertSame('example.com', \site_display('https://www.example.com'));
     }
 }

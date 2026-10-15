@@ -106,7 +106,8 @@ final class RuleCatalogTest extends TestCase
             $result['counts']['fail'],
             'with no data at all, rules must report unknown rather than invent failures'
         );
-        $this->assertGreaterThan(0, $result['counts']['unknown']);
+        // No guessed pass either: every rule is unknown or not applicable.
+        $this->assertSame($result['counts']['total'], $result['counts']['unknown'] + ($result['counts']['na'] ?? 0));
     }
 
     public function testHealthySiteFixturePassesTheDataRules(): void
@@ -321,7 +322,7 @@ final class RuleCatalogTest extends TestCase
         $eol = new \SatelliteWP\Manager\Reference\EndOfLife($this->tmpDir . '/reference');
         mkdir($this->tmpDir . '/reference', 0775, true);
         file_put_contents($this->tmpDir . '/reference/php.json', (string) json_encode([
-            ['cycle' => '8.3', 'eol' => '2027-12-31'],
+            ['cycle' => '8.3', 'eol' => '2999-12-31'],
             ['cycle' => '7.4', 'eol' => '2022-11-28'],
         ]));
         file_put_contents($this->tmpDir . '/reference/wordpress.json', (string) json_encode([
@@ -340,7 +341,7 @@ final class RuleCatalogTest extends TestCase
         );
 
         $this->assertSame(Status::Pass->value, $findings['F3']['status'], 'PHP 8.3 still supported');
-        $this->assertSame('2027-12-31', $findings['F3']['data']['eol_date']);
+        $this->assertSame('2999-12-31', $findings['F3']['data']['eol_date']);
         $this->assertSame(Status::Fail->value, $findings['H1']['status'], 'MySQL 8.0 is EOL');
         $this->assertSame('MySQL 8.0', $findings['H1']['observed']);
     }
@@ -351,19 +352,19 @@ final class RuleCatalogTest extends TestCase
         $payload = $this->fixtureArray('extraction-valid.json');
         // Fixture: plugins woocommerce/woocommerce.php + akismet/akismet.php,
         // theme storefront (+ storefront-child, no 'slug' collision risk).
-        $f8 = function (array $wporgData) use ($payload): array {
+        $f7 = function (array $wporgData) use ($payload): array {
             $probes   = ['wporg' => ['status' => 'ok', 'data' => $wporgData]];
             $findings = array_column($this->engine()->evaluate(new Context($payload, $probes))['findings'], null, 'id');
 
             return $findings['F7'];
         };
 
-        $this->assertSame(Status::Unknown->value, $f8([])['status'], 'the probe never ran / nothing matched');
+        $this->assertSame(Status::Unknown->value, $f7([])['status'], 'the probe never ran / nothing matched');
 
         $recent = gmdate('Y-m-d\TH:i:s\Z', time() - 30 * 86400);
         $stale  = gmdate('Y-m-d\TH:i:s\Z', time() - 400 * 86400);
 
-        $allRecent = $f8([
+        $allRecent = $f7([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => true, 'last_updated' => $recent],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
@@ -372,7 +373,7 @@ final class RuleCatalogTest extends TestCase
         ]);
         $this->assertSame(Status::Pass->value, $allRecent['status']);
 
-        $oneStale = $f8([
+        $oneStale = $f7([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => true, 'last_updated' => $stale],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],
@@ -385,7 +386,7 @@ final class RuleCatalogTest extends TestCase
 
         // Not on wp.org at all (a premium plugin) — skipped, not flagged,
         // even though it has no last_updated to check.
-        $notOnWporg = $f8([
+        $notOnWporg = $f7([
             'plugins' => [
                 'woocommerce' => ['on_wporg' => false, 'last_updated' => null],
                 'akismet'     => ['on_wporg' => true, 'last_updated' => $recent],

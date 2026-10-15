@@ -11,37 +11,37 @@ final class SiteDisplayTest extends TestCase
 {
     public function testStripsSchemeAndWww(): void
     {
-        $this->assertSame('rds.ca', SiteDisplay::of('https://www.rds.ca'));
+        $this->assertSame('example.com', SiteDisplay::of('https://www.example.com'));
     }
 
     public function testStripsSchemeWithoutWww(): void
     {
-        $this->assertSame('rds.ca', SiteDisplay::of('https://rds.ca'));
+        $this->assertSame('example.com', SiteDisplay::of('https://example.com'));
     }
 
     public function testHttpSchemeToo(): void
     {
-        $this->assertSame('rds.ca', SiteDisplay::of('http://www.rds.ca'));
+        $this->assertSame('example.com', SiteDisplay::of('http://www.example.com'));
     }
 
     public function testTrailingSlashRemoved(): void
     {
-        $this->assertSame('rds.ca', SiteDisplay::of('https://www.rds.ca/'));
+        $this->assertSame('example.com', SiteDisplay::of('https://www.example.com/'));
     }
 
     public function testPathIsKept(): void
     {
-        $this->assertSame('rds.ca/some/Path', SiteDisplay::of('https://www.rds.ca/some/Path'));
+        $this->assertSame('example.com/some/Path', SiteDisplay::of('https://www.example.com/some/Path'));
     }
 
     public function testNoSchemeOrWwwIsUnchanged(): void
     {
-        $this->assertSame('rds.ca', SiteDisplay::of('rds.ca'));
+        $this->assertSame('example.com', SiteDisplay::of('example.com'));
     }
 
     public function testOnlyALeadingWwwIsStripped(): void
     {
-        $this->assertSame('www2.rds.ca', SiteDisplay::of('https://www2.rds.ca'));
+        $this->assertSame('www2.example.com', SiteDisplay::of('https://www2.example.com'));
     }
 
     public function testNullOrEmptyIsEmptyString(): void

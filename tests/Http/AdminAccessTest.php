@@ -202,6 +202,31 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function aCheckThatDidNotCompleteIsListedOnADoneExtraction(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true]]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+        $app->dataStore()->writeProbeResult(self::SITE, $extractionId, 'http', [
+            'probe' => 'http', 'status' => 'ok', 'data' => ['status_code' => 200], 'errors' => ['robots.txt: cURL error 28: timed out'],
+        ]);
+
+        $page = $this->get($app, '/site/' . self::SITE . '/extraction/' . $extractionId)->body;
+
+        $this->assertStringContainsString('Some checks did not complete', $page);
+        $this->assertStringContainsString('robots.txt: cURL error 28: timed out', $page);
+    }
+
+    #[Test]
+    public function theMenuFlagsAPendingExtraction(): void
+    {
+        $app = $this->app(['auth' => ['open_mode' => true]]);
+        $this->assertStringNotContainsString('class="nav-dot"', $this->get($app, '/catalog')->body);
+
+        $this->storeExtraction($app, Index::STATUS_PENDING);
+        $this->assertStringContainsString('class="nav-dot"', $this->get($app, '/catalog')->body);
+    }
+
+    #[Test]
     public function anUnsafeReturnFallsBackToTheExtractionPage(): void
     {
         $app          = $this->app(['auth' => ['open_mode' => true]]);

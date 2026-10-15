@@ -106,7 +106,7 @@ final class HttpProbeTest extends TestCase
 
     public function testExtractFirstAssetFallsBackToScriptAndSkipsThirdParty(): void
     {
-        $html = '<script src="https://cdn.other.com/a.js"></script>'
+        $html = '<script src="https://cdn.example.net/a.js"></script>'
             . '<script src="//www.example.com/app.js"></script>';
 
         $this->assertSame(
@@ -117,7 +117,7 @@ final class HttpProbeTest extends TestCase
 
     public function testExtractFirstAssetReturnsNullWhenNoFirstPartyAsset(): void
     {
-        $html = '<link rel="stylesheet" href="https://cdn.other.com/x.css">';
+        $html = '<link rel="stylesheet" href="https://cdn.example.net/x.css">';
 
         $this->assertNull(HttpProbe::extractFirstAsset($html, 'https://www.example.com/'));
     }

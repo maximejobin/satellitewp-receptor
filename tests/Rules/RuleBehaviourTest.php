@@ -263,7 +263,7 @@ final class RuleBehaviourTest extends TestCase
 
     public function testOpenRegistrationIsGradedOnWhatTheDefaultRoleCanDo(): void
     {
-        $m7 = function (?array $registration): array {
+        $m3 = function (?array $registration): array {
             $payload = $this->payload();
             $payload['registration'] = $registration;
 
@@ -271,15 +271,15 @@ final class RuleBehaviourTest extends TestCase
         };
         $open = static fn (array $caps): array => ['open' => true, 'default_role' => 'x', 'default_role_name' => 'Rôle', 'default_role_caps' => $caps];
 
-        $this->assertSame('green', $m7(['open' => false, 'default_role' => 'subscriber', 'default_role_caps' => []])['pastille']);
+        $this->assertSame('green', $m3(['open' => false, 'default_role' => 'subscriber', 'default_role_caps' => []])['pastille']);
         foreach ([['manage_options', 'edit_posts'], ['edit_others_posts'], ['publish_posts', 'edit_posts']] as $caps) {
-            $this->assertSame('red', $m7($open($caps))['pastille'], implode(',', $caps));
+            $this->assertSame('red', $m3($open($caps))['pastille'], implode(',', $caps));
         }
-        $this->assertSame('orange', $m7($open(['edit_posts']))['pastille']);
-        $this->assertSame('blue', $m7($open([]))['pastille']);
-        $this->assertSame('Rôle', $m7($open([]))['data']['role']);
-        $this->assertSame(Status::Unknown->value, $m7(null)['status']);
-        $this->assertSame(Status::Unknown->value, $m7(['open' => true, 'default_role' => '', 'default_role_name' => '', 'default_role_caps' => []])['status'], 'no role name to show');
+        $this->assertSame('orange', $m3($open(['edit_posts']))['pastille']);
+        $this->assertSame('blue', $m3($open([]))['pastille']);
+        $this->assertSame('Rôle', $m3($open([]))['data']['role']);
+        $this->assertSame(Status::Unknown->value, $m3(null)['status']);
+        $this->assertSame(Status::Unknown->value, $m3(['open' => true, 'default_role' => '', 'default_role_name' => '', 'default_role_caps' => []])['status'], 'no role name to show');
     }
 
     public function testMailAuthRulesFollowTheReceiversVerdicts(): void
@@ -378,10 +378,10 @@ final class RuleBehaviourTest extends TestCase
             $this->assertSame(Status::Fail->value, $empty[$id]['status'], $id);
         }
 
-        $b7b = fn (array $h): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $h]])['B8']['status'];
-        $this->assertSame(Status::Fail->value, $b7b(['content-security-policy' => "default-src 'self'"]), 'a CSP without frame-ancestors does not stop framing');
-        $this->assertSame(Status::Pass->value, $b7b(['content-security-policy' => "default-src 'self'; frame-ancestors 'self'"]));
-        $this->assertSame(Status::Pass->value, $b7b(['x-frame-options' => 'SAMEORIGIN']));
+        $b8 = fn (array $h): string => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'security_headers' => $h]])['B8']['status'];
+        $this->assertSame(Status::Fail->value, $b8(['content-security-policy' => "default-src 'self'"]), 'a CSP without frame-ancestors does not stop framing');
+        $this->assertSame(Status::Pass->value, $b8(['content-security-policy' => "default-src 'self'; frame-ancestors 'self'"]));
+        $this->assertSame(Status::Pass->value, $b8(['x-frame-options' => 'SAMEORIGIN']));
     }
 
     public function testB6IsUnknownWhenTheAssetWasNotActuallyServed(): void
@@ -398,20 +398,20 @@ final class RuleBehaviourTest extends TestCase
 
     public function testA8TellsAnErrorPageFromPlainHttpTraffic(): void
     {
-        $a10 = fn (array $redirects): array => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'redirects' => $redirects]])['A8'];
+        $a8 = fn (array $redirects): array => $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'redirects' => $redirects]])['A8'];
 
-        $error = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 500]], 'forces_https' => false]);
+        $error = $a8(['chain' => [['url' => 'http://example.com/', 'status' => 500]], 'forces_https' => false]);
         $this->assertSame(Status::Fail->value, $error['status']);
         $this->assertSame('http_error', $error['data']['variant']);
         $this->assertStringNotContainsString('chiffrement', (string) (new Translator('fr', self::LANG))->message($error));
         $this->assertSame('Adresse en HTTP en erreur', (new Translator('fr', self::LANG))->title('A8', 'fail', 'http_error'));
 
-        $plain = $a10(['chain' => [['url' => 'http://example.com/', 'status' => 200]], 'forces_https' => false]);
+        $plain = $a8(['chain' => [['url' => 'http://example.com/', 'status' => 200]], 'forces_https' => false]);
         $this->assertSame(Status::Fail->value, $plain['status']);
         $this->assertArrayNotHasKey('variant', $plain['data'] ?? []);
 
-        $this->assertSame(Status::Unknown->value, $a10(['chain' => [], 'forces_https' => null, 'error' => 'Redirect chain: timeout'])['status']);
-        $this->assertSame(Status::Pass->value, $a10(['chain' => [['url' => 'http://example.com/', 'status' => 301], ['url' => 'https://example.com/', 'status' => 200]], 'forces_https' => true])['status']);
+        $this->assertSame(Status::Unknown->value, $a8(['chain' => [], 'forces_https' => null, 'error' => 'Redirect chain: timeout'])['status']);
+        $this->assertSame(Status::Pass->value, $a8(['chain' => [['url' => 'http://example.com/', 'status' => 301], ['url' => 'https://example.com/', 'status' => 200]], 'forces_https' => true])['status']);
     }
 
     public function testK4PassesWhenFileModsAreDisallowed(): void
@@ -492,10 +492,10 @@ final class RuleBehaviourTest extends TestCase
             'plugins' => ['items' => [['slug' => 'akismet', 'name' => 'Akismet', 'vulnerabilities' => [$shared]]]],
         ];
 
-        $f10 = $this->evaluate($this->payload(), ['blogvault' => $bv, 'wordfence' => $wf])['F8'];
-        $this->assertSame(Status::Fail->value, $f10['status']);
-        $this->assertSame(3, $f10['observed']);
-        $this->assertSame(2, $f10['data']['components']);
+        $f8 = $this->evaluate($this->payload(), ['blogvault' => $bv, 'wordfence' => $wf])['F8'];
+        $this->assertSame(Status::Fail->value, $f8['status']);
+        $this->assertSame(3, $f8['observed']);
+        $this->assertSame(2, $f8['data']['components']);
 
         $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload())['F8']['status']);
         $clean = ['vulnerabilities_total' => 0, 'core' => ['vulnerabilities' => []]];
@@ -523,7 +523,7 @@ final class RuleBehaviourTest extends TestCase
 
     public function testF9RequiresAutomaticMinorUpdates(): void
     {
-        $f12a = function (array $coreUpdate, array $constants = []): array {
+        $f9 = function (array $coreUpdate, array $constants = []): array {
             $payload = $this->payload();
             $payload['core_update'] = $coreUpdate + $payload['core_update'];
             $payload['constants']   = $constants + $payload['constants'];
@@ -531,25 +531,25 @@ final class RuleBehaviourTest extends TestCase
             return $this->evaluate($payload)['F9'];
         };
 
-        $this->assertSame(Status::Pass->value, $f12a(['auto_update_minor' => true])['status']);
-        $this->assertSame(Status::Fail->value, $f12a(['auto_update_minor' => false])['status']);
-        $this->assertSame('all_disabled', $f12a(['auto_update_minor' => false, 'auto_updates_disabled' => true])['data']['variant']);
-        $this->assertSame('file_mods', $f12a(['auto_update_minor' => false, 'auto_updates_disabled' => true], ['DISALLOW_FILE_MODS' => true])['data']['variant']);
-        $this->assertSame(Status::Unknown->value, $f12a(['auto_update_minor' => null])['status'], 'the constant alone ignores the Dashboard options and filters');
+        $this->assertSame(Status::Pass->value, $f9(['auto_update_minor' => true])['status']);
+        $this->assertSame(Status::Fail->value, $f9(['auto_update_minor' => false])['status']);
+        $this->assertSame('all_disabled', $f9(['auto_update_minor' => false, 'auto_updates_disabled' => true])['data']['variant']);
+        $this->assertSame('file_mods', $f9(['auto_update_minor' => false, 'auto_updates_disabled' => true], ['DISALLOW_FILE_MODS' => true])['data']['variant']);
+        $this->assertSame(Status::Unknown->value, $f9(['auto_update_minor' => null])['status'], 'the constant alone ignores the Dashboard options and filters');
     }
 
     public function testF10RefusesAutomaticMajorUpdates(): void
     {
-        $f12b = function (?bool $major): string {
+        $f10 = function (?bool $major): string {
             $payload = $this->payload();
             $payload['core_update']['auto_update_major'] = $major;
 
             return $this->evaluate($payload)['F10']['status'];
         };
 
-        $this->assertSame(Status::Pass->value, $f12b(false));
-        $this->assertSame(Status::Fail->value, $f12b(true));
-        $this->assertSame(Status::Unknown->value, $f12b(null));
+        $this->assertSame(Status::Pass->value, $f10(false));
+        $this->assertSame(Status::Fail->value, $f10(true));
+        $this->assertSame(Status::Unknown->value, $f10(null));
     }
 
     public function testF11ListsPluginsThatUpdateThemselves(): void
@@ -577,11 +577,11 @@ final class RuleBehaviourTest extends TestCase
         $payload['themes']['twentytwentyfour']  = ['name' => 'Twenty Twenty-Four', 'slug' => 'twentytwentyfour', 'active' => false];
         $payload['themes']['twentytwentythree'] = ['name' => 'Twenty Twenty-Three', 'slug' => 'twentytwentythree', 'active' => false];
 
-        $f13 = $this->evaluate($payload)['F12'];
-        $this->assertSame(Status::Fail->value, $f13['status']);
-        $this->assertSame(2, $f13['observed']);
-        $this->assertStringContainsString('Akismet', $f13['data']['names']);
-        $this->assertStringNotContainsString('Storefront', $f13['data']['names']);
+        $f12 = $this->evaluate($payload)['F12'];
+        $this->assertSame(Status::Fail->value, $f12['status']);
+        $this->assertSame(2, $f12['observed']);
+        $this->assertStringContainsString('Akismet', $f12['data']['names']);
+        $this->assertStringNotContainsString('Storefront', $f12['data']['names']);
 
         $payload['is_multisite'] = true;
         $this->assertSame(Status::NotApplicable->value, $this->evaluate($payload)['F12']['status']);
@@ -602,7 +602,7 @@ final class RuleBehaviourTest extends TestCase
 
     public function testJ1GradesOnHowLateTheOldestTaskIs(): void
     {
-        $j2 = function (int $overdue, ?int $minutes): array {
+        $j1 = function (int $overdue, ?int $minutes): array {
             $payload = $this->payload();
             $payload['cron']['overdue_events']  = $overdue;
             $payload['cron']['overdue_minutes'] = $minutes;
@@ -610,16 +610,16 @@ final class RuleBehaviourTest extends TestCase
             return $this->evaluate($payload)['J1'];
         };
 
-        $this->assertSame(Status::Pass->value, $j2(0, null)['status']);
-        $this->assertSame(Status::Pass->value, $j2(40, 30)['status'], 'many tasks, but within 30 minutes');
-        $this->assertSame(Status::Unknown->value, $j2(4, null)['status'], 'lateness unknown');
+        $this->assertSame(Status::Pass->value, $j1(0, null)['status']);
+        $this->assertSame(Status::Pass->value, $j1(40, 30)['status'], 'many tasks, but within 30 minutes');
+        $this->assertSame(Status::Unknown->value, $j1(4, null)['status'], 'lateness unknown');
 
-        $late = $j2(2, 45);
+        $late = $j1(2, 45);
         $this->assertSame(Severity::Medium->value, $late['severity']);
         $this->assertSame(45, $late['data']['minutes']);
-        $this->assertSame('hours', $j2(2, 300)['data']['variant']);
+        $this->assertSame('hours', $j1(2, 300)['data']['variant']);
 
-        $stopped = $j2(9, 3 * 1440 + 10);
+        $stopped = $j1(9, 3 * 1440 + 10);
         $this->assertSame(Severity::High->value, $stopped['severity']);
         $this->assertStringContainsString("3\u{a0}jours", (string) (new Translator('fr', self::LANG))->message($stopped));
     }
@@ -643,9 +643,9 @@ final class RuleBehaviourTest extends TestCase
 
         $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['K5']['status'], 'no http:// chain read');
         $this->assertSame(Status::Fail->value, $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => false]]])['K5']['status']);
-        $k6 = $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => true]]])['K5'];
-        $this->assertSame(Status::Pass->value, $k6['status']);
-        $this->assertSame('site_https', $k6['data']['variant']);
+        $k5 = $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => true]]])['K5'];
+        $this->assertSame(Status::Pass->value, $k5['status']);
+        $this->assertSame('site_https', $k5['data']['variant']);
     }
 
     public function testRecalibratedSeverities(): void
@@ -663,15 +663,18 @@ final class RuleBehaviourTest extends TestCase
         foreach (['B3', 'B4', 'B5', 'B10', 'B11', 'C6', 'C1', 'I2'] as $id) {
             $this->assertSame(Severity::Medium, $rules[$id], $id);
         }
-        $this->assertArrayNotHasKey('X6', $rules);
-        $this->assertArrayNotHasKey('H4', $rules);
-        $this->assertArrayNotHasKey('N2', $rules);
-        $this->assertArrayNotHasKey('N4', $rules);
-        $this->assertArrayNotHasKey('J3', $rules);
-        $this->assertArrayNotHasKey('BV2', $rules);
-        $this->assertArrayNotHasKey('WF1', $rules);
-        $this->assertArrayNotHasKey('PS2a', $rules);
-        $this->assertArrayNotHasKey('PS3a', $rules);
+        // Ids are a letter plus a number, sequential within each letter: a retired
+        // rule renumbers its successors, so the exact list is the guard.
+        $this->assertSame([
+            'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8',
+            'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12',
+            'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'D1', 'D2', 'D3', 'D4', 'W1',
+            'PS1', 'PS2', 'PS3', 'PS4', 'PS5',
+            'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+            'G1', 'G2', 'G3', 'G4', 'G5', 'H1', 'H2', 'I1', 'I2', 'J1',
+            'K1', 'K2', 'K3', 'K4', 'K5', 'L1', 'L2', 'M1', 'M2', 'M3', 'BV1',
+            'X1', 'X2', 'X3', 'X4', 'X5',
+        ], array_keys($rules));
     }
 
     public function testAccessibilityAndSeoScoreOnTheLowerOfDesktopAndMobile(): void

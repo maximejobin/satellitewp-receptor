@@ -497,7 +497,7 @@ final class ReportBuilderTest extends TestCase
         $context = $this->context();
         $context['payload']['plugins'][0]['name'] = $name;
         $findings = [[
-            'id' => 'F13', 'category_code' => 'X', 'pastille' => 'orange', 'severity' => 'Medium',
+            'id' => 'F12', 'category_code' => 'X', 'pastille' => 'orange', 'severity' => 'Medium',
             'title' => 'Inactive', 'message' => "Unused: {$name}.",
         ]];
         $contract = ['fields' => [

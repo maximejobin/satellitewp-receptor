@@ -38,9 +38,9 @@ final class ReportTokenStoreTest extends TestCase
     public function testIssuedByCarriesTheAnalystsNameCapturedAtIssueTime(): void
     {
         $store = new ReportTokenStore($this->file);
-        $token = $store->issue('site-1', 'extraction-1', 'Maxime Jobin');
+        $token = $store->issue('site-1', 'extraction-1', 'Ann Analyst');
 
-        self::assertSame('Maxime Jobin', $store->issuedBy($token));
+        self::assertSame('Ann Analyst', $store->issuedBy($token));
     }
 
     public function testIssuedByIsEmptyWhenNoneWasGivenOrTheTokenIsUnknown(): void

@@ -53,7 +53,7 @@ final class BlogVaultClientTest extends TestCase
     {
         $client = $this->client([$this->json(['vulnerabilities' => [], 'count' => 0])]);
 
-        $result = $client->get('sites/vulnerabilities', ['site_url' => 'https://ex.com']);
+        $result = $client->get('sites/vulnerabilities', ['site_url' => 'https://example.com']);
 
         $this->assertSame(['vulnerabilities' => [], 'count' => 0], $result);
 
@@ -101,11 +101,11 @@ final class BlogVaultClientTest extends TestCase
     public function testPostSendsJsonBody(): void
     {
         $client = $this->client([$this->json(['ok' => true])]);
-        $client->post('sites/scan', ['site_url' => 'https://ex.com']);
+        $client->post('sites/scan', ['site_url' => 'https://example.com']);
 
         $request = $this->sent[0];
         $this->assertSame('POST', $request->getMethod());
-        $this->assertSame(['site_url' => 'https://ex.com'], json_decode((string) $request->getBody(), true));
+        $this->assertSame(['site_url' => 'https://example.com'], json_decode((string) $request->getBody(), true));
     }
 
     /**

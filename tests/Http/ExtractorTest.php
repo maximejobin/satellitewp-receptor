@@ -234,7 +234,7 @@ final class ExtractorTest extends TestCase
 
     public function testRebindingLetsAMovedSiteReportAgain(): void
     {
-        $this->keys->setOrigin(self::SITE_ID, 'old-domain.com');
+        $this->keys->setOrigin(self::SITE_ID, 'old.example.com');
 
         $body   = $this->fixture('extraction-valid.json');
         $result = $this->extractor->handle($this->headers('extraction', $body), $body);
