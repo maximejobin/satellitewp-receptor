@@ -335,8 +335,9 @@ enforced), per-admin last-login tracking, breach-database email checks,
 file-integrity checksums (BlogVault does it), ASN/hosting-provider lookup
 (Cloudflare hides it), a computed SSL grade, analytics tags, an SMTP rule
 (php.ini `SMTP` is Windows-only; the payload can't tell authenticated SMTP),
-BlogVault scanner/firewall/backup status and care-plan data (operational
-state, not configuration), refusing an incomplete extraction (one broken
+BlogVault firewall/backup status and care-plan data (operational state, not
+configuration; the one exception is BV1, malware found by the scanner at
+extraction time), refusing an incomplete extraction (one broken
 collector must not block the analysis: it is accepted and flagged).
 
 Open: rules/UI for the CRM snapshot beyond the report fields.
