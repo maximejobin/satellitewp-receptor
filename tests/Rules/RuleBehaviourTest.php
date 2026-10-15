@@ -186,7 +186,54 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('blue', $without['C1']['pastille']);
     }
 
-    public function testAvailabilityIsJudgedOnTheHomepageStatus(): void
+    public function testCertificateRulesBlameOneCauseEach(): void
+    {
+        $tls = fn (array $data): array => $this->evaluate($this->payload(), ['tls' => $data]);
+
+        $lastDay = $tls(['days_to_expiry' => 0, 'chain_valid' => true, 'self_signed' => false]);
+        $this->assertSame(Status::Pass->value, $lastDay['A1']['status'], 'the last valid day is not expired');
+
+        $expired = $tls(['days_to_expiry' => -1, 'chain_valid' => false, 'self_signed' => false]);
+        $this->assertSame(Status::Fail->value, $expired['A1']['status']);
+        $this->assertSame(Status::NotApplicable->value, $expired['A3']['status'], 'an expired certificate is not a missing intermediate');
+        $this->assertSame(Status::NotApplicable->value, $tls(['days_to_expiry' => 90, 'chain_valid' => false, 'self_signed' => true])['A3']['status']);
+        $this->assertSame(Status::Fail->value, $tls(['days_to_expiry' => 90, 'chain_valid' => false, 'self_signed' => false])['A3']['status']);
+
+        $this->assertFalse(\SatelliteWP\Manager\Probe\TlsProbe::hostnameCovered('example.com', ['www.example.com'], 'example.com'), 'CN is ignored once SANs exist');
+        $this->assertTrue(\SatelliteWP\Manager\Probe\TlsProbe::hostnameCovered('example.com', [], 'example.com'));
+    }
+
+    public function testDebugModeIsPrivateOnlyWithADefaultLogAndNothingDisplayed(): void
+    {
+        $k1 = function (array $constants): string {
+            $payload = $this->payload();
+            $payload['constants'] = $constants + $payload['constants'];
+
+            return $this->evaluate($payload, ['http' => ['status_code' => 200, 'exposure' => ['sensitive_files' => []]]])['K1']['status'];
+        };
+
+        $this->assertSame(Status::Pass->value, $k1(['WP_DEBUG' => true, 'WP_DEBUG_LOG' => true, 'WP_DEBUG_DISPLAY' => false]));
+        $this->assertSame(Status::Fail->value, $k1(['WP_DEBUG' => true, 'WP_DEBUG_LOG' => true, 'WP_DEBUG_DISPLAY' => true]));
+        $this->assertSame(Status::Unknown->value, $k1(['WP_DEBUG' => true, 'WP_DEBUG_LOG' => '/var/log/wp.log', 'WP_DEBUG_DISPLAY' => false]));
+        $this->assertSame(Status::Fail->value, $k1(['WP_DEBUG' => true, 'WP_DEBUG_LOG' => false, 'WP_DEBUG_DISPLAY' => false]));
+    }
+
+    public function testSmallerGuessedVerdictsAreUnknownOrPrecise(): void
+    {
+        // Compression measured on an error page proves nothing.
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => ['status_code' => 503, 'compression' => ['gzip' => false]]])['B1']['status']);
+        // A conventional sitemap on a soft-404 site answers 200 whatever it is.
+        $soft = $this->evaluate($this->payload(), ['http' => ['status_code' => 200, 'soft_404' => ['checked' => true, 'is_soft_404' => true],
+            'robots' => ['present' => true, 'sitemaps' => ['https://example.com/sitemap.xml'], 'sitemap_reachable' => true, 'sitemap_source' => 'convention']]]);
+        $this->assertSame(Status::Unknown->value, $soft['C7']['status']);
+        // A null MX is a statement that the domain receives no email.
+        $this->assertSame(Status::Fail->value, $this->evaluate($this->payload(), ['dns' => ['mx' => [['host' => '.', 'priority' => 0]]]])['D4']['status']);
+        $this->assertSame(Status::Pass->value, $this->evaluate($this->payload(), ['dns' => ['mx' => [['host' => 'mail.example.com', 'priority' => 10]]]])['D4']['status']);
+        // Hacked with nothing unresolved has its own wording, without "0 items".
+        $this->assertSame('hacked', $this->evaluate($this->payload(), ['blogvault' => ['scanner' => ['status' => 'hacked', 'unresolved_count' => 0]]])['BV1']['data']['variant']);
+    }
+
+        public function testAvailabilityIsJudgedOnTheHomepageStatus(): void
     {
         $c3 = fn (int $code): string => $this->evaluate($this->payload(), ['http' => ['status_code' => $code, 'auth' => ['required' => false]]])['C3']['status'];
 
@@ -232,6 +279,7 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame('blue', $m7($open([]))['pastille']);
         $this->assertSame('Rôle', $m7($open([]))['data']['role']);
         $this->assertSame(Status::Unknown->value, $m7(null)['status']);
+        $this->assertSame(Status::Unknown->value, $m7(['open' => true, 'default_role' => '', 'default_role_name' => '', 'default_role_caps' => []])['status'], 'no role name to show');
     }
 
     public function testMailAuthRulesFollowTheReceiversVerdicts(): void
@@ -507,6 +555,10 @@ final class RuleBehaviourTest extends TestCase
     public function testF11ListsPluginsThatUpdateThemselves(): void
     {
         $payload = $this->payload(); // akismet auto-updates, woocommerce doesn't
+        $payload['plugins']['akismet/akismet.php']['active'] = false;
+        $this->assertSame(Status::Pass->value, $this->evaluate($payload)['F11']['status'], 'an inactive plugin cannot break the site');
+
+        $payload['plugins']['akismet/akismet.php']['active'] = true;
         $fail    = $this->evaluate($payload)['F11'];
         $this->assertSame(Status::Fail->value, $fail['status']);
         $this->assertSame(1, $fail['observed']);
@@ -589,7 +641,8 @@ final class RuleBehaviourTest extends TestCase
         $payload = $this->payload();
         $payload['constants']['FORCE_SSL_ADMIN'] = 'N/A';
 
-        $this->assertSame(Status::Fail->value, $this->evaluate($payload)['K5']['status']);
+        $this->assertSame(Status::Unknown->value, $this->evaluate($payload)['K5']['status'], 'no http:// chain read');
+        $this->assertSame(Status::Fail->value, $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => false]]])['K5']['status']);
         $k6 = $this->evaluate($payload, ['http' => ['redirects' => ['forces_https' => true]]])['K5'];
         $this->assertSame(Status::Pass->value, $k6['status']);
         $this->assertSame('site_https', $k6['data']['variant']);

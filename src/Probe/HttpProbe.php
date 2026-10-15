@@ -426,6 +426,12 @@ final class HttpProbe extends AbstractProbe
         } catch (GuzzleException $e) {
             return $this->inconclusive($check, $e); // inconclusive, not a "no"
         }
+        // An error page or a challenge says nothing about what the server can compress.
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            $this->inconclusive[] = "{$check}: HTTP {$response->getStatusCode()}";
+
+            return null;
+        }
 
         return strtolower($response->getHeaderLine('Content-Encoding')) === $expect;
     }
@@ -612,8 +618,15 @@ final class HttpProbe extends AbstractProbe
             return ['present' => null, 'error' => $e->getMessage()];
         }
 
-        if ($response->getStatusCode() !== 200) {
-            return ['present' => false, 'status_code' => $response->getStatusCode()];
+        $status = $response->getStatusCode();
+        // Only "not found" proves absence; a 403, 5xx or redirect leaves it unknown.
+        if (in_array($status, [404, 410], true)) {
+            return ['present' => false, 'status_code' => $status];
+        }
+        if ($status !== 200) {
+            $this->inconclusive[] = "robots.txt: HTTP {$status}";
+
+            return ['present' => null, 'status_code' => $status];
         }
 
         $contentType = strtolower($response->getHeaderLine('Content-Type'));
@@ -673,7 +686,8 @@ final class HttpProbe extends AbstractProbe
         $sitemaps    = [];
         $disallowAll = false;
         $ruleCount   = 0;
-        $appliesToAll = false; // are we inside a "User-agent: *" block?
+        $appliesToAll = false; // are we inside a group that names "*"?
+        $readingAgents = false; // consecutive User-agent lines share one group (RFC 9309)
 
         foreach (preg_split('/\r\n|\r|\n/', $body) ?: [] as $line) {
             $line = trim(preg_replace('/#.*$/', '', $line) ?? '');
@@ -684,6 +698,9 @@ final class HttpProbe extends AbstractProbe
             [$field, $value] = array_map('trim', explode(':', $line, 2));
             $field = strtolower($field);
 
+            if ($field !== 'user-agent') {
+                $readingAgents = false;
+            }
             switch ($field) {
                 case 'sitemap':
                     if ($value !== '') {
@@ -691,7 +708,8 @@ final class HttpProbe extends AbstractProbe
                     }
                     break;
                 case 'user-agent':
-                    $appliesToAll = $value === '*';
+                    $appliesToAll  = ($readingAgents && $appliesToAll) || $value === '*';
+                    $readingAgents = true;
                     break;
                 case 'disallow':
                     $ruleCount++;

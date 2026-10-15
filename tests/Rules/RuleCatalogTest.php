@@ -272,7 +272,7 @@ final class RuleCatalogTest extends TestCase
         $payload['constants'] = array_fill_keys(array_keys($payload['constants']), 'N/A');
 
         $findings = array_column(
-            $this->engine()->evaluate(new Context($payload))['findings'],
+            $this->engine()->evaluate(new Context($payload, ['http' => ['status' => 'ok', 'data' => ['redirects' => ['forces_https' => false]]]]))['findings'],
             null,
             'id'
         );

@@ -118,8 +118,9 @@ final class TlsProbe extends AbstractProbe
     /** @param list<string> $san */
     public static function hostnameCovered(string $host, array $san, ?string $subjectCn): bool
     {
+        // Browsers ignore the CN once the certificate lists SANs (RFC 6125).
         $names = $san;
-        if ($subjectCn !== null) {
+        if ($subjectCn !== null && $san === []) {
             $names[] = $subjectCn;
         }
 

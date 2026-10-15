@@ -53,11 +53,11 @@ return [
         'http_server' => ['type' => 'value', 'from' => 'payload.web_server', 'default' => '—'],
         // The same compression/protocol tests as rules B1–B5, never the
         // single encoding or version the main request happened to negotiate.
-        'gzip'   => ['type' => 'value', 'from' => 'probe.http.compression.gzip', 'transform' => 'enabled_label', 'color_transform' => 'bool_green_red'],
-        'brotli' => ['type' => 'value', 'from' => 'probe.http.compression.brotli', 'transform' => 'enabled_label', 'color_transform' => 'bool_green_red'],
-        'http1'  => ['type' => 'value', 'from' => 'probe.http.protocols.http1_1', 'transform' => 'yes_no', 'color_transform' => 'bool_green_red'],
-        'http2'  => ['type' => 'value', 'from' => 'probe.http.protocols.http2', 'transform' => 'yes_no', 'color_transform' => 'bool_green_red'],
-        'http3'  => ['type' => 'value', 'from' => 'probe.http.protocols.http3_advertised', 'transform' => 'yes_no', 'color_transform' => 'bool_green_red'],
+        'gzip'   => ['type' => 'value', 'from' => 'probe.http.compression.gzip', 'transform' => 'enabled_label', 'color_transform' => 'bool_green_orange'],
+        'brotli' => ['type' => 'value', 'from' => 'probe.http.compression.brotli', 'transform' => 'enabled_label', 'color_transform' => 'bool_green_orange'],
+        'http1'  => ['type' => 'value', 'from' => 'probe.http.protocols.http1_1', 'transform' => 'yes_no', 'color_transform' => 'bool_green_blue'],
+        'http2'  => ['type' => 'value', 'from' => 'probe.http.protocols.http2', 'transform' => 'yes_no', 'color_transform' => 'bool_green_orange'],
+        'http3'  => ['type' => 'value', 'from' => 'probe.http.protocols.http3_advertised', 'transform' => 'yes_no', 'color_transform' => 'bool_green_orange'],
         'post_max'   => ['type' => 'value', 'from' => 'payload.php.post_max_size', 'transform' => 'php_size', 'default' => '—'],
         'upload_max' => ['type' => 'value', 'from' => 'payload.php.upload_max_filesize', 'transform' => 'php_size', 'default' => '—'],
 

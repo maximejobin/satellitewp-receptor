@@ -242,6 +242,9 @@ final class ReportBuilder
         // null means "never observed" — no colour, never a false red.
         return match ($name) {
             'bool_green_red'         => $v === null ? null : ($v ? 'green' : 'red'),
+            // Same colours as the rule's pastille for a medium or informational check.
+            'bool_green_orange'      => $v === null ? null : ($v ? 'green' : 'orange'),
+            'bool_green_blue'        => $v === null ? null : ($v ? 'green' : 'blue'),
             'eol_red_green'          => self::eolColor(is_array($v) ? ($v[0] ?? null) : $v),
             'wordpress_status_color' => $v === null ? null : match (WordPressVersions::status((string) $v)) {
                 'unsecure' => 'red',

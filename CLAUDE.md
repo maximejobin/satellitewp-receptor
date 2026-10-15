@@ -192,7 +192,7 @@ plugins/themes, `M3` open sign-up graded on the default role's capabilities
 (`payload.registration`), never its name. Retired, don't re-add: table
 overhead (InnoDB `DATA_FREE` is preallocated, reusable space), trash and
 draft counts (WordPress empties the trash; drafts are editorial), scheduled
-task count, the DNS CAA record. Thresholds overridable via `rules.thresholds.<id>`.
+task count, the DNS CAA record, core files writable (managed hosts keep core writable so WordPress can update itself). Thresholds overridable via `rules.thresholds.<id>`.
 - **Ignored vulnerabilities**: `vulnerabilities.ignored` in `config/config.php`
   (edit it there, not in `config.local.php` — `array_replace_recursive` merges
   lists by position) is a list of Wordfence ids (a BlogVault id also works,

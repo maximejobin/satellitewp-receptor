@@ -136,16 +136,17 @@ return [
     [
         'id' => 'A1', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
         'check' => static function (Context $c) {
+            // days_to_expiry is floored: 0 is the last valid day, below 0 is expired.
             $days = $c->number('probe.tls.days_to_expiry');
 
-            return $days === null ? Check::unknown() : ($days > 0 ? Check::pass($days) : Check::fail($days));
+            return $days === null ? Check::unknown() : ($days >= 0 ? Check::pass($days) : Check::fail($days));
         },
     ],
     [
         'id' => 'A2', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::Medium, 'threshold' => 30,
         'check' => static function (Context $c, Rule $rule) {
             $days = $c->number('probe.tls.days_to_expiry');
-            if ($days !== null && $days <= 0) {
+            if ($days !== null && $days < 0) {
                 return Check::na(); // A1 reports an expired certificate
             }
 
@@ -153,8 +154,17 @@ return [
         },
     ],
     [
+        // Any verify failure reads as an invalid chain: an expired or self-signed
+        // certificate is A1's or A5's finding, not a missing intermediate.
         'id' => 'A3', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.tls.chain_valid')),
+        'check' => static function (Context $c) {
+            $days = $c->number('probe.tls.days_to_expiry');
+            if (($days !== null && $days < 0) || $c->bool('probe.tls.self_signed') === true) {
+                return Check::na();
+            }
+
+            return Check::isTrue($c->bool('probe.tls.chain_valid'));
+        },
     ],
     [
         'id' => 'A4', 'category' => Category::SSL, 'source' => 'EXT', 'severity' => Severity::High,
@@ -216,11 +226,11 @@ return [
     [
         // Offers gzip alone, so it measures capability, not the server's preference.
         'id' => 'B1', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.gzip')),
+        'check' => static fn (Context $c) => $homepageReadable($c) ? Check::isTrue($c->bool('probe.http.compression.gzip')) : Check::unknown(),
     ],
     [
         'id' => 'B2', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.brotli')),
+        'check' => static fn (Context $c) => $homepageReadable($c) ? Check::isTrue($c->bool('probe.http.compression.brotli')) : Check::unknown(),
     ],
     [
         'id' => 'B3', 'category' => Category::HTTP, 'source' => 'EXT', 'severity' => Severity::Medium,
@@ -418,6 +428,10 @@ return [
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
+            // On a soft-404 site every conventional URL answers 200: finding one there proves nothing.
+            if (($robots['sitemap_source'] ?? null) === 'convention' && $c->get('probe.http.soft_404.is_soft_404') === true) {
+                return Check::unknown();
+            }
             // A sitemap request that failed proves neither presence nor absence.
             if ($sitemaps === [] ? ($robots['sitemap_unverified'] ?? false) === true : ($robots['sitemap_reachable'] ?? null) === null) {
                 return Check::unknown();
@@ -447,12 +461,12 @@ return [
                 return $result;
             }
 
+            $signer = implode(', ', array_filter(array_map('strval', $c->list('probe.mail.dkim_domains')), static fn (string $d): bool => $d !== ''));
+
             return match ($c->bool('probe.mail.dkim_aligned')) {
                 true    => $result,
-                false   => Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => implode(', ', array_filter(
-                    array_map('strval', $c->list('probe.mail.dkim_domains')),
-                    static fn (string $d): bool => $d !== ''
-                ))]),
+                // Without the signing domain the client text could not name it.
+                false   => $signer !== '' ? Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => $signer]) : Check::unknown(),
                 default => Check::unknown(),
             };
         },
@@ -467,7 +481,8 @@ return [
             if (!$dnsKnown($c, 'mx')) {
                 return Check::unknown();
             }
-            $mx = $c->list('probe.dns.mx');
+            // A null MX ("MX 0 .", RFC 7505) states that the domain receives no email.
+            $mx = array_filter($c->list('probe.dns.mx'), static fn ($r): bool => is_array($r) && rtrim((string) ($r['host'] ?? ''), '.') !== '');
 
             return $mx !== [] ? Check::pass(count($mx)) : Check::fail(0);
         },
@@ -745,11 +760,12 @@ return [
             }
             $auto = [];
             foreach ($plugins as $plugin) {
-                // Sent by plugin releases that resolve the auto-update filters; older ones can't tell.
+                // Without the resolved policy (auto-update filters included) nothing is proven.
                 if (!is_array($plugin) || !is_bool($plugin['auto_update'] ?? null)) {
                     return Check::unknown();
                 }
-                if ($plugin['auto_update']) {
+                // An inactive plugin updating itself cannot break the site.
+                if ($plugin['auto_update'] && (($plugin['active'] ?? false) === true || ($plugin['network_activated'] ?? false) === true)) {
                     $auto[] = (string) ($plugin['name'] ?? '?');
                 }
             }
@@ -983,7 +999,11 @@ return [
             $data = ['events' => (int) $overdue];
 
             return match (true) {
-                $minutes >= 1440 => Check::fail($minutes, $data + ['variant' => 'stopped', 'days' => intdiv($minutes, 1440)], Severity::High),
+                // With DISABLE_WP_CRON the site already relies on a server cron job: that one stopped.
+                $minutes >= 1440 => Check::fail($minutes, $data + [
+                    'variant' => $c->get('payload.cron.disabled') === true ? 'server_cron_stopped' : 'stopped',
+                    'days'    => intdiv($minutes, 1440),
+                ], Severity::High),
                 $minutes >= 120  => Check::fail($minutes, $data + ['variant' => 'hours', 'hours' => intdiv($minutes, 60)]),
                 default          => Check::fail($minutes, $data + ['minutes' => $minutes]),
             };
@@ -1003,9 +1023,15 @@ return [
             if ($debug === false) {
                 return Check::pass(false);
             }
-            // Debug on is acceptable only when it logs to a file confirmed private.
-            if ($c->get('payload.constants.WP_DEBUG_LOG') !== true) {
+            // Debug on is acceptable only when it logs to a file confirmed private,
+            // with nothing shown to visitors (K2's finding otherwise).
+            $log = $c->get('payload.constants.WP_DEBUG_LOG');
+            if ($c->constant('WP_DEBUG_DISPLAY') !== false || ($log !== true && !(is_string($log) && $log !== '' && $log !== 'N/A'))) {
                 return Check::fail(true);
+            }
+            // A custom log path cannot be probed from outside: its privacy is not proven.
+            if ($log !== true) {
+                return Check::unknown();
             }
 
             return match ($debugLogExposed($c)) {
@@ -1063,6 +1089,10 @@ return [
             if ($forced === true) {
                 return Check::pass(true);
             }
+            // Without a readable http:// chain, whether the site forces HTTPS is not known.
+            if ($c->bool('probe.http.redirects.forces_https') === null) {
+                return Check::unknown();
+            }
             $siteHttps = $c->bool('probe.http.redirects.forces_https') === true
                 && str_starts_with((string) $c->string('payload.home_url'), 'https://');
             if ($siteHttps) {
@@ -1095,12 +1125,6 @@ return [
         'id' => 'L2', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.filesystem.uploads_writable')),
     ],
-    // L3 (core files writable in production) is disabled: most managed hosts
-    // keep core writable by design so WordPress can update itself.
-    // [
-    //     'id' => 'L3', 'category' => Category::HOSTING, 'source' => 'DATA', 'severity' => Severity::Medium,
-    //     'check' => static fn (Context $c) => Check::isFalse($c->bool('payload.filesystem.core_writable')),
-    // ],
 
     // ===================================================================
     //  M. USERS & ACCESS                                          [DATA]
@@ -1143,6 +1167,10 @@ return [
             }
             $role = (string) ($registration['default_role_name'] ?? '') ?: (string) ($registration['default_role'] ?? '');
             $caps = $registration['default_role_caps'];
+            // A default role that names nothing cannot be judged, nor shown to a client.
+            if ($role === '') {
+                return Check::unknown();
+            }
             if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
                 return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
             }
@@ -1168,9 +1196,11 @@ return [
             }
             $unresolved = (int) ($c->number('probe.blogvault.scanner.unresolved_count') ?? 0);
 
-            return ($status === 'hacked' || $unresolved > 0)
-                ? Check::fail($status, ['detections' => $unresolved])
-                : Check::pass($status);
+            if ($status !== 'hacked' && $unresolved === 0) {
+                return Check::pass($status);
+            }
+
+            return Check::fail($status, $unresolved > 0 ? ['detections' => $unresolved] : ['variant' => 'hacked']);
         },
     ],
 
@@ -1198,7 +1228,12 @@ return [
                 return Check::unknown();
             }
 
-            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', array_map('strval', $found)));
+            if ($found === []) {
+                return Check::pass('none');
+            }
+
+            // The debug log alone reveals errors and paths, not database credentials.
+            return Check::fail(implode(', ', array_map('strval', $found)), $found === ['wp-content/debug.log'] ? ['variant' => 'debug_log'] : []);
         },
     ],
     [

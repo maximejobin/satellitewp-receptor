@@ -155,7 +155,13 @@ final class HttpProbeTest extends TestCase
         $this->assertSame([], $parsed['sitemaps']);
     }
 
-    public function testParseRobotsEmpty(): void
+    public function testParseRobotsGroupsConsecutiveUserAgents(): void
+    {
+        $this->assertTrue(HttpProbe::parseRobots("User-agent: *\nUser-agent: badbot\nDisallow: /")['disallow_all']);
+        $this->assertFalse(HttpProbe::parseRobots("User-agent: *\nDisallow: /wp-admin/\nUser-agent: badbot\nDisallow: /")['disallow_all']);
+    }
+
+        public function testParseRobotsEmpty(): void
     {
         $parsed = HttpProbe::parseRobots('');
 

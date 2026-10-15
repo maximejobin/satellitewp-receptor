@@ -16,14 +16,15 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### A1 — Certificat SSL valide
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Le certificat SSL de votre site est valide.
+- **Réussite (FR) :** Le certificat SSL de votre site n'est pas expiré.
 - **Échec (FR) :** Le certificat SSL de votre site est expiré : les navigateurs affichent un avertissement de sécurité à vos visiteurs. Renouvelez-le sans délai.
 
 ```php
         'check' => static function (Context $c) {
+            // days_to_expiry is floored: 0 is the last valid day, below 0 is expired.
             $days = $c->number('probe.tls.days_to_expiry');
 
-            return $days === null ? Check::unknown() : ($days > 0 ? Check::pass($days) : Check::fail($days));
+            return $days === null ? Check::unknown() : ($days >= 0 ? Check::pass($days) : Check::fail($days));
         },
 ```
 
@@ -36,7 +37,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```php
         'check' => static function (Context $c, Rule $rule) {
             $days = $c->number('probe.tls.days_to_expiry');
-            if ($days !== null && $days <= 0) {
+            if ($days !== null && $days < 0) {
                 return Check::na(); // A1 reports an expired certificate
             }
 
@@ -51,7 +52,14 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Un certificat intermédiaire manque dans la configuration du serveur : certains navigateurs et appareils mobiles refuseront la connexion. Faites installer la chaîne complète par votre hébergeur.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.tls.chain_valid')),
+        'check' => static function (Context $c) {
+            $days = $c->number('probe.tls.days_to_expiry');
+            if (($days !== null && $days < 0) || $c->bool('probe.tls.self_signed') === true) {
+                return Check::na();
+            }
+
+            return Check::isTrue($c->bool('probe.tls.chain_valid'));
+        },
 ```
 
 ### A4 — Certificat émis pour l'adresse du site
@@ -102,7 +110,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 - **Catégorie :** SSL · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le site demande aux navigateurs de toujours utiliser une connexion sécurisée (HSTS).
-- **Échec (FR) :** Le site ne demande pas aux navigateurs de toujours utiliser une connexion sécurisée : une première visite en HTTP peut être interceptée. Faites ajouter l'en-tête Strict-Transport-Security (HSTS).
+- **Échec (FR) :** Le site ne demande pas aux navigateurs de toujours utiliser une connexion sécurisée : un visiteur qui suit un ancien lien en http:// passe d'abord par une connexion non chiffrée, qui peut être interceptée. Faites ajouter l'en-tête Strict-Transport-Security (HSTS).
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
@@ -144,7 +152,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Le serveur ne compresse pas les pages avec Gzip : elles sont plus lourdes et plus lentes à charger. Faites activer la compression Gzip.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.gzip')),
+        'check' => static fn (Context $c) => $homepageReadable($c) ? Check::isTrue($c->bool('probe.http.compression.gzip')) : Check::unknown(),
 ```
 
 ### B2 — Compression Brotli
@@ -154,7 +162,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Le serveur n'offre pas la compression Brotli, plus efficace que Gzip : vos pages pourraient se charger plus vite. Faites activer Brotli si votre hébergeur le permet.
 
 ```php
-        'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.compression.brotli')),
+        'check' => static fn (Context $c) => $homepageReadable($c) ? Check::isTrue($c->bool('probe.http.compression.brotli')) : Check::unknown(),
 ```
 
 ### B3 — Protocole HTTP/2
@@ -188,7 +196,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Le serveur annonce HTTP/3, la version la plus récente du protocole web.
-- **Échec (FR) :** Le serveur n'annonce pas HTTP/3, la version la plus récente du protocole web. C'est une optimisation facultative.
+- **Échec (FR) :** Le serveur n'annonce pas HTTP/3, la version la plus récente du protocole web, qui accélère l'affichage, surtout sur mobile. Demandez à votre hébergeur de l'activer.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('probe.http.protocols.http3_advertised')),
@@ -276,7 +284,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
 - **Réussite (FR) :** Une Referrer-Policy limite les informations transmises aux sites externes.
-- **Échec (FR) :** Aucune Referrer-Policy n'est définie : l'adresse complète de vos pages peut être transmise aux sites vers lesquels vous faites des liens.
+- **Échec (FR) :** Aucune Referrer-Policy n'est définie : le site laisse au navigateur le choix des informations transmises aux sites vers lesquels il fait des liens. Faites définir explicitement l'en-tête Referrer-Policy (par exemple strict-origin-when-cross-origin).
 
 ```php
         'check' => static fn (Context $c) => $homepageReadable($c)
@@ -341,7 +349,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### C2 — Nombre de redirections
 
 - **Catégorie :** HTTP · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2
-- **Réussite (FR) :** Redirections avant d'atteindre votre page d'accueil : {observed}, ce qui est raisonnable.
+- **Réussite (FR) :** {observed} redirections avant d'atteindre votre page d'accueil, ce qui est raisonnable.
 - **Échec (FR) :** L'accès à votre page d'accueil passe par {observed} redirections (maximum recommandé : {threshold}) : chaque étape ralentit le chargement. Faites simplifier les redirections.
 
 ```php
@@ -362,9 +370,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 - **Échec (FR) :** Votre page d'accueil répond par une erreur (code HTTP {observed}) : vos visiteurs ne peuvent pas la consulter. Vérifiez le site sans délai.
 
 ```php
-        'check' => static function (Context $c) use ($homepageReadable) {
+        'check' => static function (Context $c) {
             $code = $c->number('probe.http.status_code');
-            if ($code === null || !$homepageReadable($c)) {
+            // A 401 is the auth gate; a 3xx means the redirect chain could not be followed to its end.
+            if (!$c->probeRan('http') || $code === null || $code === 401.0 || $c->get('probe.http.auth.required') === true
+                || ($code >= 300 && $code < 400)) {
                 return Check::unknown();
             }
 
@@ -436,8 +446,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### C7 — Plan du site
 
 - **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** {observed} plans du site déclarés et accessibles.
-- **Échec (FR) :** Aucun plan du site accessible n'est déclaré dans robots.txt : les moteurs de recherche découvrent vos pages moins efficacement. Déclarez-y l'adresse de votre plan du site.
+- **Réussite (FR) :** {observed} plans du site accessibles.
+- **Échec (FR) :** Aucun plan du site accessible n'a été trouvé : les moteurs de recherche découvrent vos pages moins efficacement. Faites publier un plan du site et déclarez son adresse dans robots.txt.
 
 ```php
         'check' => static function (Context $c) use ($homepageReadable) {
@@ -446,6 +456,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
             $sitemaps = $robots['sitemaps'] ?? [];
+            // On a soft-404 site every conventional URL answers 200: finding one there proves nothing.
+            if (($robots['sitemap_source'] ?? null) === 'convention' && $c->get('probe.http.soft_404.is_soft_404') === true) {
+                return Check::unknown();
+            }
             // A sitemap request that failed proves neither presence nor absence.
             if ($sitemaps === [] ? ($robots['sitemap_unverified'] ?? false) === true : ($robots['sitemap_reachable'] ?? null) === null) {
                 return Check::unknown();
@@ -483,12 +497,12 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return $result;
             }
 
+            $signer = implode(', ', array_filter(array_map('strval', $c->list('probe.mail.dkim_domains')), static fn (string $d): bool => $d !== ''));
+
             return match ($c->bool('probe.mail.dkim_aligned')) {
                 true    => $result,
-                false   => Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => implode(', ', array_filter(
-                    array_map('strval', $c->list('probe.mail.dkim_domains')),
-                    static fn (string $d): bool => $d !== ''
-                ))]),
+                // Without the signing domain the client text could not name it.
+                false   => $signer !== '' ? Check::fail('unaligned', ['variant' => 'unaligned', 'signer' => $signer]) : Check::unknown(),
                 default => Check::unknown(),
             };
         },
@@ -515,7 +529,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if (!$dnsKnown($c, 'mx')) {
                 return Check::unknown();
             }
-            $mx = $c->list('probe.dns.mx');
+            // A null MX ("MX 0 .", RFC 7505) states that the domain receives no email.
+            $mx = array_filter($c->list('probe.dns.mx'), static fn ($r): bool => is_array($r) && rtrim((string) ($r['host'] ?? ''), '.') !== '');
 
             return $mx !== [] ? Check::pass(count($mx)) : Check::fail(0);
         },
@@ -588,8 +603,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### PS5 — Vitesse d'affichage sur mobile
 
 - **Catégorie :** PERFORMANCE · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** 2500
-- **Réussite (FR) :** Sur mobile, le contenu principal de votre page d'accueil s'affiche en {lcp_s} s (objectif : moins de {threshold_s} s).
-- **Échec (FR) :** Sur mobile, le contenu principal de votre page d'accueil met {lcp_s} s à s'afficher (objectif : moins de {threshold_s} s) : les visiteurs impatients quittent le site. Faites optimiser les images et le chargement de la page.
+- **Réussite (FR) :** Sur mobile, le contenu principal de votre page d'accueil s'affiche en {lcp_s} s (objectif : moins de {threshold_s} s).
+- **Échec (FR) :** Sur mobile, le contenu principal de votre page d'accueil met {lcp_s} s à s'afficher (objectif : moins de {threshold_s} s) : les visiteurs impatients quittent le site. Faites optimiser les images et le chargement de la page.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -880,11 +895,12 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
             $auto = [];
             foreach ($plugins as $plugin) {
-                // Sent by plugin releases that resolve the auto-update filters; older ones can't tell.
+                // Without the resolved policy (auto-update filters included) nothing is proven.
                 if (!is_array($plugin) || !is_bool($plugin['auto_update'] ?? null)) {
                     return Check::unknown();
                 }
-                if ($plugin['auto_update']) {
+                // An inactive plugin updating itself cannot break the site.
+                if ($plugin['auto_update'] && (($plugin['active'] ?? false) === true || ($plugin['network_activated'] ?? false) === true)) {
                     $auto[] = (string) ($plugin['name'] ?? '?');
                 }
             }
@@ -952,8 +968,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### G1 — Mémoire disponible pour PHP
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** PHP dispose de {memory_mb} Mo de mémoire, ce qui est suffisant.
-- **Échec (FR) :** PHP dispose de {memory_mb} Mo de mémoire (recommandé : au moins 256 Mo) : les pages lourdes et l'administration peuvent tomber en erreur. Faites augmenter la limite par votre hébergeur.
+- **Réussite (FR) :** PHP dispose de {memory_mb} Mo de mémoire, ce qui est suffisant.
+- **Échec (FR) :** PHP dispose de {memory_mb} Mo de mémoire (recommandé : au moins 256 Mo) : les pages lourdes et l'administration peuvent tomber en erreur. Faites augmenter la limite par votre hébergeur.
 
 ```php
         'check' => static function (Context $c) {
@@ -978,8 +994,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### G2 — Taille maximale des envois de fichiers
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 50
-- **Réussite (FR) :** Les envois de fichiers peuvent atteindre {effective_mb} Mo.
-- **Échec (FR) :** Un envoi de fichier est limité à {effective_mb} Mo (recommandé : au moins {threshold} Mo) : l'ajout de vidéos ou de gros documents peut échouer. Faites augmenter la limite par votre hébergeur.
+- **Réussite (FR) :** Les envois de fichiers peuvent atteindre {effective_mb} Mo.
+- **Échec (FR) :** Un envoi de fichier est limité à {effective_mb} Mo (recommandé : au moins {threshold} Mo) : l'ajout de vidéos ou de gros documents peut échouer. Faites augmenter la limite par votre hébergeur.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -1101,7 +1117,7 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 - **Catégorie :** DATABASE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 250
 - **Réussite (FR) :** La base de données contient {observed} données temporaires expirées, ce qui est normal.
-- **Échec (FR) :** {observed} données temporaires expirées (« transients ») encombrent la base de données (seuil : {threshold}). Un nettoyage régulier les supprime.
+- **Échec (FR) :** {observed} données temporaires expirées encombrent la base de données. Un nettoyage régulier les supprime.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atMost($c->number('payload.database.transients.expired'), (float) $rule->threshold),
@@ -1112,8 +1128,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### I1 — Poids des réglages chargés à chaque page
 
 - **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Élevée · **Seuil configurable :** —
-- **Réussite (FR) :** Les réglages que WordPress charge à chaque page pèsent {size_kb} Ko, dans la norme.
-- **Échec (FR) :** Les réglages que WordPress charge à chaque page (options « autoload ») pèsent {size_kb} Ko (idéalement moins de 500 Ko) : chaque visite en est ralentie. Faites nettoyer les réglages laissés par d'anciennes extensions.
+- **Réussite (FR) :** Les réglages que WordPress charge à chaque page pèsent {size_kb} Ko, dans la norme.
+- **Échec (FR) :** Les réglages que WordPress charge à chaque page (options « autoload ») pèsent {size_kb} Ko (idéalement moins de 500 Ko) : chaque visite en est ralentie. Faites nettoyer les réglages laissés par d'anciennes extensions.
 
 ```php
         'check' => static function (Context $c) {
@@ -1134,8 +1150,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### I2 — Cache objet persistant
 
 - **Catégorie :** CACHE · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Un cache objet persistant (Redis ou Memcached) accélère le site.
-- **Échec (FR) :** Aucun cache objet persistant (Redis ou Memcached) n'est configuré. Il est à considérer pour accélérer le site : il évite de refaire les mêmes requêtes à la base de données à chaque page.
+- **Réussite (FR) :** Un cache objet persistant accélère le site.
+- **Échec (FR) :** Aucun cache objet persistant (par exemple Redis) n'est configuré. Il est à considérer pour accélérer le site : il évite de refaire les mêmes requêtes à la base de données à chaque page.
 
 ```php
         'check' => static fn (Context $c) => Check::isTrue($c->bool('payload.object_cache.external')),
@@ -1169,7 +1185,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             $data = ['events' => (int) $overdue];
 
             return match (true) {
-                $minutes >= 1440 => Check::fail($minutes, $data + ['variant' => 'stopped', 'days' => intdiv($minutes, 1440)], Severity::High),
+                // With DISABLE_WP_CRON the site already relies on a server cron job: that one stopped.
+                $minutes >= 1440 => Check::fail($minutes, $data + [
+                    'variant' => $c->get('payload.cron.disabled') === true ? 'server_cron_stopped' : 'stopped',
+                    'days'    => intdiv($minutes, 1440),
+                ], Severity::High),
                 $minutes >= 120  => Check::fail($minutes, $data + ['variant' => 'hours', 'hours' => intdiv($minutes, 60)]),
                 default          => Check::fail($minutes, $data + ['minutes' => $minutes]),
             };
@@ -1193,9 +1213,15 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if ($debug === false) {
                 return Check::pass(false);
             }
-            // Debug on is acceptable only when it logs to a file confirmed private.
-            if ($c->get('payload.constants.WP_DEBUG_LOG') !== true) {
+            // Debug on is acceptable only when it logs to a file confirmed private,
+            // with nothing shown to visitors (K2's finding otherwise).
+            $log = $c->get('payload.constants.WP_DEBUG_LOG');
+            if ($c->constant('WP_DEBUG_DISPLAY') !== false || ($log !== true && !(is_string($log) && $log !== '' && $log !== 'N/A'))) {
                 return Check::fail(true);
+            }
+            // A custom log path cannot be probed from outside: its privacy is not proven.
+            if ($log !== true) {
+                return Check::unknown();
             }
 
             return match ($debugLogExposed($c)) {
@@ -1274,6 +1300,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             if ($forced === true) {
                 return Check::pass(true);
             }
+            // Without a readable http:// chain, whether the site forces HTTPS is not known.
+            if ($c->bool('probe.http.redirects.forces_https') === null) {
+                return Check::unknown();
+            }
             $siteHttps = $c->bool('probe.http.redirects.forces_https') === true
                 && str_starts_with((string) $c->string('payload.home_url'), 'https://');
             if ($siteHttps) {
@@ -1289,8 +1319,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### L1 — Espace disque disponible
 
 - **Catégorie :** HOSTING · **Source :** DATA · **Sévérité de base :** Info · **Seuil configurable :** —
-- **Réussite (FR) :** Il reste {observed} % d'espace disque ({free_gb} Go).
-- **Échec (FR) :** Il ne reste que {observed} % d'espace disque ({free_gb} Go) : les sauvegardes, mises à jour et téléversements peuvent échouer. Libérez de l'espace ou augmentez votre forfait.
+- **Réussite (FR) :** Il reste {observed} % d'espace disque ({free_gb} Go).
+- **Échec (FR) :** Il ne reste que {observed} % d'espace disque ({free_gb} Go) : les sauvegardes, mises à jour et téléversements peuvent échouer. Libérez de l'espace ou augmentez votre forfait.
 
 ```php
         'check' => static function (Context $c) {
@@ -1372,6 +1402,10 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
             $role = (string) ($registration['default_role_name'] ?? '') ?: (string) ($registration['default_role'] ?? '');
             $caps = $registration['default_role_caps'];
+            // A default role that names nothing cannot be judged, nor shown to a client.
+            if ($role === '') {
+                return Check::unknown();
+            }
             if (array_intersect(['manage_options', 'edit_others_posts', 'publish_posts'], $caps) !== []) {
                 return Check::fail('privileged', ['role' => $role, 'variant' => 'privileged']);
             }
@@ -1400,9 +1434,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
             $unresolved = (int) ($c->number('probe.blogvault.scanner.unresolved_count') ?? 0);
 
-            return ($status === 'hacked' || $unresolved > 0)
-                ? Check::fail($status, ['detections' => $unresolved])
-                : Check::pass($status);
+            if ($status !== 'hacked' && $unresolved === 0) {
+                return Check::pass($status);
+            }
+
+            return Check::fail($status, $unresolved > 0 ? ['detections' => $unresolved] : ['variant' => 'hacked']);
         },
 ```
 
@@ -1418,21 +1454,21 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'xmlrpc_enabled')),
 ```
 
-### X2 — Identifiants protégés (API de WordPress)
+### X2 — Noms d'utilisateur protégés (API de WordPress)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'API de WordPress ne divulgue pas les identifiants de vos utilisateurs.
-- **Échec (FR) :** L'API de WordPress publie la liste des identifiants de connexion de vos utilisateurs : un attaquant n'a plus qu'à deviner les mots de passe. Restreignez l'accès à cette liste.
+- **Réussite (FR) :** L'API de WordPress ne divulgue pas les noms d'utilisateur de vos auteurs.
+- **Échec (FR) :** L'API de WordPress publie les noms d'utilisateur de vos auteurs, souvent identiques à leurs identifiants de connexion : un attaquant n'a plus qu'à deviner les mots de passe. Faites restreindre l'accès à cette liste.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'rest_user_enumeration')),
 ```
 
-### X3 — Identifiants protégés (archives d'auteur)
+### X3 — Noms d'utilisateur protégés (archives d'auteur)
 
 - **Catégorie :** SECURITY · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Les archives d'auteur ne révèlent pas les identifiants de connexion.
-- **Échec (FR) :** L'adresse « ?author=1 » révèle l'identifiant de connexion d'un administrateur. Bloquez cette redirection.
+- **Réussite (FR) :** Les archives d'auteur ne révèlent pas les noms d'utilisateur.
+- **Échec (FR) :** L'adresse « ?author=1 » redirige vers la page d'auteur d'un utilisateur et révèle son nom d'utilisateur, souvent identique à son identifiant de connexion. Faites bloquer cette redirection.
 
 ```php
         'check' => static fn (Context $c) => Check::isFalse($exposureFlag($c, 'author_enumeration')),
@@ -1451,7 +1487,12 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
                 return Check::unknown();
             }
 
-            return $found === [] ? Check::pass('none') : Check::fail(implode(', ', array_map('strval', $found)));
+            if ($found === []) {
+                return Check::pass('none');
+            }
+
+            // The debug log alone reveals errors and paths, not database credentials.
+            return Check::fail(implode(', ', array_map('strval', $found)), $found === ['wp-content/debug.log'] ? ['variant' => 'debug_log'] : []);
         },
 ```
 
