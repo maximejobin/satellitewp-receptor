@@ -53,7 +53,7 @@ function run(action, title, message) {
   if (response.getSelectedButton() !== ui.Button.OK) { return; }
 
   var address = response.getResponseText().trim();
-  var m = /^https:\/\/([a-z0-9.-]+)(:\d+)?(\/[^?#\s]*)?\/report\.json\?token=[A-Za-z0-9%_-]+$/i.exec(address);
+  var m = /^https:\/\/([a-z0-9.-]+)(:\d+)?(\/[^?#\s]*)?\/report\.json\?token=[A-Za-z0-9%_-]+(&lang=[a-z]{2})?$/i.exec(address);
   if (!m) {
     ui.alert('This does not look like a "Report data key" address.\n\n' +
       'Go back to Manager, click the button on the extraction page, ' +

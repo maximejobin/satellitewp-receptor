@@ -21,6 +21,23 @@ final class ReportController extends Controller
 {
     public const string ENGINE_FILE = 'resources/apps-script/report-engine.gs';
 
+    /**
+     * ?lang= when given, else the language chosen before the run. The key
+     * carries no lang: loaders already pasted in Docs accept nothing after the token.
+     *
+     * @param array<string, mixed> $meta
+     */
+    public static function reportLocale(mixed $requested, array $meta): string
+    {
+        foreach ([is_string($requested) ? strtolower($requested) : null, $meta['language'] ?? null] as $lang) {
+            if (in_array($lang, ['fr', 'en'], true)) {
+                return $lang;
+            }
+        }
+
+        return 'fr';
+    }
+
     /** @param array<string, string> $params */
     public function json(array $params): void
     {
@@ -48,13 +65,14 @@ final class ReportController extends Controller
             return;
         }
 
-        $t     = $this->app->translator($this->locale());
+        $meta  = $store->readMeta($siteId, $extractionId) ?? [];
+        $t     = $this->app->translator(self::reportLocale($_GET['lang'] ?? null, $meta));
         $token = (string) ($_GET['token'] ?? '');
 
         $context = ReportContext::build(
             $payload,
             $store->readSiteInfo($siteId) ?? [],
-            $store->readMeta($siteId, $extractionId) ?? [],
+            $meta,
             $store->readAllProbeResults($siteId, $extractionId),
             $store->readLicenses($siteId, $extractionId) ?? [],
             ReportContext::reference($payload, $this->app->endOfLife(), $this->app->wordPressVersions()),

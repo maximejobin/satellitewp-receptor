@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager\Tests\Http;
 use PHPUnit\Framework\Attributes\Test;
 use SatelliteWP\Manager\App;
 use SatelliteWP\Manager\Config;
+use SatelliteWP\Manager\Http\Controller\ReportController;
 use SatelliteWP\Manager\Http\Router;
 use SatelliteWP\Manager\Http\Session;
 use SatelliteWP\Manager\Storage\Index;
@@ -134,6 +135,28 @@ final class AdminAccessTest extends TestCase
 
         $this->assertSame(409, $this->post($app, '/site/' . self::SITE . '/extraction/' . $extractionId . '/report-token')->status);
         $this->assertSame(404, $this->post($app, '/site/' . self::SITE . '/extraction/20260101T000000Z/report-token')->status);
+    }
+
+    #[Test]
+    public function theReportKeyEndsWithTheToken(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true], 'app' => ['base_url' => 'https://example.com']]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+
+        $response = $this->post($app, '/site/' . self::SITE . '/extraction/' . $extractionId . '/report-token');
+        $url      = (string) (json_decode($response->body, true)['url'] ?? '');
+
+        // The pattern of loaders already pasted in Docs: nothing may follow the token.
+        $this->assertMatchesRegularExpression('#^https://example\.com/site/[^?]+/report\.json\?token=[A-Za-z0-9%_-]+$#', $url);
+    }
+
+    #[Test]
+    public function theReportLanguageIsTheRequestedOneElseTheRunsOne(): void
+    {
+        $this->assertSame('en', ReportController::reportLocale('EN', ['language' => 'fr']));
+        $this->assertSame('en', ReportController::reportLocale(null, ['language' => 'en']));
+        $this->assertSame('fr', ReportController::reportLocale('de', []));
+        $this->assertSame('fr', ReportController::reportLocale(['en'], ['language' => 'xx']));
     }
 
     #[Test]

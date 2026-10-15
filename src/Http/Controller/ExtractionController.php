@@ -246,13 +246,9 @@ final class ExtractionController extends Controller
         }
         $token = $this->app->reportTokenStore()->issue($siteId, $extractionId, $this->currentUserDisplayName());
 
-        // The report follows the language chosen before the run; &lang= stays overridable by hand.
-        $meta = $this->app->dataStore()->readMeta($siteId, $extractionId) ?? [];
-        $lang = in_array($meta['language'] ?? null, ['fr', 'en'], true) ? (string) $meta['language'] : 'fr';
-
+        // No &lang=: report.json reads the run's language itself (ReportController::reportLocale()).
         $this->response->json(['url' => $this->baseUrl()
-            . "/site/{$siteId}/extraction/{$extractionId}/report.json?token=" . rawurlencode($token)
-            . '&lang=' . $lang]);
+            . "/site/{$siteId}/extraction/{$extractionId}/report.json?token=" . rawurlencode($token)]);
     }
 
     /**
