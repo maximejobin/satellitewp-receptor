@@ -964,11 +964,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 
 ## G. PHP & serveur
 
-### G1 — Mémoire disponible pour PHP
+### G1 — Mémoire PHP
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** PHP dispose de {memory_mb} Mo de mémoire, ce qui est suffisant.
-- **Échec (FR) :** PHP dispose de {memory_mb} Mo de mémoire (recommandé : au moins 256 Mo) : les pages lourdes et l'administration peuvent tomber en erreur. Faites augmenter la limite par votre hébergeur.
+- **Réussite (FR) :** La mémoire PHP est l'espace de travail dont le site dispose pour produire chaque page. Avec {memory_mb} Mo, le site a la marge nécessaire pour ses pages et son administration.
+- **Échec (FR) :** La mémoire PHP est l'espace de travail dont le site dispose pour produire chaque page. Elle est limitée à {memory_mb} Mo, sous les 256 Mo recommandés : les pages lourdes et l'administration pourraient tomber en erreur. Demandez à votre hébergeur d'augmenter cette limite.
 
 ```php
         'check' => static function (Context $c) {
@@ -990,11 +990,11 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### G2 — Taille maximale des envois de fichiers
+### G2 — Taille des envois de fichiers
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 50
-- **Réussite (FR) :** Les envois de fichiers peuvent atteindre {effective_mb} Mo.
-- **Échec (FR) :** Un envoi de fichier est limité à {effective_mb} Mo (recommandé : au moins {threshold} Mo) : l'ajout de vidéos ou de gros documents peut échouer. Faites augmenter la limite par votre hébergeur.
+- **Réussite (FR) :** Cette limite fixe la taille maximale d'un fichier ajouté au site (image, vidéo, PDF). Elle est de {effective_mb} Mo, assez pour les médias courants.
+- **Échec (FR) :** Cette limite fixe la taille maximale d'un fichier ajouté au site (image, vidéo, PDF). Elle est de {effective_mb} Mo, sous les {threshold} Mo recommandés : l'ajout de vidéos ou de gros documents pourrait échouer. Demandez à votre hébergeur d'augmenter cette limite.
 
 ```php
         'check' => static function (Context $c, Rule $rule) {
@@ -1025,21 +1025,21 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
         },
 ```
 
-### G3 — Nombre de champs par formulaire
+### G3 — Champs par formulaire
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** 1000
-- **Réussite (FR) :** PHP accepte {observed} champs par formulaire, ce qui est suffisant.
-- **Échec (FR) :** PHP accepte au plus {observed} champs par formulaire (recommandé : au moins {threshold}) : l'enregistrement de menus ou de pages complexes peut perdre des données sans avertissement. Faites augmenter le réglage max_input_vars.
+- **Réussite (FR) :** PHP limite le nombre de champs qu'un formulaire peut envoyer en une fois, y compris dans l'administration. Avec {observed} champs, les menus et les pages complexes devraient s'enregistrer sans perte.
+- **Échec (FR) :** PHP limite le nombre de champs qu'un formulaire peut envoyer en une fois, y compris dans l'administration. Cette limite est de {observed} (recommandé : {threshold}) : un grand menu ou une page complexe pourrait perdre des données à l'enregistrement, sans avertissement. Demandez à votre hébergeur d'augmenter le réglage max_input_vars.
 
 ```php
         'check' => static fn (Context $c, Rule $rule) => Check::atLeast($c->number('payload.php.max_input_vars'), (float) $rule->threshold),
 ```
 
-### G4 — Modules PHP nécessaires
+### G4 — Modules PHP
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** Tous les modules PHP dont WordPress a besoin sont présents.
-- **Échec (FR) :** Des modules PHP dont WordPress a besoin sont absents ({observed}) : certaines fonctions (images, mises à jour, sécurité) peuvent échouer. Faites-les installer par votre hébergeur.
+- **Réussite (FR) :** WordPress s'appuie sur des modules PHP pour traiter les images, communiquer de façon sécurisée et installer ses mises à jour. Tous ceux dont il a besoin sont présents.
+- **Échec (FR) :** WordPress s'appuie sur des modules PHP pour traiter les images, communiquer de façon sécurisée et installer ses mises à jour. Certains sont absents ({observed}) : ces fonctions pourraient échouer. Demandez à votre hébergeur de les installer.
 
 ```php
         'check' => static function (Context $c) {
@@ -1060,8 +1060,8 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
 ### G5 — Accélérateur PHP (OPcache)
 
 - **Catégorie :** PHP · **Source :** DATA · **Sévérité de base :** Moyenne · **Seuil configurable :** —
-- **Réussite (FR) :** L'accélérateur OPcache est actif.
-- **Échec (FR) :** L'accélérateur OPcache n'est pas actif : PHP recompile le code du site à chaque visite, ce qui le ralentit. Faites-le activer par votre hébergeur.
+- **Réussite (FR) :** OPcache garde en mémoire le code PHP déjà compilé. Il est actif : les pages sont produites plus vite et le serveur est moins sollicité.
+- **Échec (FR) :** OPcache garde en mémoire le code PHP déjà compilé. Il est inactif : chaque visite recompile le site, ce qui ralentit les pages et charge le serveur. Demandez à votre hébergeur de l'activer.
 
 ```php
         'check' => static function (Context $c) {
