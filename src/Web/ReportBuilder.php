@@ -267,6 +267,11 @@ final class ReportBuilder
                 (float) $v >= 50 => 'orange',
                 default          => 'red',
             } : null,
+            'seranking_score'         => is_numeric($v) ? ((float) $v >= 90 ? 'green' : 'orange') : null,
+            'red_if_any'              => is_numeric($v) && (float) $v > 0 ? 'red' : null,
+            'orange_if_any'           => is_numeric($v) && (float) $v > 0 ? 'orange' : null,
+            'seranking_error_types'   => (int) self::seRankingIssueTypes($v, 'error') > 0 ? 'red' : null,
+            'seranking_warning_types' => (int) self::seRankingIssueTypes($v, 'warning') > 0 ? 'orange' : null,
             default                  => null,
         };
     }

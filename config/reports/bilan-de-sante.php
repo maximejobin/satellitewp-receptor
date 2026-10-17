@@ -127,14 +127,15 @@ return [
 
         // SE Ranking website audit: empty until the crawl has finished (it
         // ends after the analysis). Counts are issue occurrences across pages;
-        // a "type" is one check with at least one affected page.
-        'seranking_score'         => ['type' => 'value', 'from' => 'probe.seranking.score', 'transform' => 'score_100'],
+        // a "type" is one check with at least one affected page. Errors are red
+        // and warnings orange only when there is at least one; zero stays uncoloured.
+        'seranking_score'         => ['type' => 'value', 'from' => 'probe.seranking.score', 'transform' => 'score_100', 'color_transform' => 'seranking_score'],
         'seranking_pages'         => ['type' => 'value', 'from' => 'probe.seranking.totals.pages', 'transform' => 'number'],
-        'seranking_errors'        => ['type' => 'value', 'from' => 'probe.seranking.totals.errors', 'transform' => 'number'],
-        'seranking_warnings'      => ['type' => 'value', 'from' => 'probe.seranking.totals.warnings', 'transform' => 'number'],
+        'seranking_errors'        => ['type' => 'value', 'from' => 'probe.seranking.totals.errors', 'transform' => 'number', 'color_transform' => 'red_if_any'],
+        'seranking_warnings'      => ['type' => 'value', 'from' => 'probe.seranking.totals.warnings', 'transform' => 'number', 'color_transform' => 'orange_if_any'],
         'seranking_notices'       => ['type' => 'value', 'from' => 'probe.seranking.totals.notices', 'transform' => 'number'],
-        'seranking_error_types'   => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_error_types'],
-        'seranking_warning_types' => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_warning_types'],
+        'seranking_error_types'   => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_error_types', 'color_transform' => 'seranking_error_types'],
+        'seranking_warning_types' => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_warning_types', 'color_transform' => 'seranking_warning_types'],
         'seranking_notice_types'  => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_notice_types'],
 
         // Every finding, every colour. A manual observation joins only the field

@@ -431,11 +431,27 @@ final class ReportBuilderTest extends TestCase
         self::assertSame('1', $fields['seranking_warning_types']['value']);
         self::assertSame('0', $fields['seranking_notice_types']['value']);
 
+        self::assertSame('orange', $fields['seranking_score']['color'], 'below 90');
+        self::assertSame('red', $fields['seranking_errors']['color']);
+        self::assertSame('red', $fields['seranking_error_types']['color']);
+        self::assertSame('orange', $fields['seranking_warnings']['color']);
+        self::assertSame('orange', $fields['seranking_warning_types']['color']);
+        self::assertNull($fields['seranking_notices']['color']);
+
+        $context['probe']['seranking']['score']            = 90;
+        $context['probe']['seranking']['totals']['errors'] = 0;
+        $context['probe']['seranking']['checks']           = [['status' => 'error', 'pages' => 0]];
+        $fields = $this->builder()->build($contract, $context, [])['fields'];
+        self::assertSame('green', $fields['seranking_score']['color']);
+        self::assertNull($fields['seranking_errors']['color'], 'no error: no red');
+        self::assertNull($fields['seranking_error_types']['color']);
+
         // Audit still crawling: nothing is known yet, so every field stays empty.
         $context['probe']['seranking'] = ['state' => 'processing', 'pages_crawled' => 120];
         $fields = $this->builder()->build($contract, $context, [])['fields'];
         foreach (['score', 'pages', 'errors', 'error_types', 'notice_types'] as $f) {
             self::assertSame('', $fields['seranking_' . $f]['value'], $f);
+            self::assertNull($fields['seranking_' . $f]['color'], $f);
         }
     }
 
