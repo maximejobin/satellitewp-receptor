@@ -455,6 +455,75 @@ final class ReportBuilderTest extends TestCase
         }
     }
 
+    public function testAddedValuesAreFormattedAndColouredOnTheRulesLimits(): void
+    {
+        $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
+        $context  = $this->context();
+        $context['probe']['tls']  = ['issuer' => 'R11', 'issuer_org' => "Let's Encrypt", 'not_after' => '2026-12-28T21:50:29Z', 'days_to_expiry' => 20];
+        $context['probe']['rdap'] = ['days_to_expiry' => 265];
+        $context['probe']['mail'] = ['found' => true, 'spf' => 'pass', 'dkim' => 'none', 'dmarc' => 'temperror'];
+        $context['probe']['pagespeed']['mobile'] = [
+            'scores' => ['accessibility' => 87, 'best-practices' => 100, 'seo' => 40],
+            'lab'    => ['lcp' => ['value' => 2176], 'cls' => ['value' => 0.12], 'tbt' => ['value' => 650]],
+        ];
+        $context['payload']['php']['memory_limit']   = '128M';
+        $context['payload']['php']['max_input_vars'] = '1000';
+        $context['payload']['php']['max_execution_time'] = '0';
+        $context['payload']['constants']['WP_MEMORY_LIMIT'] = '40M';
+        $context['payload']['constants']['WP_CACHE'] = 'N/A';
+        $context['payload']['filesystem'] = ['disk_free_bytes' => 1073741824, 'disk_total_bytes' => 10737418240];
+        $context['payload']['autoload']   = ['total_bytes' => 600000];
+        $context['payload']['object_cache'] = ['external' => false, 'page_cache' => true];
+        $context['payload']['database']['total_bytes'] = 80248832;
+
+        $f = $this->builder()->build($contract, $context, [])['fields'];
+
+        self::assertSame("Let's Encrypt", $f['ssl_issuer']['value']);
+        self::assertSame(['20 days', 'orange'], [$f['ssl_days_left']['value'], $f['ssl_days_left']['color']]);
+        self::assertSame(['265 days', 'green'], [$f['domain_days_left']['value'], $f['domain_days_left']['color']]);
+        self::assertSame(['Passed', 'green'], [$f['email_spf_result']['value'], $f['email_spf_result']['color']]);
+        self::assertSame(['Missing', 'red'], [$f['email_dkim_result']['value'], $f['email_dkim_result']['color']]);
+        self::assertSame(['', null], [$f['email_dmarc_result']['value'], $f['email_dmarc_result']['color']], 'temperror is unknown');
+        self::assertSame(['87/100', 'orange'], [$f['performance_mobile_accessibility']['value'], $f['performance_mobile_accessibility']['color']]);
+        self::assertSame('red', $f['performance_mobile_seo']['color']);
+        self::assertSame(['2.2 s', 'green'], [$f['performance_mobile_lcp']['value'], $f['performance_mobile_lcp']['color']]);
+        self::assertSame(['0.120', 'orange'], [$f['performance_mobile_cls']['value'], $f['performance_mobile_cls']['color']]);
+        self::assertSame(['650 ms', 'red'], [$f['performance_mobile_tbt']['value'], $f['performance_mobile_tbt']['color']]);
+        self::assertSame(['', null], [$f['performance_desktop_lcp']['value'], $f['performance_desktop_lcp']['color']], 'not measured');
+        self::assertSame(['128 MB', 'orange'], [$f['php_memory_limit']['value'], $f['php_memory_limit']['color']]);
+        self::assertSame('green', $f['php_max_input_vars']['color']);
+        self::assertSame('Unlimited', $f['php_max_execution_time']['value']);
+        self::assertSame('40 MB', $f['wp_memory_limit']['value']);
+        self::assertSame(['1 GB (10 %)', 'orange'], [$f['disk_free']['value'], $f['disk_free']['color']]);
+        self::assertSame(['585.9 KB', 'orange'], [$f['autoload_size']['value'], $f['autoload_size']['color']]);
+        self::assertSame('orange', $f['object_cache']['color']);
+        self::assertSame('Not enabled', $f['page_cache']['value'], 'advanced-cache.php without WP_CACHE is not loaded');
+        self::assertSame('76.5 MB', $f['database_size']['value']);
+
+        $context['probe']['tls']['days_to_expiry'] = -2;
+        $f = $this->builder('fr')->build($contract, $context, [])['fields'];
+        self::assertSame(['Expiré', 'red'], [$f['ssl_days_left']['value'], $f['ssl_days_left']['color']]);
+    }
+
+    public function testSeRankingIssuesListAffectedChecksErrorsFirst(): void
+    {
+        $context = $this->context();
+        $context['probe']['seranking']['checks'] = [
+            ['name' => 'Long title', 'status' => 'notice', 'pages' => 50],
+            ['name' => 'Broken link', 'status' => 'error', 'pages' => 3],
+            ['name' => 'No HTTPS', 'status' => 'error', 'pages' => 0],
+            ['name' => 'Slow page', 'status' => 'warning', 'pages' => 9],
+            ['name' => '404 page', 'status' => 'error', 'pages' => 12],
+            ['name' => 'Fine', 'status' => 'passed', 'pages' => 400],
+        ];
+
+        $rows = $this->builder()->build(['fields' => ['t' => ['type' => 'table', 'source' => 'seranking_issues']]], $context, [])['fields']['t']['rows'];
+
+        self::assertSame(['404 page', 'Broken link', 'Slow page', 'Long title'], array_map(static fn (array $r): string => $r[0]['text'], $rows));
+        self::assertSame(['red', 'red', 'orange', null], array_map(static fn (array $r): ?string => $r[1]['color'], $rows));
+        self::assertSame('12', $rows[0][2]['text']);
+    }
+
     public function testTheActionListGathersPurpleObservationsFiledInAnySection(): void
     {
         $contract = ['fields' => [
@@ -896,8 +965,8 @@ final class ReportBuilderTest extends TestCase
 
             $rows = $this->builder()->build($contract, $context, [])['fields']['x']['rows'];
 
-            self::assertCount(4, $rows, $key);
-            self::assertSame('French, English', $rows[3][1]['text'], $key);
+            self::assertCount(6, $rows, $key);
+            self::assertSame('French, English', $rows[4][1]['text'], $key);
         }
     }
 
@@ -906,13 +975,24 @@ final class ReportBuilderTest extends TestCase
         $contract = ['fields' => ['x' => ['type' => 'table', 'source' => 'settings']]];
 
         $report = $this->builder()->build($contract, $this->context(), []);
-        self::assertCount(4, $report['fields']['x']['rows']); // Admin email + Permalinks + 2 WPML rows
-        self::assertSame('French, English', $report['fields']['x']['rows'][3][1]['text']);
+        self::assertCount(6, $report['fields']['x']['rows']); // Title, admin email, permalinks, 2 WPML rows, time zone
+        self::assertSame('French, English', $report['fields']['x']['rows'][4][1]['text']);
 
         $context = $this->context();
         unset($context['payload']['connectors']);
         $report = $this->builder()->build($contract, $context, []);
-        self::assertCount(2, $report['fields']['x']['rows']); // Admin email + Permalinks only
+        self::assertCount(5, $report['fields']['x']['rows']); // The site's own language replaces the WPML rows
+
+        $context['payload'] += ['site_title' => 'Example', 'site_locale' => 'fr_CA', 'timezone_string' => '', 'timezone_offset' => -4.5];
+        $context['probe']['http']['robots'] = ['present' => true, 'sitemaps' => ['https://example.com/wp-sitemap.xml']];
+        $rows = array_map(
+            static fn (array $r): string => $r[1]['text'],
+            $this->builder()->build($contract, $context, [])['fields']['x']['rows']
+        );
+        self::assertSame('Example', $rows[0]);
+        self::assertSame('French', $rows[3]);
+        self::assertSame('UTC-4:30', $rows[4]);
+        self::assertSame('https://example.com/wp-sitemap.xml', $rows[5]);
     }
 
     /** WordPress fills 'template' with a non-child theme's OWN slug — that is not a parent. */
@@ -961,7 +1041,7 @@ final class ReportBuilderTest extends TestCase
         $report = $this->builder('fr')->build($contract, $this->context(), []);
 
         self::assertSame(['Réglage', 'Valeur'], $report['fields']['settings']['headers']);
-        self::assertSame('Permaliens', $report['fields']['settings']['rows'][1][0]['text']);
+        self::assertSame('Permaliens', $report['fields']['settings']['rows'][2][0]['text']);
         self::assertSame(['Type', 'Total', 'Publiés', 'Brouillons', 'Corbeille'], $report['fields']['content']['headers']);
         self::assertSame(['Nom', 'Version'], $report['fields']['mu']['headers']);
         self::assertSame(['Fichier', 'Description'], $report['fields']['dropins']['headers']);

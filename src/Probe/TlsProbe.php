@@ -105,6 +105,8 @@ final class TlsProbe extends AbstractProbe
         return [
             'subject_cn'       => $subjectCn,
             'issuer'           => $issuerCn,
+            // The CA's name ("Let's Encrypt"); the CN is often an intermediate code ("R11").
+            'issuer_org'       => isset($issuer['O']) ? (string) $issuer['O'] : null,
             'san'              => $san,
             'not_before'       => $notBefore !== null ? gmdate('Y-m-d\TH:i:s\Z', $notBefore) : null,
             'not_after'        => $notAfter !== null ? gmdate('Y-m-d\TH:i:s\Z', $notAfter) : null,

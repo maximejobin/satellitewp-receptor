@@ -29,6 +29,7 @@ final class TlsProbeTest extends TestCase
 
         $this->assertSame('www.example.com', $data['subject_cn']);
         $this->assertSame('R11', $data['issuer']);
+        $this->assertSame("Let's Encrypt", $data['issuer_org']);
         $this->assertSame(['www.example.com', 'example.com'], $data['san']);
         $this->assertGreaterThanOrEqual(59, $data['days_to_expiry']);
         $this->assertFalse($data['self_signed']);

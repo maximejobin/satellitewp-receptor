@@ -36,6 +36,7 @@ return [
         // From the CRM snapshot (probes/crm.json); empty when the site isn't linked or has no single active plan.
         'client'           => ['type' => 'value', 'from' => 'probe.crm.clients', 'transform' => 'crm_client_labels'],
         'maintenance_plan' => ['type' => 'value', 'from' => 'probe.crm.maintenance_plan.name'],
+        'maintenance_plan_renewal' => ['type' => 'value', 'from' => 'probe.crm.maintenance_plan.next_renewal', 'transform' => 'date'],
 
         // Nom de domaine.
         'domain_name'            => ['type' => 'value', 'from' => 'host', 'transform' => 'registrable_domain'],
@@ -43,9 +44,15 @@ return [
         'domain_date_creation'   => ['type' => 'value', 'from' => 'probe.rdap.created_at', 'transform' => 'date'],
         'domain_date_update'     => ['type' => 'value', 'from' => 'probe.rdap.updated_at', 'transform' => 'date'],
         'domain_date_expiration' => ['type' => 'value', 'from' => 'probe.rdap.expires_at', 'transform' => 'date'],
+        // Same grading as W1: under 30 days is red, a domain that lapses takes the site and email down.
+        'domain_days_left'       => ['type' => 'value', 'from' => 'probe.rdap.days_to_expiry', 'transform' => 'days', 'color_transform' => 'domain_days'],
         'domain_nameservers'     => ['type' => 'value', 'from' => 'probe.rdap.nameservers', 'transform' => 'join_lines'],
         'email_spf_record'       => ['type' => 'value', 'from' => 'probe.dns.spf.record'],
         'email_dmarc_policy'     => ['type' => 'value', 'from' => 'probe.dns.dmarc.policy'],
+        // Verdicts of the test email, as rules D1–D3 read them; empty when no test email was found.
+        'email_spf_result'       => ['type' => 'value', 'from' => 'probe.mail', 'transform' => 'mail_spf', 'color_transform' => 'mail_spf'],
+        'email_dkim_result'      => ['type' => 'value', 'from' => 'probe.mail', 'transform' => 'mail_dkim', 'color_transform' => 'mail_dkim'],
+        'email_dmarc_result'     => ['type' => 'value', 'from' => 'probe.mail', 'transform' => 'mail_dmarc', 'color_transform' => 'mail_dmarc'],
         'domain_observations'    => ['type' => 'observations', 'categories' => ['DOMAIN', 'DNS', 'EMAIL']],
 
         // Infrastructure web.
@@ -60,6 +67,20 @@ return [
         'http3'  => ['type' => 'value', 'from' => 'probe.http.protocols.http3_advertised', 'transform' => 'yes_no', 'color_transform' => 'bool_green_orange'],
         'post_max'   => ['type' => 'value', 'from' => 'payload.php.post_max_size', 'transform' => 'php_size'],
         'upload_max' => ['type' => 'value', 'from' => 'payload.php.upload_max_filesize', 'transform' => 'php_size'],
+        // Colours follow G1 (under 64 MB red, under 256 MB orange) and G3 (under 1,000 orange).
+        'php_memory_limit'       => ['type' => 'value', 'from' => 'payload.php.memory_limit', 'transform' => 'php_size', 'color_transform' => 'php_memory'],
+        'php_max_input_vars'     => ['type' => 'value', 'from' => 'payload.php.max_input_vars', 'transform' => 'number', 'color_transform' => 'max_input_vars'],
+        'php_max_execution_time' => ['type' => 'value', 'from' => 'payload.php.max_execution_time', 'transform' => 'seconds'],
+        'wp_memory_limit'        => ['type' => 'value', 'from' => 'payload.constants.WP_MEMORY_LIMIT', 'transform' => 'php_size'],
+        'wp_max_memory_limit'    => ['type' => 'value', 'from' => 'payload.constants.WP_MAX_MEMORY_LIMIT', 'transform' => 'php_size'],
+        // L1: under 20 % or 2 GB free is orange.
+        'disk_free'  => ['type' => 'value', 'from' => 'payload.filesystem', 'transform' => 'disk_free', 'color_transform' => 'disk_free'],
+        'disk_total' => ['type' => 'value', 'from' => 'payload.filesystem.disk_total_bytes', 'transform' => 'bytes'],
+
+        // Certificat SSL. Same grading as A1/A2: expired or under 15 days red, under 30 days orange.
+        'ssl_issuer'     => ['type' => 'value', 'from' => ['probe.tls.issuer_org', 'probe.tls.issuer'], 'transform' => 'first_value'],
+        'ssl_expiration' => ['type' => 'value', 'from' => 'probe.tls.not_after', 'transform' => 'date'],
+        'ssl_days_left'  => ['type' => 'value', 'from' => 'probe.tls.days_to_expiry', 'transform' => 'days', 'color_transform' => 'ssl_days'],
 
         'php_version'            => ['type' => 'value', 'from' => 'payload.php.version'],
         'php_status'             => ['type' => 'value', 'from' => 'reference.php_eol', 'transform' => 'eol_status_label', 'color_transform' => 'eol_red_green'],
@@ -71,6 +92,7 @@ return [
         'database_version'        => ['type' => 'value', 'from' => 'payload.database_version', 'transform' => 'database_version'],
         'database_status'         => ['type' => 'value', 'from' => ['reference.database_eol', 'reference.database_eol_date'], 'transform' => 'database_status_label', 'color_transform' => 'eol_red_green'],
         'database_prefix'         => ['type' => 'value', 'from' => 'payload.db_table_prefix'],
+        'database_size'           => ['type' => 'value', 'from' => 'payload.database.total_bytes', 'transform' => 'bytes'],
         'database_largest_tables' => ['type' => 'table', 'source' => 'database_tables'],
 
         // F3 is an UPDATES rule about the PHP runtime, placed here with the rest of PHP.
@@ -113,6 +135,27 @@ return [
         // Performance.
         'performance_desktop_score' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
         'performance_mobile_score'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.performance', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        // Lighthouse scores: 90+ green, 50+ orange, below red (Google's bands).
+        'performance_desktop_accessibility'  => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.accessibility', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_mobile_accessibility'   => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.accessibility', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_desktop_best_practices' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.best-practices', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_mobile_best_practices'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.best-practices', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_desktop_seo'            => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.scores.seo', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        'performance_mobile_seo'             => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.scores.seo', 'transform' => 'score_100', 'color_transform' => 'lighthouse'],
+        // Lab metrics, graded on Google's "good / needs improvement" limits:
+        // LCP 2.5 s / 4 s, CLS 0.1 / 0.25, TBT 200 ms / 600 ms.
+        'performance_desktop_lcp' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.lab.lcp.value', 'transform' => 'ms_as_seconds', 'color_transform' => 'lcp'],
+        'performance_mobile_lcp'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.lab.lcp.value', 'transform' => 'ms_as_seconds', 'color_transform' => 'lcp'],
+        'performance_desktop_cls' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.lab.cls.value', 'transform' => 'cls', 'color_transform' => 'cls'],
+        'performance_mobile_cls'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.lab.cls.value', 'transform' => 'cls', 'color_transform' => 'cls'],
+        'performance_desktop_tbt' => ['type' => 'value', 'from' => 'probe.pagespeed.desktop.lab.tbt.value', 'transform' => 'milliseconds', 'color_transform' => 'tbt'],
+        'performance_mobile_tbt'  => ['type' => 'value', 'from' => 'probe.pagespeed.mobile.lab.tbt.value', 'transform' => 'milliseconds', 'color_transform' => 'tbt'],
+        // I1: under 500 KB green, under 2 MB orange, above red. I2: no object cache is orange.
+        'autoload_size' => ['type' => 'value', 'from' => 'payload.autoload.total_bytes', 'transform' => 'bytes', 'color_transform' => 'autoload'],
+        'object_cache'  => ['type' => 'value', 'from' => 'payload.object_cache.external', 'transform' => 'enabled_label_m', 'color_transform' => 'bool_green_orange'],
+        // advanced-cache.php only runs with WP_CACHE on. No colour: a server-level
+        // cache does the same job without it.
+        'page_cache'    => ['type' => 'value', 'from' => ['payload.object_cache.page_cache', 'payload.constants.WP_CACHE'], 'transform' => 'page_cache'],
         'performance_observations'  => ['type' => 'observations', 'categories' => ['PERFORMANCE', 'CACHE']],
 
         // Contenu et réglages.
@@ -137,6 +180,12 @@ return [
         'seranking_error_types'   => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_error_types', 'color_transform' => 'seranking_error_types'],
         'seranking_warning_types' => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_warning_types', 'color_transform' => 'seranking_warning_types'],
         'seranking_notice_types'  => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_notice_types'],
+        // Every check that affects at least one page, errors first, then by pages affected.
+        'seranking_issues'            => ['type' => 'table', 'source' => 'seranking_issues'],
+        // SE Ranking's own estimates for the domain, not measured by Manager.
+        'seranking_backlinks'         => ['type' => 'value', 'from' => 'probe.seranking.domain_props.backlinks', 'transform' => 'number'],
+        'seranking_referring_domains' => ['type' => 'value', 'from' => 'probe.seranking.domain_props.domains', 'transform' => 'number'],
+        'seranking_google_index'      => ['type' => 'value', 'from' => 'probe.seranking.domain_props.index_google', 'transform' => 'number'],
 
         // Every finding, every colour. A manual observation joins only the field
         // named in its 'section', except a purple one (a request to the client):

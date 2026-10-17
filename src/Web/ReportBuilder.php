@@ -137,6 +137,7 @@ final class ReportBuilder
             'file_permissions' => $this->filePermissionsTable($context),
             'security_headers' => $this->securityHeadersTable($context),
             'vulnerabilities'  => $this->vulnerabilitiesTable($context),
+            'seranking_issues' => $this->seRankingIssuesTable($context),
             default            => null,
         };
 
@@ -230,6 +231,7 @@ final class ReportBuilder
             'install_type'           => is_bool(((array) $v)[0] ?? null) ? $this->installType((array) $v) : '',
             'yes_no'                 => $this->yesNo($v),
             'enabled_label'          => $v === null ? $this->unknown() : $this->t->report($v ? 'label_enabled' : 'label_disabled'),
+            'enabled_label_m'        => $v === null ? $this->unknown() : $this->t->report($v ? 'label_enabled_m' : 'label_disabled_m'),
             'eol_status_label'       => $this->eolStatus($v, ''),
             'database_status_label'  => $this->eolStatus(((array) $v)[0] ?? null, (string) (((array) $v)[1] ?? '')),
             'database_label'         => $this->databaseLabel((array) $v),
@@ -244,6 +246,18 @@ final class ReportBuilder
             'seranking_warning_types' => self::seRankingIssueTypes($v, 'warning'),
             'seranking_notice_types'  => self::seRankingIssueTypes($v, 'notice'),
             'php_size'               => $this->phpSize($v),
+            'bytes'                  => is_numeric($v) ? $this->formatBytes((int) $v) : '',
+            'disk_free'              => $this->diskFree($v),
+            'days'                   => $this->days($v),
+            'seconds'                => $this->seconds($v),
+            'milliseconds'           => is_numeric($v) ? $this->formatNumber((float) $v) . ' ' . $this->t->report('unit_ms') : '',
+            'ms_as_seconds'          => is_numeric($v) ? $this->formatNumber((float) $v / 1000, 1) . ' ' . $this->t->report('unit_s') : '',
+            'cls'                    => is_numeric($v) ? $this->formatNumber((float) $v, 3) : '',
+            'first_value'            => (string) (current(array_filter((array) $v, static fn (mixed $x): bool => is_scalar($x) && (string) $x !== '')) ?: ''),
+            'page_cache'             => $this->pageCache((array) $v),
+            'mail_spf'               => $this->mailVerdict($v, 'spf'),
+            'mail_dkim'              => $this->mailVerdict($v, 'dkim'),
+            'mail_dmarc'             => $this->mailVerdict($v, 'dmarc'),
             default                  => $v,
         };
     }
@@ -272,6 +286,33 @@ final class ReportBuilder
             'orange_if_any'           => is_numeric($v) && (float) $v > 0 ? 'orange' : null,
             'seranking_error_types'   => (int) self::seRankingIssueTypes($v, 'error') > 0 ? 'red' : null,
             'seranking_warning_types' => (int) self::seRankingIssueTypes($v, 'warning') > 0 ? 'orange' : null,
+            // The rules' own limits (A1/A2, W1, G1, G3, I1, L1, D1–D3), so a value and its finding agree.
+            'ssl_days'                => is_numeric($v) ? match (true) {
+                (float) $v < 15 => 'red',
+                (float) $v < 30 => 'orange',
+                default         => 'green',
+            } : null,
+            'domain_days'             => is_numeric($v) ? ((float) $v < 30 ? 'red' : 'green') : null,
+            'php_memory'              => match (true) {
+                ($bytes = self::iniBytes($v)) === null => null,
+                $bytes < 64 * 1048576                  => 'red',
+                $bytes < 256 * 1048576                 => 'orange',
+                default                                => 'green',
+            },
+            'max_input_vars'          => is_numeric($v) ? ((float) $v >= 1000 ? 'green' : 'orange') : null,
+            'autoload'                => is_numeric($v) ? match (true) {
+                (float) $v < 512000  => 'green',
+                (float) $v < 2097152 => 'orange',
+                default              => 'red',
+            } : null,
+            'disk_free'               => self::diskFreeColor($v),
+            'mail_spf'                => self::mailColor($v, 'spf'),
+            'mail_dkim'               => self::mailColor($v, 'dkim'),
+            'mail_dmarc'              => self::mailColor($v, 'dmarc'),
+            // Google's "good / needs improvement" limits for the lab metrics.
+            'lcp'                     => self::band($v, 2500, 4000),
+            'cls'                     => self::band($v, 0.1, 0.25),
+            'tbt'                     => self::band($v, 200, 600),
             default                  => null,
         };
     }
@@ -290,6 +331,143 @@ final class ReportBuilder
             $checks,
             static fn (mixed $c): bool => is_array($c) && ($c['status'] ?? null) === $level && (int) ($c['pages'] ?? 0) > 0
         ));
+    }
+
+    /** Green up to $good, orange up to $poor, red above; null when not measured. */
+    private static function band(mixed $v, float $good, float $poor): ?string
+    {
+        if (!is_numeric($v)) {
+            return null;
+        }
+
+        return match (true) {
+            (float) $v <= $good => 'green',
+            (float) $v <= $poor => 'orange',
+            default             => 'red',
+        };
+    }
+
+    /** A php.ini size in bytes; -1 (no limit) is INF, unreadable is null. */
+    private static function iniBytes(mixed $v): ?float
+    {
+        $raw = strtoupper(trim((string) (is_scalar($v) ? $v : '')));
+        if ($raw === '-1') {
+            return INF;
+        }
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*([KMG])?B?$/', $raw, $m) !== 1) {
+            return null;
+        }
+
+        return (float) $m[1] * match ($m[2] ?? '') {
+            'K'     => 1024,
+            'M'     => 1048576,
+            'G'     => 1073741824,
+            default => 1,
+        };
+    }
+
+    /** @return array{0: float, 1: float}|null free and total bytes */
+    private static function diskSpace(mixed $fs): ?array
+    {
+        $fs    = (array) $fs;
+        $free  = $fs['disk_free_bytes'] ?? null;
+        $total = $fs['disk_total_bytes'] ?? null;
+
+        return is_numeric($free) && is_numeric($total) && (float) $total > 0 ? [(float) $free, (float) $total] : null;
+    }
+
+    private function diskFree(mixed $fs): string
+    {
+        $space = self::diskSpace($fs);
+        if ($space === null) {
+            return '';
+        }
+
+        return $this->formatBytes((int) $space[0]) . ' (' . $this->formatNumber(round($space[0] / $space[1] * 100)) . ' %)';
+    }
+
+    /** L1's limit: under 20 % or 2 GB free. */
+    private static function diskFreeColor(mixed $fs): ?string
+    {
+        $space = self::diskSpace($fs);
+        if ($space === null) {
+            return null;
+        }
+
+        return $space[0] / $space[1] < 0.2 || $space[0] < 2147483648 ? 'orange' : 'green';
+    }
+
+    private function days(mixed $v): string
+    {
+        if (!is_numeric($v)) {
+            return '';
+        }
+        $n = (int) $v;
+        if ($n < 0) {
+            return $this->t->report('expired');
+        }
+
+        return sprintf($this->t->report(match ($n) {
+            0       => 'days_zero',
+            1       => 'days_one',
+            default => 'days_many',
+        }), $this->formatNumber($n));
+    }
+
+    /** php.ini max_execution_time; 0 means no limit. */
+    private function seconds(mixed $v): string
+    {
+        if (!is_numeric($v)) {
+            return '';
+        }
+
+        return (int) $v === 0
+            ? $this->t->report('size_unlimited', 'Unlimited')
+            : $this->formatNumber((float) $v) . ' ' . $this->t->report('unit_s');
+    }
+
+    /** @param array<array-key, mixed> $parts [advanced-cache.php present, WP_CACHE] */
+    private function pageCache(array $parts): string
+    {
+        $dropin = $parts[0] ?? null;
+        if (!is_bool($dropin)) {
+            return '';
+        }
+        // WordPress loads advanced-cache.php only when WP_CACHE is on ("N/A" = undefined).
+        $active = $dropin && in_array($parts[1] ?? null, [true, 1, '1', 'true'], true);
+
+        return $this->t->report($active ? 'label_enabled_m' : 'label_disabled_m');
+    }
+
+    /** The test email's verdict as rules D1–D3 read it; null when there is none to read. */
+    private static function mailResult(mixed $mail, string $method): ?string
+    {
+        $mail = (array) $mail;
+        if (($mail['found'] ?? null) !== true) {
+            return null;
+        }
+        $verdict = $mail[$method] ?? null;
+
+        return match ($verdict) {
+            'pass'  => 'pass',
+            'none'  => 'none',
+            'fail', 'softfail', 'neutral', 'permerror', 'policy' => 'fail',
+            default => null, // temperror: unknown, as in the rules
+        };
+    }
+
+    private function mailVerdict(mixed $mail, string $method): string
+    {
+        $result = self::mailResult($mail, $method);
+
+        return $result === null ? '' : $this->t->report('mail_' . $result);
+    }
+
+    private static function mailColor(mixed $mail, string $method): ?string
+    {
+        $result = self::mailResult($mail, $method);
+
+        return $result === null ? null : ($result === 'pass' ? 'green' : 'red');
     }
 
     private static function eolColor(mixed $isEol): ?string
@@ -708,6 +886,7 @@ final class ReportBuilder
     {
         $p    = (array) ($context['payload'] ?? []);
         $rows = [
+            [self::cell($this->t->report('setting_site_title')), self::cell((string) ($p['site_title'] ?? ''))],
             [self::cell($this->t->report('setting_admin_email')), self::cell((string) ($p['website_administrator_email'] ?? ''))],
             // An empty structure is WordPress's "Plain" setting; a missing field is unknown.
             [self::cell($this->t->report('setting_permalinks')), self::cell(is_string($p['permalink_structure'] ?? null)
@@ -722,9 +901,64 @@ final class ReportBuilder
                 fn (string $code): string => $this->languageName($code),
                 $multilingual['active_languages']
             )))];
+        } else {
+            $locale = (string) ($p['site_locale'] ?? '');
+            $rows[] = [self::cell($this->t->report('setting_site_language')), self::cell($locale !== '' ? $this->languageName(strtolower(strtok($locale, '_') ?: $locale)) : '')];
+        }
+        $rows[] = [self::cell($this->t->report('setting_timezone')), self::cell(self::timezone($p))];
+
+        // Sitemaps found by the HTTP probe (robots.txt or WordPress's own /wp-sitemap.xml).
+        $robots = $context['probe']['http']['robots'] ?? null;
+        if (is_array($robots)) {
+            $sitemaps = array_values(array_filter(array_map('strval', (array) ($robots['sitemaps'] ?? []))));
+            $rows[]   = [self::cell($this->t->report('setting_sitemap')), self::cell($sitemaps !== [] ? implode("\n", $sitemaps) : $this->t->report('none_m'))];
         }
 
         return ['headers' => $this->headers('col_setting', 'col_value'), 'rows' => $rows];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function timezone(array $payload): string
+    {
+        $name = (string) ($payload['timezone_string'] ?? '');
+        if ($name !== '') {
+            return $name;
+        }
+        $offset = $payload['timezone_offset'] ?? null;
+        if (!is_numeric($offset)) {
+            return '';
+        }
+        $minutes = (int) round((float) $offset * 60);
+
+        return sprintf('UTC%s%d%s', $minutes < 0 ? '-' : '+', intdiv(abs($minutes), 60), abs($minutes) % 60 !== 0 ? sprintf(':%02d', abs($minutes) % 60) : '');
+    }
+
+    /**
+     * SE Ranking checks that affect at least one page: errors, then warnings,
+     * then notices, each by pages affected. Names come in the audit's language.
+     *
+     * @param array<string, mixed> $context
+     * @return array{headers: list<string>, rows: list<list<array{text: string, color: ?string}>>}
+     */
+    private function seRankingIssuesTable(array $context): array
+    {
+        $order  = ['error' => 0, 'warning' => 1, 'notice' => 2];
+        $checks = array_values(array_filter(
+            (array) ($context['probe']['seranking']['checks'] ?? []),
+            static fn (mixed $c): bool => is_array($c) && isset($order[$c['status'] ?? '']) && (int) ($c['pages'] ?? 0) > 0
+        ));
+        usort($checks, static fn (array $a, array $b): int => [$order[$a['status']], -(int) $a['pages']] <=> [$order[$b['status']], -(int) $b['pages']]);
+
+        $rows = [];
+        foreach ($checks as $c) {
+            $rows[] = [
+                self::cell((string) ($c['name'] ?? $c['code'] ?? '')),
+                self::cell($this->t->report('seranking_' . $c['status']), ['error' => 'red', 'warning' => 'orange'][$c['status']] ?? null),
+                self::cell($this->formatNumber((float) $c['pages'])),
+            ];
+        }
+
+        return ['headers' => $this->headers('col_issue', 'col_severity', 'col_pages'), 'rows' => $rows];
     }
 
     /**

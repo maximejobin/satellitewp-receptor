@@ -185,8 +185,9 @@ optional calls need `try/catch`.
   `poll_minutes`: finished = `ok` with score, totals and a flat `checks` list
   (passed ones included); cancelled/expired/404 or older than `give_up_hours`
   = `error`; a transient API failure stays pending (`last_error`). No rule
-  reads it yet; the report shows its score, totals and issue types
-  (`seranking_*`; a type is a check with at least one affected page). The
+  reads it yet; the report shows its score, totals, issue types, the table
+  of affected checks and SE Ranking's domain estimates (`seranking_*`; a type
+  is a check with at least one affected page). The
   finished report's `totals.pages` is the crawl size: `pages_crawled` is the
   last progress count seen while pending.
 - `BlogVaultProbe` strips the Basic-auth password `GET /sites/{id}` returns;
@@ -246,7 +247,9 @@ purple → blue → red → orange → green → grey, plus analyst observations
 under that field). A test enforces that every rule lands in a topic section.
 `Web\ReportBuilder` resolves it; `HardeningConstants` is shared with the UI.
 The Apps Script (Google Doc side) only renders: `{{field:colours:mode}}`
-filters colours (`red,orange`; empty = all) and `short` renders titles only,
+filters colours (`red,orange`; empty = all); a coloured value uses its
+rule's own limits (SSL/domain days, PHP memory, autoload, disk), Lighthouse
+scores and lab metrics Google's bands, and `short` renders titles only,
 11 pt, two borderless columns, each title behind its marker (✓ green, ☐
 purple, ◼ other) with a hanging indent. Purple items render as a ☐ checkbox
 line only in a field with `action_list` (`all_observations`, which also gathers
