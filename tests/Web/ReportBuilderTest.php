@@ -470,10 +470,9 @@ final class ReportBuilderTest extends TestCase
         $context['payload']['php']['max_input_vars'] = '1000';
         $context['payload']['php']['max_execution_time'] = '0';
         $context['payload']['constants']['WP_MEMORY_LIMIT'] = '40M';
-        $context['payload']['constants']['WP_CACHE'] = 'N/A';
         $context['payload']['filesystem'] = ['disk_free_bytes' => 1073741824, 'disk_total_bytes' => 10737418240];
         $context['payload']['autoload']   = ['total_bytes' => 600000];
-        $context['payload']['object_cache'] = ['external' => false, 'page_cache' => true];
+        $context['payload']['object_cache'] = ['external' => false];
         $context['payload']['database']['total_bytes'] = 80248832;
 
         $f = $this->builder()->build($contract, $context, [])['fields'];
@@ -497,7 +496,6 @@ final class ReportBuilderTest extends TestCase
         self::assertSame(['1 GB (10 %)', 'orange'], [$f['disk_free']['value'], $f['disk_free']['color']]);
         self::assertSame(['585.9 KB', 'orange'], [$f['autoload_size']['value'], $f['autoload_size']['color']]);
         self::assertSame('orange', $f['object_cache']['color']);
-        self::assertSame('Not enabled', $f['page_cache']['value'], 'advanced-cache.php without WP_CACHE is not loaded');
         self::assertSame('76.5 MB', $f['database_size']['value']);
 
         $context['probe']['tls']['days_to_expiry'] = -2;

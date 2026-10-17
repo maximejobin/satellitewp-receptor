@@ -254,7 +254,6 @@ final class ReportBuilder
             'ms_as_seconds'          => is_numeric($v) ? $this->formatNumber((float) $v / 1000, 1) . ' ' . $this->t->report('unit_s') : '',
             'cls'                    => is_numeric($v) ? $this->formatNumber((float) $v, 3) : '',
             'first_value'            => (string) (current(array_filter((array) $v, static fn (mixed $x): bool => is_scalar($x) && (string) $x !== '')) ?: ''),
-            'page_cache'             => $this->pageCache((array) $v),
             'mail_spf'               => $this->mailVerdict($v, 'spf'),
             'mail_dkim'              => $this->mailVerdict($v, 'dkim'),
             'mail_dmarc'             => $this->mailVerdict($v, 'dmarc'),
@@ -424,19 +423,6 @@ final class ReportBuilder
         return (int) $v === 0
             ? $this->t->report('size_unlimited', 'Unlimited')
             : $this->formatNumber((float) $v) . ' ' . $this->t->report('unit_s');
-    }
-
-    /** @param array<array-key, mixed> $parts [advanced-cache.php present, WP_CACHE] */
-    private function pageCache(array $parts): string
-    {
-        $dropin = $parts[0] ?? null;
-        if (!is_bool($dropin)) {
-            return '';
-        }
-        // WordPress loads advanced-cache.php only when WP_CACHE is on ("N/A" = undefined).
-        $active = $dropin && in_array($parts[1] ?? null, [true, 1, '1', 'true'], true);
-
-        return $this->t->report($active ? 'label_enabled_m' : 'label_disabled_m');
     }
 
     /** The test email's verdict as rules D1–D3 read it; null when there is none to read. */

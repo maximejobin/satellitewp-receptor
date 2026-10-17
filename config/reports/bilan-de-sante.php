@@ -153,9 +153,6 @@ return [
         // I1: under 500 KB green, under 2 MB orange, above red. I2: no object cache is orange.
         'autoload_size' => ['type' => 'value', 'from' => 'payload.autoload.total_bytes', 'transform' => 'bytes', 'color_transform' => 'autoload'],
         'object_cache'  => ['type' => 'value', 'from' => 'payload.object_cache.external', 'transform' => 'enabled_label_m', 'color_transform' => 'bool_green_orange'],
-        // advanced-cache.php only runs with WP_CACHE on. No colour: a server-level
-        // cache does the same job without it.
-        'page_cache'    => ['type' => 'value', 'from' => ['payload.object_cache.page_cache', 'payload.constants.WP_CACHE'], 'transform' => 'page_cache'],
         'performance_observations'  => ['type' => 'observations', 'categories' => ['PERFORMANCE', 'CACHE']],
 
         // Contenu et réglages.
