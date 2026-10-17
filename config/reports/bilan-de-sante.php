@@ -125,6 +125,18 @@ return [
         // Visibilité web — the template has no separate observations field here.
         'visibility' => ['type' => 'observations', 'categories' => ['SEO']],
 
+        // SE Ranking website audit: empty until the crawl has finished (it
+        // ends after the analysis). Counts are issue occurrences across pages;
+        // a "type" is one check with at least one affected page.
+        'seranking_score'         => ['type' => 'value', 'from' => 'probe.seranking.score', 'transform' => 'score_100'],
+        'seranking_pages'         => ['type' => 'value', 'from' => 'probe.seranking.totals.pages', 'transform' => 'number'],
+        'seranking_errors'        => ['type' => 'value', 'from' => 'probe.seranking.totals.errors', 'transform' => 'number'],
+        'seranking_warnings'      => ['type' => 'value', 'from' => 'probe.seranking.totals.warnings', 'transform' => 'number'],
+        'seranking_notices'       => ['type' => 'value', 'from' => 'probe.seranking.totals.notices', 'transform' => 'number'],
+        'seranking_error_types'   => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_error_types'],
+        'seranking_warning_types' => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_warning_types'],
+        'seranking_notice_types'  => ['type' => 'value', 'from' => 'probe.seranking.checks', 'transform' => 'seranking_notice_types'],
+
         // Every finding, every colour. A manual observation joins only the field
         // named in its 'section', except a purple one (a request to the client):
         // the action list also gathers those, rendered as checkboxes.

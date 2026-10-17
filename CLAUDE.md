@@ -185,7 +185,10 @@ optional calls need `try/catch`.
   `poll_minutes`: finished = `ok` with score, totals and a flat `checks` list
   (passed ones included); cancelled/expired/404 or older than `give_up_hours`
   = `error`; a transient API failure stays pending (`last_error`). No rule
-  reads it yet.
+  reads it yet; the report shows its score, totals and issue types
+  (`seranking_*`; a type is a check with at least one affected page). The
+  finished report's `totals.pages` is the crawl size: `pages_crawled` is the
+  last progress count seen while pending.
 - `BlogVaultProbe` strips the Basic-auth password `GET /sites/{id}` returns;
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.

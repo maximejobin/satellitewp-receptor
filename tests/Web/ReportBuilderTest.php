@@ -405,6 +405,40 @@ final class ReportBuilderTest extends TestCase
         self::assertCount(3, $rows[0]);
     }
 
+    public function testSeRankingFieldsCountIssuesAndIssueTypes(): void
+    {
+        $contract = require dirname(__DIR__, 2) . '/config/reports/bilan-de-sante.php';
+        $context  = $this->context();
+        $context['probe']['seranking'] = [
+            'score'  => 80,
+            'totals' => ['pages' => 402, 'errors' => 267, 'warnings' => 1943, 'notices' => 0],
+            'checks' => [
+                ['status' => 'error', 'pages' => 260],
+                ['status' => 'error', 'pages' => 7],
+                ['status' => 'error', 'pages' => 0], // a check that found nothing is not a type
+                ['status' => 'warning', 'pages' => 1943],
+                ['status' => 'passed', 'pages' => 402],
+            ],
+        ];
+
+        $fields = $this->builder()->build($contract, $context, [])['fields'];
+
+        self::assertSame('80/100', $fields['seranking_score']['value']);
+        self::assertSame('402', $fields['seranking_pages']['value']);
+        self::assertSame('1,943', $fields['seranking_warnings']['value']);
+        self::assertSame('0', $fields['seranking_notices']['value'], 'zero is a fact once the audit is read');
+        self::assertSame('2', $fields['seranking_error_types']['value']);
+        self::assertSame('1', $fields['seranking_warning_types']['value']);
+        self::assertSame('0', $fields['seranking_notice_types']['value']);
+
+        // Audit still crawling: nothing is known yet, so every field stays empty.
+        $context['probe']['seranking'] = ['state' => 'processing', 'pages_crawled' => 120];
+        $fields = $this->builder()->build($contract, $context, [])['fields'];
+        foreach (['score', 'pages', 'errors', 'error_types', 'notice_types'] as $f) {
+            self::assertSame('', $fields['seranking_' . $f]['value'], $f);
+        }
+    }
+
     public function testTheActionListGathersPurpleObservationsFiledInAnySection(): void
     {
         $contract = ['fields' => [

@@ -239,6 +239,10 @@ final class ReportBuilder
             'auto_update_core'       => $this->autoUpdateCore($v),
             'score_100'              => is_numeric($v) ? ((int) round((float) $v)) . '/100' : '',
             'count'                  => is_array($v) ? (string) count($v) : '',
+            'number'                 => is_numeric($v) ? $this->formatNumber((float) $v) : '',
+            'seranking_error_types'   => self::seRankingIssueTypes($v, 'error'),
+            'seranking_warning_types' => self::seRankingIssueTypes($v, 'warning'),
+            'seranking_notice_types'  => self::seRankingIssueTypes($v, 'notice'),
             'php_size'               => $this->phpSize($v),
             default                  => $v,
         };
@@ -265,6 +269,22 @@ final class ReportBuilder
             } : null,
             default                  => null,
         };
+    }
+
+    /**
+     * SE Ranking lists every check with its level and affected page count:
+     * a level's issue types are its checks that affect at least one page.
+     */
+    private static function seRankingIssueTypes(mixed $checks, string $level): string
+    {
+        if (!is_array($checks)) {
+            return '';
+        }
+
+        return (string) count(array_filter(
+            $checks,
+            static fn (mixed $c): bool => is_array($c) && ($c['status'] ?? null) === $level && (int) ($c['pages'] ?? 0) > 0
+        ));
     }
 
     private static function eolColor(mixed $isEol): ?string
