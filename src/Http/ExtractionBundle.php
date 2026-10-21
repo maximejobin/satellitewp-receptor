@@ -184,7 +184,7 @@ final class ExtractionBundle
             $out .= "\n## {$colour}\n";
             foreach ($group as $f) {
                 $out .= sprintf(
-                    "\n### %s — %s\n\n- status: %s · severity: %s · category: %s\n\n%s\n",
+                    "\n### %s — %s\n\n- status: %s\n- severity: %s\n- category: %s\n\n%s\n",
                     $f['id'],
                     $f['title'],
                     $f['status'] !== '' ? $f['status'] : 'unknown',
@@ -200,7 +200,7 @@ final class ExtractionBundle
             $out .= "\n# Analyst observations\n";
             foreach ($included as $o) {
                 $out .= sprintf(
-                    "\n### %s\n\n- colour: %s · section: %s\n\n%s\n",
+                    "\n### %s\n\n- colour: %s\n- section: %s\n\n%s\n",
                     (string) ($o['title'] ?? ''),
                     (string) ($o['color'] ?? ''),
                     (string) ($o['section'] ?? ''),
