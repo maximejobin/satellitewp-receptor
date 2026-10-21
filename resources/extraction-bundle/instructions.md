@@ -25,8 +25,6 @@ it was taken and in which language the client works.
 │   ├── report.json          the data that fills the client's "Bilan de santé"
 │   ├── observations.json    analyst notes (present only when written)
 │   └── licenses.json        premium licence status (present only when set)
-└── reference/
-    └── rules-catalog.md     every rule: what it checks, thresholds, texts
 ```
 
 ### raw/payload.json
@@ -67,7 +65,7 @@ A `null` value means "not measured", never "absent" or "false".
 
 One entry per rule:
 
-- `id`: the rule, described in `reference/rules-catalog.md`;
+- `id`: the rule; its title and client text are in `findings.<lang>.md`;
 - `status`: `pass`, `fail`, `na` (does not apply) or `unknown` (the data
   could not prove a verdict). `unknown` is not a pass: it is something
   Manager could not see, often something you can check in the code;

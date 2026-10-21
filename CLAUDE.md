@@ -268,8 +268,8 @@ extraction copies a shell line (one-hour report token) that downloads
 `…/bundle.tar.gz` into the current directory and replaces `.swp-extraction/`:
 `instructions.md` (static, `resources/extraction-bundle/`, English),
 `meta.json`, `raw/` (payload, probes), `analysis/` (findings, findings in the
-extraction's language as Markdown, report.json, observations, licences) and
-`reference/rules-catalog.md`. For an AI working in a local copy of the site.
+extraction's language as Markdown, report.json, observations, licences). For
+an AI working in a local copy of the site.
 Personal data is omitted from every file, never replaced by a placeholder
 (`Support\PersonalData`): email addresses, admin logins (`admin` kept, M2
 reads it). Technical data only: the CRM probe and the report fields read

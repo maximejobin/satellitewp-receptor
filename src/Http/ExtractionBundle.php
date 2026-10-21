@@ -109,11 +109,6 @@ final class ExtractionBundle
         if ($licenses !== null) {
             $files["{$root}/analysis/licenses.json"] = self::json($licenses);
         }
-        $catalog = dirname(__DIR__, 2) . '/docs/rules-catalog.md';
-        if (is_file($catalog)) {
-            $files["{$root}/reference/rules-catalog.md"] = (string) file_get_contents($catalog);
-        }
-
         return $files;
     }
 
