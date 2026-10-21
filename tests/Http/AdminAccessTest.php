@@ -151,6 +151,59 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function theBundleCommandReplacesTheDirectoryWithTheDownloadedOne(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true], 'app' => ['base_url' => 'https://example.com']]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+
+        $response = $this->post($app, '/site/' . self::SITE . '/extraction/' . $extractionId . '/bundle-command');
+        $command  = (string) (json_decode($response->body, true)['command'] ?? '');
+
+        $this->assertMatchesRegularExpression(
+            "#^curl -fsS 'https://example\\.com/site/[^']+/bundle\\.tar\\.gz\\?token=[A-Za-z0-9%_-]+' -o \\.swp-extraction\\.tar\\.gz"
+            . ' && rm -rf \\.swp-extraction && tar -xzf \\.swp-extraction\\.tar\\.gz && rm \\.swp-extraction\\.tar\\.gz$#',
+            $command
+        );
+        $this->assertSame(409, $this->post($app, '/site/' . self::SITE . '/extraction/' . $this->storeExtraction($app, Index::STATUS_QUEUED) . '/bundle-command')->status);
+    }
+
+    #[Test]
+    public function theBundleIsATarGzOfTheExtractionWithPersonalDataMasked(): void
+    {
+        $app          = $this->app();
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+        $path         = '/site/' . self::SITE . '/extraction/' . $extractionId . '/bundle.tar.gz';
+
+        $_GET = [];
+        $this->assertSame(401, $this->get($app, $path)->status, 'no session, no token: refused');
+
+        $_GET     = ['token' => $app->reportTokenStore()->issue(self::SITE, $extractionId)];
+        $response = $this->get($app, $path);
+        $this->assertSame(200, $response->status);
+        $this->assertContains('Content-Type: application/gzip', $response->headers);
+
+        $archive = $this->tmpDir . '/bundle.tar.gz';
+        file_put_contents($archive, $response->body);
+        $out = $this->tmpDir . '/out';
+        (new \PharData($archive))->extractTo($out);
+
+        $root = $out . '/.swp-extraction';
+        foreach (['instructions.md', 'meta.json', 'raw/payload.json', 'analysis/findings.json', 'analysis/report.json', 'analysis/findings.fr.md'] as $file) {
+            $this->assertFileExists($root . '/' . $file);
+        }
+        $meta = json_decode((string) file_get_contents($root . '/meta.json'), true);
+        $this->assertSame($extractionId, $meta['extraction']['id']);
+
+        $payload = json_decode((string) file_get_contents($root . '/raw/payload.json'), true);
+        $this->assertSame('user-1', $payload['administrators'][0]['login']);
+        foreach (glob($root . '/{,*/,*/*/}*.{json,md}', GLOB_BRACE) ?: [] as $file) {
+            $text = (string) file_get_contents($file);
+            $this->assertStringNotContainsString('max@example.com', $text, basename($file));
+            $this->assertStringNotContainsString('maxadmin', $text, basename($file));
+        }
+    }
+
+    #[Test]
     public function theReportLanguageIsTheRequestedOneElseTheRunsOne(): void
     {
         $this->assertSame('en', ReportController::reportLocale('EN', ['language' => 'fr']));

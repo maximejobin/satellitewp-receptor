@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager\Http\Controller;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
+use SatelliteWP\Manager\Http\ExtractionBundle;
 use SatelliteWP\Manager\Http\ReportContract;
 use SatelliteWP\Manager\Http\Router;
 use SatelliteWP\Manager\Http\Session;
@@ -249,6 +250,27 @@ final class ExtractionController extends Controller
         // No &lang=: report.json reads the run's language itself (ReportController::reportLocale()).
         $this->response->json(['url' => $this->baseUrl()
             . "/site/{$siteId}/extraction/{$extractionId}/report.json?token=" . rawurlencode($token)]);
+    }
+
+    /**
+     * POST …/bundle-command — mints a one-hour token and answers the shell
+     * command that downloads the extraction bundle into the current
+     * directory (JSON: the button's fetch() copies it).
+     *
+     * @param array<string, string> $params
+     */
+    public function bundleCommand(array $params): void
+    {
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
+        if (!$this->requireCapability('extraction_view_technical')
+            || !$this->requireExtractionStatus($siteId, $extractionId, [Index::STATUS_DONE])
+        ) {
+            return;
+        }
+        $token = $this->app->reportTokenStore()->issue($siteId, $extractionId, $this->currentUserDisplayName());
+
+        $this->response->json(['command' => ExtractionBundle::command($this->baseUrl()
+            . "/site/{$siteId}/extraction/{$extractionId}/bundle.tar.gz?token=" . rawurlencode($token))]);
     }
 
     /**

@@ -33,6 +33,7 @@ final class Router
         'extraction_observations_csv' => [ExtractionController::class, 'exportObservations'],
         'extraction_report_json'      => [ReportController::class, 'json'],
         'extraction_report_script'    => [ReportController::class, 'script'],
+        'extraction_bundle'           => [ReportController::class, 'bundle'],
         'status'                      => [DataController::class, 'status'],
         'data_wp_versions'            => [DataController::class, 'wordPressVersions'],
         'data_php_versions'           => [DataController::class, 'phpVersions'],
@@ -61,6 +62,7 @@ final class Router
         'extraction_abort'               => [ExtractionController::class, 'abort'],
         'extraction_rerun'               => [ExtractionController::class, 'rerun'],
         'extraction_report_token'        => [ExtractionController::class, 'reportToken'],
+        'extraction_bundle_command'      => [ExtractionController::class, 'bundleCommand'],
         'extraction_observations'        => [ExtractionController::class, 'observations'],
         'extraction_observations_import' => [ExtractionController::class, 'importObservations'],
         'extraction_licenses'            => [ExtractionController::class, 'licenses'],
@@ -77,6 +79,7 @@ final class Router
         'abort'               => 'extraction_abort',
         'rerun'               => 'extraction_rerun',
         'report-token'        => 'extraction_report_token',
+        'bundle-command'      => 'extraction_bundle_command',
         'observations'        => 'extraction_observations',
         'observations-import' => 'extraction_observations_import',
         'licenses'            => 'extraction_licenses',
@@ -103,8 +106,8 @@ final class Router
 
         $match = self::matchRoute($path);
 
-        // Fetched by the Google Docs script with no browser session; they carry their own credentials.
-        if (!in_array($match['route'], ['extraction_report_json', 'extraction_report_script'], true) && !$this->auth()->authenticate()) {
+        // Fetched by the Google Docs script or curl with no browser session; they carry their own credentials.
+        if (!in_array($match['route'], ['extraction_report_json', 'extraction_report_script', 'extraction_bundle'], true) && !$this->auth()->authenticate()) {
             return;
         }
 
@@ -195,6 +198,9 @@ final class Router
             }
             if ($count === 5 && $segments[4] === 'report-script.json') {
                 return ['route' => 'extraction_report_script', 'params' => $extraction];
+            }
+            if ($count === 5 && $segments[4] === 'bundle.tar.gz') {
+                return ['route' => 'extraction_bundle', 'params' => $extraction];
             }
             if ($count === 6 && $segments[4] === 'raw') {
                 return ['route' => 'raw', 'params' => $extraction + ['file' => $segments[5]]];

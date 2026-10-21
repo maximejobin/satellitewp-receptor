@@ -340,6 +340,11 @@ if ($status !== 'done'):
                             data-csrf="<?= e($csrf) ?>" title="Copy a one-hour link for the Google Docs report template">
                         <?= report_icon('raw') ?> Report data key
                     </button>
+                    <button type="button" class="btn-ghost" id="xt-bundle-btn"
+                            data-action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/bundle-command"
+                            data-csrf="<?= e($csrf) ?>" title="Copy a one-hour shell command that downloads this extraction's data (personal data masked) into .swp-extraction/ of the current directory">
+                        <?= report_icon('raw') ?> AI bundle command
+                    </button>
                 <?php endif; ?>
             </div>
         </div>

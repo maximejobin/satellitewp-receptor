@@ -45,30 +45,35 @@
     });
   });
 
-  // "Report data key" — mints a one-hour, single-extraction token server-side
-  // (ExtractionController::reportToken()) and copies the ready-to-paste URL,
-  // so the shared reports.api_key is never put on screen.
-  var keyBtn = report.querySelector('#xt-report-key-btn');
-  if (keyBtn) {
-    keyBtn.addEventListener('click', function () {
-      keyBtn.disabled = true;
-      fetch(keyBtn.dataset.action, {
+  // "Report data key" and "AI bundle command" mint a one-hour, single-extraction
+  // token server-side and copy what carries it, so the shared reports.api_key is
+  // never put on screen.
+  function copyFromPost(btn, field, done, failed) {
+    if (!btn) { return; }
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      fetch(btn.dataset.action, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: '_csrf=' + encodeURIComponent(keyBtn.dataset.csrf)
+        body: '_csrf=' + encodeURIComponent(btn.dataset.csrf)
       })
         .then(function (res) {
           if (!res.ok) { throw new Error('HTTP ' + res.status); }
           return res.json();
         })
-        .then(function (data) { return navigator.clipboard.writeText(data.url); })
+        .then(function (data) { return navigator.clipboard.writeText(data[field]); })
         .then(function () {
-          if (window.showToast) { window.showToast('Report link copied — valid for one hour.', false); }
+          if (window.showToast) { window.showToast(done, false); }
         })
         .catch(function () {
-          if (window.showToast) { window.showToast('Could not create the report link.', true); }
+          if (window.showToast) { window.showToast(failed, true); }
         })
-        .finally(function () { keyBtn.disabled = false; });
+        .finally(function () { btn.disabled = false; });
     });
   }
+
+  copyFromPost(report.querySelector('#xt-report-key-btn'), 'url',
+    'Report link copied — valid for one hour.', 'Could not create the report link.');
+  copyFromPost(report.querySelector('#xt-bundle-btn'), 'command',
+    'Bundle command copied — valid for one hour.', 'Could not create the bundle command.');
 })();

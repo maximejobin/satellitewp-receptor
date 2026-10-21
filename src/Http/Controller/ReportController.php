@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace SatelliteWP\Manager\Http\Controller;
 
 use RuntimeException;
-use SatelliteWP\Manager\Http\ReportContext;
-use SatelliteWP\Manager\Http\ReportContract;
+use SatelliteWP\Manager\Http\ExtractionBundle;
+use SatelliteWP\Manager\Http\ReportDocument;
 use SatelliteWP\Manager\Storage\Index;
-use SatelliteWP\Manager\Web\DefaultObservations;
-use SatelliteWP\Manager\Web\ReportBuilder;
 
 /**
  * GET /site/{id}/extraction/{id}/report.json — the Google Docs report
@@ -69,37 +67,61 @@ final class ReportController extends Controller
         $t     = $this->app->translator(self::reportLocale($_GET['lang'] ?? null, $meta));
         $token = (string) ($_GET['token'] ?? '');
 
-        $context = ReportContext::build(
+        $document = ReportDocument::build(
+            $this->app,
+            $t,
+            $this->baseUrl() . '/assets/report-icons',
+            $extractionId,
+            // The analyst captured on the token when it was minted; the shared API key carries none.
+            $token !== '' ? $this->app->reportTokenStore()->issuedBy($token) : '',
             $payload,
             $store->readSiteInfo($siteId) ?? [],
             $meta,
             $store->readAllProbeResults($siteId, $extractionId),
             $store->readLicenses($siteId, $extractionId) ?? [],
-            ReportContext::reference($payload, $this->app->endOfLife(), $this->app->wordPressVersions()),
-            $extractionId,
-            // The analyst captured on the token when it was minted; the shared API key carries none.
-            $token !== '' ? $this->app->reportTokenStore()->issuedBy($token) : '',
-            gmdate('Y-m-d')
+            $store->readFindings($siteId, $extractionId) ?? [],
+            $store->readObservations($siteId, $extractionId)
         );
 
-        $findings     = ReportContext::translatedFindings($store->readFindings($siteId, $extractionId) ?? [], $t);
-        $contract     = ReportContract::load($this->app);
-        $observations = DefaultObservations::resolve(
-            DefaultObservations::items($store->readObservations($siteId, $extractionId), $contract),
-            $t
-        );
+        $this->response->json($document, 200, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
 
-        $report = (new ReportBuilder($t, $this->baseUrl() . '/assets/report-icons', $this->app->ignoredVulnerabilities()))
-            ->build($contract, $context, $findings, $observations);
+    /**
+     * GET …/bundle.tar.gz — the extraction's raw and compiled data, personal
+     * data masked, for an AI working in a local copy of the site
+     * (Http\ExtractionBundle). Same credentials as report.json.
+     *
+     * @param array<string, string> $params
+     */
+    public function bundle(array $params): void
+    {
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
 
-        $this->response->json([
-            'site'          => $report['fields']['site']['value'] ?? $siteId,
-            'extraction_id' => $extractionId,
-            'generated_at'  => gmdate('Y-m-d\TH:i:s\Z'),
-            // Keyed by the template's exact {{variable}} names, each carrying its own 'type'.
-            'fields'        => $report['fields'],
-            'findings'      => $findings,
-        ], 200, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!$this->accessGranted($siteId, $extractionId)) {
+            $this->response->text(401, 'Invalid or missing credentials');
+
+            return;
+        }
+        $row = $this->app->index()->getExtraction($siteId, $extractionId);
+        if ($row === null || ($row['status'] ?? null) !== Index::STATUS_DONE) {
+            $this->response->text($row === null ? 404 : 409, $row === null ? 'Extraction not found' : 'The analysis of this extraction is not done');
+
+            return;
+        }
+
+        $archive = (new ExtractionBundle($this->app, $this->baseUrl()))->archive($siteId, $extractionId, (string) $row['status']);
+        if ($archive === null) {
+            $this->response->text(404, 'Extraction not found');
+
+            return;
+        }
+
+        $this->response->status(200);
+        $this->response->header('Content-Type: application/gzip');
+        $this->response->header('Content-Disposition: attachment; filename="swp-extraction-' . $extractionId . '.tar.gz"');
+        $this->response->header('Cache-Control: no-store');
+        $this->response->header('X-Content-Type-Options: nosniff');
+        $this->response->write($archive);
     }
 
     /** @param array<string, string> $params */

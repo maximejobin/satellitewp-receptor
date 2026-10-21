@@ -263,6 +263,17 @@ first), stores the engine per origin in document properties and offers an
 update when the served `var VERSION` is higher — bump it on every engine change.
 Both files are English only (identifiers, comments, UI strings).
 
+**Extraction bundle (`Http\ExtractionBundle`).** "AI bundle command" on a done
+extraction copies a shell line (one-hour report token) that downloads
+`…/bundle.tar.gz` into the current directory and replaces `.swp-extraction/`:
+`instructions.md` (static, `resources/extraction-bundle/`, English),
+`meta.json`, `raw/` (payload, probes), `analysis/` (findings, findings in the
+extraction's language as Markdown, report.json, observations, licences) and
+`reference/rules-catalog.md`. For an AI working in a local copy of the site.
+Personal data is masked in every file (`Support\PersonalData`): email local
+parts, admin logins as stable `user-N` (`admin` kept, M2 reads it), CRM client
+names. `Support\TarGz` writes the ustar archive (no zip tool needed).
+
 **Catalogue & reference.** `SoftwareCatalog` (`data/catalog/software.json`):
 cross-site free/premium licence classification; `normalizeSlug()` turns
 `woocommerce/woocommerce.php` into `woocommerce`. `EndOfLife` (endoflife.date)
