@@ -88,7 +88,7 @@ final class ReportController extends Controller
 
     /**
      * GET …/bundle.tar.gz — the extraction's raw and compiled data, personal
-     * data masked, for an AI working in a local copy of the site
+     * data left out, for an AI working in a local copy of the site
      * (Http\ExtractionBundle). Same credentials as report.json.
      *
      * @param array<string, string> $params

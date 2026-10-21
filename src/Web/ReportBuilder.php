@@ -222,7 +222,7 @@ final class ReportBuilder
             'site_display'           => site_display((string) ($v ?? '')),
             'date'                   => $this->formatDate($v),
             'join_lines'             => implode("\n", array_map('strval', (array) ($v ?? []))),
-            'crm_client_labels'      => implode(', ', array_map(static fn (mixed $c): string => (string) ((array) $c)['label'], (array) ($v ?? []))),
+            'crm_client_labels'      => implode(', ', array_filter(array_map(static fn (mixed $c): string => (string) (((array) $c)['label'] ?? ''), (array) ($v ?? [])))),
             'join_comma'             => implode(', ', array_map('strval', (array) ($v ?? []))),
             'registrable_domain'     => is_string($v) && $v !== '' ? SiteContext::registrableDomain($v) : '',
             'active_theme'           => (string) (self::activeTheme($v)['name'] ?? ''),
@@ -796,7 +796,7 @@ final class ReportBuilder
             foreach ((array) ($context['payload'][$list] ?? []) as $a) {
                 if (is_array($a)) {
                     $rows[] = [
-                        self::cell((string) ($a['login'] ?? '?')),
+                        self::cell((string) ($a['login'] ?? '')),
                         self::cell((string) ($a['email'] ?? '')),
                         self::cell($this->t->report($roleKey)),
                     ];

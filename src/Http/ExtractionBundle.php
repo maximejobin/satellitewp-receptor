@@ -15,7 +15,7 @@ use SatelliteWP\Manager\Web\DefaultObservations;
  * One extraction as a `.swp-extraction/` directory for an AI working in a
  * local copy of the site: raw data (payload, probes), Manager's analysis
  * (findings, report data) and the static instructions.md that explains them.
- * Personal data is masked in every file (Support\PersonalData).
+ * Personal data is left out of every file (Support\PersonalData).
  */
 final class ExtractionBundle
 {
@@ -54,14 +54,15 @@ final class ExtractionBundle
         }
         $site         = $store->readSiteInfo($siteId) ?? [];
         $meta         = $store->readMeta($siteId, $extractionId) ?? [];
-        $probes       = $store->readAllProbeResults($siteId, $extractionId);
+        // Business records (client, plan) are not technical data: the CRM snapshot stays in Manager.
+        $probes       = array_diff_key($store->readAllProbeResults($siteId, $extractionId), ['crm' => true]);
         $licenses     = $store->readLicenses($siteId, $extractionId);
         $observations = $store->readObservations($siteId, $extractionId);
         $findingsData = $store->readFindings($siteId, $extractionId) ?? [];
         $language     = ReportController::reportLocale(null, $meta);
         $t            = $this->app->translator($language);
 
-        $mask         = new PersonalData($payload, $probes);
+        $mask         = new PersonalData();
         $payload      = $mask->payload($payload);
         $probes       = $mask->probes($probes);
         $findingsData = (array) $mask->any($findingsData);
@@ -82,8 +83,10 @@ final class ExtractionBundle
             $findingsData,
             $observations
         );
+        $contract = ReportContract::load($this->app);
+        $report['fields'] = array_diff_key($report['fields'], array_flip(self::crmFields($contract)));
         $resolvedObservations = DefaultObservations::resolve(
-            DefaultObservations::items($observations, ReportContract::load($this->app)),
+            DefaultObservations::items($observations, $contract),
             $t
         );
 
@@ -112,6 +115,26 @@ final class ExtractionBundle
         }
 
         return $files;
+    }
+
+    /**
+     * Report fields read from the CRM snapshot, left out with it.
+     *
+     * @param array<string, mixed> $contract
+     * @return list<string>
+     */
+    public static function crmFields(array $contract): array
+    {
+        $names = [];
+        foreach ((array) ($contract['fields'] ?? []) as $name => $spec) {
+            foreach ((array) (((array) $spec)['from'] ?? []) as $from) {
+                if (str_starts_with((string) $from, 'probe.crm.')) {
+                    $names[] = (string) $name;
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**
@@ -144,7 +167,7 @@ final class ExtractionBundle
                 'collector_errors'  => array_values((array) ($payload['collector_errors'] ?? [])),
                 'manager_url'       => $baseUrl . "/site/{$siteId}/extraction/{$extractionId}",
             ],
-            'personal_data' => 'masked',
+            'personal_data' => 'omitted',
         ];
     }
 

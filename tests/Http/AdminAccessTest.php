@@ -168,11 +168,15 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
-    public function theBundleIsATarGzOfTheExtractionWithPersonalDataMasked(): void
+    public function theBundleIsATarGzOfTheExtractionWithoutPersonalData(): void
     {
         $app          = $this->app();
         $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
         $path         = '/site/' . self::SITE . '/extraction/' . $extractionId . '/bundle.tar.gz';
+        $app->dataStore()->writeProbeResult(self::SITE, $extractionId, 'crm', ['probe' => 'crm', 'status' => 'ok', 'data' => [
+            'linked' => true, 'clients' => [['id' => 1, 'label' => 'Example Client']], 'maintenance_plan' => ['name' => 'Example plan'],
+        ]]);
+        $app->dataStore()->writeProbeResult(self::SITE, $extractionId, 'tls', ['probe' => 'tls', 'status' => 'ok', 'data' => ['issuer' => 'R11']]);
 
         $_GET = [];
         $this->assertSame(401, $this->get($app, $path)->status, 'no session, no token: refused');
@@ -195,11 +199,18 @@ final class AdminAccessTest extends TestCase
         $this->assertSame($extractionId, $meta['extraction']['id']);
 
         $payload = json_decode((string) file_get_contents($root . '/raw/payload.json'), true);
-        $this->assertSame('user-1', $payload['administrators'][0]['login']);
+        $this->assertSame([['id' => 1]], $payload['administrators']);
+        $this->assertSame('omitted', $meta['personal_data']);
+        $this->assertFileExists($root . '/raw/probes/tls.json');
+        $this->assertFileDoesNotExist($root . '/raw/probes/crm.json');
+        $report = json_decode((string) file_get_contents($root . '/analysis/report.json'), true);
+        $this->assertArrayNotHasKey('client', $report['fields'], 'business data stays in Manager');
+        $this->assertArrayNotHasKey('maintenance_plan', $report['fields']);
         foreach (glob($root . '/{,*/,*/*/}*.{json,md}', GLOB_BRACE) ?: [] as $file) {
             $text = (string) file_get_contents($file);
             $this->assertStringNotContainsString('max@example.com', $text, basename($file));
             $this->assertStringNotContainsString('maxadmin', $text, basename($file));
+            $this->assertStringNotContainsString('Example Client', $text, basename($file));
         }
     }
 

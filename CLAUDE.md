@@ -270,9 +270,10 @@ extraction copies a shell line (one-hour report token) that downloads
 `meta.json`, `raw/` (payload, probes), `analysis/` (findings, findings in the
 extraction's language as Markdown, report.json, observations, licences) and
 `reference/rules-catalog.md`. For an AI working in a local copy of the site.
-Personal data is masked in every file (`Support\PersonalData`): email local
-parts, admin logins as stable `user-N` (`admin` kept, M2 reads it), CRM client
-names. `Support\TarGz` writes the ustar archive (no zip tool needed).
+Personal data is omitted from every file, never replaced by a placeholder
+(`Support\PersonalData`): email addresses, admin logins (`admin` kept, M2
+reads it). Technical data only: the CRM probe and the report fields read
+from it (client, plan) are left out. `Support\TarGz` writes the ustar archive (no zip tool needed).
 
 **Catalogue & reference.** `SoftwareCatalog` (`data/catalog/software.json`):
 cross-site free/premium licence classification; `normalizeSlug()` turns

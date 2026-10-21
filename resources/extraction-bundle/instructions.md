@@ -60,7 +60,6 @@ Each file is an envelope: `probe`, `ran_at`, `status` (`ok`, `error`,
 | `wporg` | when each plugin and theme hosted on wordpress.org was last updated |
 | `mail` | SPF, DKIM and DMARC verdicts of a test email sent by the site |
 | `seranking` | SE Ranking site audit: score, crawled pages, issues by check |
-| `crm` | SatelliteWP's own client record and maintenance plan |
 
 A `null` value means "not measured", never "absent" or "false".
 
@@ -86,7 +85,8 @@ vocabulary reference for anything written for the client.
 
 ### analysis/report.json
 
-The data of the client report, keyed by the template's `{{variable}}` names.
+The data of the client report, keyed by the template's `{{variable}}` names
+(business fields such as the client and the maintenance plan are left out).
 `value` fields carry a display value and a colour, `table` fields headers and
 rows, `observations` fields the findings placed in that section.
 
@@ -95,10 +95,10 @@ rows, `observations` fields the findings placed in that section.
 - **It is a snapshot.** Everything describes the site at `received_at`. The
   local copy may be newer or older: check versions before concluding that a
   finding still holds or no longer does.
-- **Personal data is masked.** Email addresses read `redacted@<domain>`,
-  administrator logins `user-1`, `user-2`… (the same person keeps the same
-  alias in every file; a login named `admin` is kept, because it is a finding
-  in itself) and the client's name `[redacted]`. Do not try to recover them.
+- **Personal data is left out.** Email addresses and administrator logins
+  were removed before the bundle was built: a missing `email` or `login`
+  field was omitted on purpose, not missing on the site.
+  A login that is exactly `admin` is kept, because it is a finding in itself.
 - **Write for the client in their language** (`extraction.language` in
   `meta.json`): short sentences that say what the element is, its impact,
   and what to do. Use the conditional when an impact is likely rather than
