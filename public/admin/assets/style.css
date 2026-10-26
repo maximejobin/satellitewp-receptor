@@ -556,11 +556,12 @@ table.obs-columns td.mono { white-space: nowrap; width: 1%; }
 .obs-field > label, .obs-field > legend { font-size: .82rem; font-weight: 600; padding: 0; margin-bottom: .35rem; }
 .obs-field > label { margin-bottom: 0; }
 .obs-field small, .obs-include small { color: var(--muted); font-size: .76rem; }
-.obs-field input[type="text"], .obs-field select, .obs-field textarea {
+.obs-field input[type="text"], .obs-field input[type="email"], .obs-field select, .obs-field textarea {
     width: 100%; box-sizing: border-box; padding: .55rem .7rem; font: inherit; font-size: .92rem; color: var(--text);
     background: var(--surface); border: 1px solid var(--border); border-radius: 7px;
 }
 .obs-field textarea { resize: vertical; min-height: 7rem; line-height: 1.45; }
+.obs-names { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .obs-field input:focus, .obs-field select:focus, .obs-field textarea:focus {
     outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--bg-accent);
 }

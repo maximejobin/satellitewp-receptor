@@ -66,8 +66,9 @@ final class UserController extends Controller
 
         $email  = (string) ($_POST['email'] ?? '');
         $notice = match ($action) {
+            // The dialog sends the address as new_email for both add and edit.
             'add' => $users->add(
-                $email,
+                (string) ($_POST['new_email'] ?? $email),
                 (string) ($_POST['role'] ?? UserStore::DEFAULT_ROLE),
                 (string) ($_POST['first_name'] ?? ''),
                 (string) ($_POST['last_name'] ?? '')

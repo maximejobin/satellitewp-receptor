@@ -215,6 +215,26 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function usersAreAddedAndEditedThroughTheDialog(): void
+    {
+        $app = $this->app(['auth' => ['open_mode' => true]]);
+        $app->userStore()->add('admin@example.com', 'admin');
+        $_SESSION['user_email'] = 'admin@example.com';
+
+        $page = $this->get($app, '/users')->body;
+        $this->assertStringContainsString('id="user-dialog"', $page);
+        $this->assertStringContainsString('data-user="{&quot;email&quot;:&quot;admin@example.com&quot;', $page);
+
+        $this->post($app, '/users', ['action' => 'add', 'new_email' => 'ann@example.com', 'first_name' => 'Ann', 'last_name' => 'Lee', 'role' => 'sale']);
+        $this->assertSame('sale', $app->userStore()->roleOf('ann@example.com'));
+
+        $response = $this->post($app, '/users', ['action' => 'edit', 'email' => 'ann@example.com', 'new_email' => 'ann.lee@example.com', 'first_name' => 'Ann', 'last_name' => 'Lee', 'role' => 'coordinator']);
+        $this->assertSame('/users?notice=edited', $response->location());
+        $this->assertNull($app->userStore()->roleOf('ann@example.com'));
+        $this->assertSame('coordinator', $app->userStore()->roleOf('ann.lee@example.com'));
+    }
+
+    #[Test]
     public function theReportLanguageIsTheRequestedOneElseTheRunsOne(): void
     {
         $this->assertSame('en', ReportController::reportLocale('EN', ['language' => 'fr']));

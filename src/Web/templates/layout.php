@@ -434,25 +434,6 @@ $nav = $nav ?? 'sites';
       if (display2) { display2.style.display = ''; }
       return;
     }
-
-    // Inline row editing (users, observations): both rows are <tr>, so 'table-row'.
-    var rowEditBtn = e.target.closest('.row-edit-btn');
-    if (rowEditBtn) {
-      var rid = rowEditBtn.dataset.rowId;
-      var rdisplay = document.querySelector('.row-display[data-row-id="' + rid + '"]');
-      var rform = document.querySelector('.row-edit-form[data-row-id="' + rid + '"]');
-      if (rdisplay) { rdisplay.style.display = 'none'; }
-      if (rform) { rform.style.display = 'table-row'; }
-      return;
-    }
-    var rowCancelBtn = e.target.closest('.row-cancel-btn');
-    if (rowCancelBtn) {
-      var rform2 = rowCancelBtn.closest('.row-edit-form');
-      var rid2 = rform2.dataset.rowId;
-      rform2.style.display = 'none';
-      var rdisplay2 = document.querySelector('.row-display[data-row-id="' + rid2 + '"]');
-      if (rdisplay2) { rdisplay2.style.display = ''; }
-    }
   });
 </script>
 <?php if (!empty($reportAssets)): ?>
