@@ -9,29 +9,25 @@
  */
 ?>
 <h1>Users</h1>
-<p class="muted">
-    Only these addresses can access the interface. The administrator role
-    can manage this list; the last remaining active administrator can
-    neither be removed nor suspended.
-</p>
+<p class="muted">Only these addresses can access the interface.</p>
 
 <?php
 $notices = [
-    'added'             => ['badge-ok', 'User added.'],
-    'edited'            => ['badge-ok', 'User updated.'],
-    'suspended'         => ['badge-ok', 'User suspended.'],
-    'reactivated'       => ['badge-ok', 'User reactivated.'],
-    'removed'           => ['badge-ok', 'User removed.'],
-    'add-failed'        => ['badge-error', 'Invalid address, unknown role, or already present.'],
-    'edit-failed'       => ['badge-error', 'Could not save — invalid/duplicate address, unknown role, or the last active administrator.'],
-    'suspend-failed'    => ['badge-error', 'Could not suspend — unknown address or the last active administrator.'],
-    'reactivate-failed' => ['badge-error', 'Could not reactivate — unknown address.'],
-    'remove-failed'     => ['badge-error', 'Cannot remove this address (not found, or the last active administrator).'],
+    'added'             => ['success', 'User added.'],
+    'edited'            => ['success', 'User updated.'],
+    'suspended'         => ['success', 'User suspended.'],
+    'reactivated'       => ['success', 'User reactivated.'],
+    'removed'           => ['success', 'User removed.'],
+    'add-failed'        => ['critical', 'Invalid address, unknown role, or already present.'],
+    'edit-failed'       => ['critical', 'Could not save — invalid/duplicate address, unknown role, or the last active administrator.'],
+    'suspend-failed'    => ['critical', 'Could not suspend — unknown address or the last active administrator.'],
+    'reactivate-failed' => ['critical', 'Could not reactivate — unknown address.'],
+    'remove-failed'     => ['critical', 'Cannot remove this address (not found, or the last active administrator).'],
 ];
 if (isset($notices[$notice])):
-    [$cls, $text] = $notices[$notice];
+    [$level, $text] = $notices[$notice];
 ?>
-    <p><span class="badge <?= $cls ?>"><?= e($text) ?></span></p>
+    <?= notice($level, e($text)) ?>
 <?php endif; ?>
 
 <?php if ($can['add']): ?>
@@ -127,7 +123,6 @@ if (isset($notices[$notice])):
             <div class="obs-field">
                 <label for="user-email">Google account email</label>
                 <input id="user-email" type="email" name="new_email" required autocomplete="off" placeholder="first.last@example.com">
-                <small>The address used to sign in with Google.</small>
             </div>
             <div class="obs-field">
                 <label for="user-role">Role</label>
@@ -136,7 +131,6 @@ if (isset($notices[$notice])):
                         <option value="<?= e($role) ?>"><?= e($role) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <small>The last active administrator keeps the admin role.</small>
             </div>
         </div>
         <footer class="obs-dialog-foot">

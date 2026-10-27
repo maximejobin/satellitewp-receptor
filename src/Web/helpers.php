@@ -142,12 +142,15 @@ function breadcrumb(array $trail): string
 /** Page-level banner: info, warning, critical or progress (spinner). $html is trusted, pre-rendered HTML. */
 function notice(string $level, string $html): string
 {
-    $level = in_array($level, ['info', 'warning', 'critical', 'progress'], true) ? $level : 'info';
+    $level = in_array($level, ['info', 'success', 'warning', 'critical', 'progress'], true) ? $level : 'info';
     $icon = match ($level) {
         'warning'  => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
             . 'stroke-linecap="round" stroke-linejoin="round"><path d="M8.18 2.6 1.4 14.2A1.4 1.4 0 0 0 '
             . '2.62 16.3h12.76a1.4 1.4 0 0 0 1.22-2.1L9.82 2.6a1.4 1.4 0 0 0-2.64 0Z"/>'
             . '<line x1="9" y1="7" x2="9" y2="10.6"/><circle cx="9" cy="13.1" r=".2" fill="currentColor"/></svg>',
+        'success'  => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
+            . 'stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/>'
+            . '<path d="m5.8 9.2 2.2 2.2 4.2-4.6"/></svg>',
         'critical' => '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" '
             . 'stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7.2"/>'
             . '<line x1="6.6" y1="6.6" x2="11.4" y2="11.4"/><line x1="11.4" y1="6.6" x2="6.6" y2="11.4"/></svg>',

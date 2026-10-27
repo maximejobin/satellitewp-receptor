@@ -12,8 +12,8 @@
 use SatelliteWP\Manager\Crm\ClientsRepository;
 
 $notices = [
-    'website-updated'       => ['badge-ok', 'Linked website updated.'],
-    'website-update-failed' => ['badge-error', 'Could not update the linked website.'],
+    'website-updated'       => ['success', 'Linked website updated.'],
+    'website-update-failed' => ['critical', 'Could not update the linked website.'],
 ];
 
 /** A version value plus an "Outdated"/"Vulnerable" badge, only when there's actually something to flag. */
@@ -45,8 +45,8 @@ $clientLabels = array_map(
 ?>
 <h1><?= e(site_display($website['url'])) ?></h1>
 
-<?php if (isset($notices[$notice])): [$cls, $text] = $notices[$notice]; ?>
-    <p><span class="badge <?= $cls ?>"><?= e($text) ?></span></p>
+<?php if (isset($notices[$notice])): [$level, $text] = $notices[$notice]; ?>
+    <?= notice($level, e($text)) ?>
 <?php endif; ?>
 
 <?php

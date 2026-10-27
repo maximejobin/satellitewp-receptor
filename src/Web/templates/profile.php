@@ -13,16 +13,16 @@ $dataJson = $user['data'] !== null
     : '';
 
 $notices = [
-    'saved'        => ['badge-ok', 'Profile saved.'],
-    'invalid-json' => ['badge-error', 'Could not save — "Data" is not valid JSON (must be an object or array, e.g. {}).'],
+    'saved'        => ['success', 'Profile saved.'],
+    'invalid-json' => ['critical', 'Could not save — "Data" is not valid JSON (must be an object or array, e.g. {}).'],
 ];
 ?>
 <h1>My profile</h1>
 <p class="muted">Your own account — identity and role are managed by an administrator on <a href="/users">Users</a>;
     the fields below are yours to edit.</p>
 
-<?php if (isset($notices[$notice])): [$cls, $text] = $notices[$notice]; ?>
-    <p><span class="badge <?= $cls ?>"><?= e($text) ?></span></p>
+<?php if (isset($notices[$notice])): [$level, $text] = $notices[$notice]; ?>
+    <?= notice($level, e($text)) ?>
 <?php endif; ?>
 
 <?= section('Identity', implode('', [

@@ -8,12 +8,12 @@
 
 <?php
 $notices = [
-    'invalid-uuid' => ['badge-error', 'The site identifier must be a valid UUID.'],
+    'invalid-uuid' => ['critical', 'The site identifier must be a valid UUID.'],
 ];
 if (isset($notices[$notice ?? ''])):
-    [$cls, $text] = $notices[$notice];
+    [$level, $text] = $notices[$notice];
 ?>
-    <p><span class="badge <?= $cls ?>"><?= e($text) ?></span></p>
+    <?= notice($level, e($text)) ?>
 <?php endif; ?>
 
 <details style="margin:.2rem 0 1rem">

@@ -3,7 +3,7 @@
     <p class="muted" style="margin-top:0">Analyst interface — restricted access.</p>
 
     <?php if ($message !== ''): ?>
-        <div style="text-align:left;margin:1rem 0"><?= notice('critical', e($message)) ?></div>
+        <div style="text-align:left;margin-top:1rem"><?= notice('critical', e($message)) ?></div>
     <?php endif; ?>
 
     <?php if ($firstRun): ?>

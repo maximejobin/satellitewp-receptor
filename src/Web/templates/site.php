@@ -19,16 +19,12 @@
 <?php endif; ?>
 
 <?php if ($createdKey !== null): ?>
-    <div class="pending-note" style="border-style:solid;border-color:var(--ok);background:var(--bg-ok);margin-bottom:.8rem">
-        <b>Key created — copy it now, it will never be shown again:</b><br>
-        <span class="mono" style="user-select:all;font-size:1rem"><?= e($createdKey['key']) ?></span><br>
-        <span class="muted">Paste it into Settings → SatelliteWP → Pairing on the site
-            (or <span class="mono">define('SWP_API_KEY', '…')</span> in wp-config.php).
-            <?= $createdKey['origin'] !== null
-                ? 'Bound to <span class="mono">' . e($createdKey['origin']) . '</span>.'
-                : 'Not bound to an address yet: the first extraction received will bind it.' ?>
-        </span>
-    </div>
+    <?= notice('success', '<b>Key created — copy it now, it will never be shown again:</b><br>'
+        . '<span class="mono" style="user-select:all;font-size:1rem">' . e($createdKey['key']) . '</span><br>'
+        . 'Paste it into Settings → SatelliteWP → Pairing on the site (or <span class="mono">define(\'SWP_API_KEY\', \'…\')</span> in wp-config.php). '
+        . ($createdKey['origin'] !== null
+            ? 'Bound to <span class="mono">' . e($createdKey['origin']) . '</span>.'
+            : 'Not bound to an address yet: the first extraction received will bind it.')) ?>
 <?php endif; ?>
 
 <h2>Extractions</h2>

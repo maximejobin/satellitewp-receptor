@@ -89,6 +89,7 @@ $hex = [
 <p class="muted"><span class="mono">notice()</span> — a page-level alert banner, not a value. Reach for this,
     never a stretched <span class="mono">.badge</span>, for something the reader should see before anything else.</p>
 <?= notice('info', 'Informational — nothing needs to change.') ?>
+<?= notice('success', 'Success — the action went through (saved, added, imported).') ?>
 <?= notice('warning', 'Warning — worth a look, not urgent.') ?>
 <?= notice('critical', 'Critical — something is actually wrong.') ?>
 

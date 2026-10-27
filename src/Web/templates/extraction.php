@@ -154,7 +154,7 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 <?php
 $status = (string) ($row['status'] ?? '');
 echo match ($notice) {
-    'rerun-done'   => notice('info', 'Probes re-run and findings re-evaluated.'),
+    'rerun-done'   => notice('success', 'Probes re-run and findings re-evaluated.'),
     'rerun-none'   => notice('warning', 'No probe selected — nothing was re-run.'),
     'rerun-failed' => notice('critical', 'The re-run failed' . ($noticeRef !== '' ? ' (log ref <span class="mono">' . e($noticeRef) . '</span>)' : '') . '.'),
     default        => '',
@@ -210,16 +210,14 @@ if ($status !== 'done'):
                 . ' This page will refresh automatically once it\'s done.') ?>
             <script>setTimeout(function () { location.reload(); }, 5000);</script>
         <?php elseif ($status === 'error'): ?>
-            <p><span class="badge badge-error">Error</span>
-               The last analysis failed. Check the worker logs if needed, then retry.</p>
+            <?= notice('critical', '<b>Analysis failed.</b> Check the worker logs if needed, then retry.') ?>
             <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run">
                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                 <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
                 <button type="submit" class="btn">Retry analysis</button>
             </form>
         <?php elseif ($status === 'aborted'): ?>
-            <p><span class="badge badge-muted">Aborted</span>
-               This extraction was not analysed — an analyst chose to skip it.</p>
+            <?= notice('info', '<b>Aborted.</b> This extraction was not analysed — an analyst chose to skip it.') ?>
         <?php else: ?>
             <p class="muted">This extraction was received but <b>not analysed yet</b>.
                No probe has run, no quota has been spent.</p>
@@ -239,33 +237,25 @@ if ($status !== 'done'):
                     . '<a href="/site/' . e($siteId) . '">⚙ Site settings</a>, then reload this page to re-check.'
                 ) ?>
             <?php elseif (!empty($httpAuth['error'])): ?>
-                <p><span class="badge badge-warn">Site unreachable</span>
-                   <span class="mono"><?= e($httpAuth['error']) ?></span> — external checks may come back empty.</p>
+                <?= notice('warning', '<b>Site unreachable.</b> <span class="mono">' . e($httpAuth['error']) . '</span> — external checks may come back empty.') ?>
             <?php elseif (($httpAuth['checked'] ?? false) === true && ($httpAuth['configured'] ?? false) === true): ?>
                 <?php // Credentials were sent, so this says nothing about whether the site needs them. ?>
-                <p><span class="badge badge-ok">Credentials accepted</span>
-                   The site answered <span class="mono">HTTP <?= e($httpAuth['status']) ?></span> with the stored
-                   credentials — external checks will run.</p>
+                <?= notice('success', '<b>Credentials accepted.</b> The site answered <span class="mono">HTTP ' . e($httpAuth['status'])
+                    . '</span> with the stored credentials — external checks will run.') ?>
             <?php elseif (($httpAuth['checked'] ?? false) === true): ?>
-                <p><span class="badge badge-ok">Publicly reachable</span>
-                   The site answered <span class="mono">HTTP <?= e($httpAuth['status']) ?></span> anonymously.</p>
+                <?= notice('success', '<b>Publicly reachable.</b> The site answered <span class="mono">HTTP ' . e($httpAuth['status']) . '</span> anonymously.') ?>
             <?php endif; ?>
 
             <?php if (($blogVault['configured'] ?? false) !== true): ?>
-                <p><span class="badge badge-muted">BlogVault not configured</span>
-                   Cannot check whether this site is managed there.</p>
+                <?= notice('info', '<b>BlogVault not configured.</b> Cannot check whether this site is managed there.') ?>
             <?php elseif (!empty($blogVault['error'])): ?>
-                <p><span class="badge badge-warn">BlogVault unreachable</span>
-                   <span class="mono"><?= e($blogVault['error']) ?></span></p>
+                <?= notice('warning', '<b>BlogVault unreachable.</b> <span class="mono">' . e($blogVault['error']) . '</span>') ?>
             <?php elseif ($bvFound): ?>
-                <p><span class="badge badge-ok">On BlogVault</span>
-                   <?= e($blogVault['name'] ?? '') ?>
-                   <span class="mono muted"><?= e($blogVault['id'] ?? '') ?></span></p>
+                <?= notice('success', '<b>On BlogVault.</b> ' . e($blogVault['name'] ?? '') . ' <span class="mono">' . e($blogVault['id'] ?? '') . '</span>') ?>
             <?php else: ?>
-                <p><span class="badge badge-error">Not on BlogVault</span>
-                   <span class="mono"><?= e($blogVault['host'] ?? '') ?></span> is not in the account —
-                   this site is probably not under a maintenance plan.
-                   Rule <span class="mono">BV1</span> and the BlogVault part of <span class="mono">F8</span> will stay indeterminate.</p>
+                <?= notice('critical', '<b>Not on BlogVault.</b> <span class="mono">' . e($blogVault['host'] ?? '') . '</span> is not in the account — '
+                    . 'this site is probably not under a maintenance plan. Rule <span class="mono">BV1</span> and the BlogVault part of '
+                    . '<span class="mono">F8</span> will stay indeterminate.') ?>
             <?php endif; ?>
 
             <?php
@@ -412,7 +402,7 @@ if ($status !== 'done'):
             $crmNote = ($crm['linked'] ?? false) ? (is_array($crmPlan) ? null : 'No single active maintenance plan') : ($crmReasons[$crm['reason'] ?? ''] ?? null);
             // A failed snapshot has no data: test the error before the empty case.
             if (($probes['crm']['status'] ?? '') === 'error') : ?>
-                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">CRM snapshot failed: <?= e(implode(' ', (array) ($probes['crm']['errors'] ?? []))) ?></div>
+                <?= notice('warning', '<b>CRM snapshot failed.</b> ' . e(implode(' ', (array) ($probes['crm']['errors'] ?? [])))) ?>
             <?php elseif ($crm === []) : ?>
                 <div class="pending-note">No CRM snapshot for this extraction — run the <code>crm</code> probe to link it.</div>
             <?php else : ?>
@@ -975,18 +965,16 @@ if ($status !== 'done'):
                 $sensitiveEv    = $evidence['sensitive_files'] ?? null;
                 if (($exp['auth_required'] ?? false) === true) {
                     echo '<div class="card card-full"><h3>Exposure</h3><div style="padding:1rem 1.1rem">'
-                        . '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">'
-                        . '<b>Site not public — checks below could not run.</b> The homepage itself answered '
+                        . notice('warning', '<b>Site not public — checks below could not run.</b> The homepage itself answered '
                         . '<span class="mono">HTTP 401</span> (HTTP Basic Auth required), so every request below '
                         . 'would also 401 regardless of what it is testing for — that is not the same thing as '
                         . '"nothing exposed". Add this site\'s Basic Auth credentials under "⚙ Site settings" on '
-                        . 'its page to let these checks actually run.</div></div></div>';
+                        . 'its page to let these checks actually run.') . '</div></div>';
                 } elseif (($exp['skipped'] ?? false) === true) {
                     echo '<div class="card card-full"><h3>Exposure</h3><div style="padding:1rem 1.1rem">'
-                        . '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">'
-                        . '<b>Checks could not run.</b> The homepage answered <span class="mono">HTTP '
+                        . notice('warning', '<b>Checks could not run.</b> The homepage answered <span class="mono">HTTP '
                         . e($http['status_code'] ?? '?') . '</span> instead of a page (firewall challenge or error): '
-                        . 'probing paths behind it would prove nothing.</div></div></div>';
+                        . 'probing paths behind it would prove nothing.') . '</div></div>';
                 } else {
                 echo section('Exposure',
                     $exposureRow('xmlrpc.php', $exp['xmlrpc_enabled'] ?? null, 'exposed', 'blocked',
@@ -1134,7 +1122,7 @@ if ($status !== 'done'):
                         . e($auditData['state'] ?? 'queued') . (isset($auditData['pages_crawled']) ? ', ' . e($auditData['pages_crawled']) . ' pages crawled so far' : '')
                         . '). The report is fetched automatically once it is finished.</div>';
                 } elseif ($auditStatus === 'error') {
-                    $auditNote = '<div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">Site audit failed: ' . e(implode(' ', (array) ($audit['errors'] ?? []))) . '</div>';
+                    $auditNote = notice('warning', '<b>Site audit failed.</b> ' . e(implode(' ', (array) ($audit['errors'] ?? []))));
                 } else {
                     $totals    = (array) ($auditData['totals'] ?? []);
                     $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '', null, 'probe.seranking.score')
@@ -1180,18 +1168,14 @@ if ($status !== 'done'):
                 stays saved, just left out of the report until re-included.
             </p>
             <?php if ($observationsImport !== null && $observationsImport['errors'] === []): ?>
-                <div class="pending-note" style="border-color:var(--ok);background:var(--bg-ok)"><?= e($observationsImport['imported']) ?> observation<?= $observationsImport['imported'] > 1 ? 's' : '' ?> imported from the CSV.</div>
+                <?= notice('success', e($observationsImport['imported']) . ' observation' . ($observationsImport['imported'] > 1 ? 's' : '') . ' imported from the CSV.') ?>
             <?php elseif ($observationsImport !== null): ?>
-                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">
-                    Nothing was imported — fix the file and import it again:
-                    <ul style="margin:.4rem 0 0"><?php foreach ($observationsImport['errors'] as $importError): ?><li><?= e($importError) ?></li><?php endforeach; ?></ul>
-                </div>
+                <?= notice('critical', 'Nothing was imported — fix the file and import it again:<ul>'
+                    . implode('', array_map(static fn (mixed $err): string => '<li>' . e($err) . '</li>', $observationsImport['errors'])) . '</ul>') ?>
             <?php endif; ?>
             <?php if ($observationErrors !== []): ?>
-                <div class="pending-note" style="border-color:var(--warn);background:var(--bg-warn)">
-                    The observation was not saved:
-                    <ul style="margin:.4rem 0 0"><?php foreach ($observationErrors as $observationError): ?><li><?= e($observationError) ?></li><?php endforeach; ?></ul>
-                </div>
+                <?= notice('critical', 'The observation was not saved:<ul>'
+                    . implode('', array_map(static fn (string $err): string => '<li>' . e($err) . '</li>', $observationErrors)) . '</ul>') ?>
             <?php endif; ?>
             <?php
             // "wp_core_observations" → "WordPress core": the field name stays visible as a hint.
