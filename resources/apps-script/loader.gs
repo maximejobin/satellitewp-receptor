@@ -4,7 +4,7 @@
  * SatelliteWP report — loader. Paste it once into the Google Doc
  * (Extensions → Apps Script); it does not change afterwards.
  *
- * The "Report data key" address pasted in the prompt names both the data and
+ * The extraction URL pasted in the prompt names both the data and
  * the Manager serving it (PROD or DEV): the rendering engine is downloaded
  * from that same Manager with the same token, stored in this document per
  * Manager origin, and replaced only on confirmation when a newer version is
@@ -38,13 +38,13 @@ function onOpen() {
 
 function fillReport() {
   run('fill', 'Report to import',
-    'In Manager, on the extraction page, click "Report data key" ' +
-    '(it copies an address) and paste it here.\n\nValid for one hour.');
+    'In Manager, on the extraction page, click "Copy Extraction URL" ' +
+    'and paste the address here.\n\nValid for one hour.');
 }
 
 function checkVariables() {
   run('check', 'Check document variables',
-    'Paste a "Report data key" address: the document\'s {{variables}} are ' +
+    'Paste an extraction URL ("Copy Extraction URL" in Manager): the document\'s {{variables}} are ' +
     'compared with what this extraction provides.');
 }
 
@@ -64,7 +64,7 @@ function run(action, title, message) {
   var address = response.getResponseText().trim();
   var m = /^https:\/\/([a-z0-9.-]+)(:\d+)?(\/[^?#\s]*)?\/report\.json\?token=[A-Za-z0-9%_-]+(&lang=[a-z]{2})?$/i.exec(address);
   if (!m) {
-    ui.alert('This does not look like a "Report data key" address.\n\n' +
+    ui.alert('This does not look like an extraction URL.\n\n' +
       'Go back to Manager, click the button on the extraction page, ' +
       'then paste what was copied, as is.');
     return;
@@ -98,7 +98,7 @@ function download(url) {
 
   if (code === 401) {
     throw new Error('Expired or invalid link (401): go back to Manager and click ' +
-      '"Report data key" again (each link is valid for one hour).');
+      '"Copy Extraction URL" again (each link is valid for one hour).');
   }
   if (code === 404) { throw new Error('Extraction not found (404).'); }
   if (code !== 200) { throw new Error('Unexpected response: HTTP ' + code); }

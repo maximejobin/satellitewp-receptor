@@ -266,7 +266,7 @@ first), stores the engine per origin in document properties and offers an
 update when the served `var VERSION` is higher — bump it on every engine change.
 Both files are English only (identifiers, comments, UI strings).
 
-**Extraction bundle (`Http\ExtractionBundle`).** "AI bundle command" on a done
+**Extraction bundle (`Http\ExtractionBundle`).** "Copy Bundle command" on a done
 extraction copies a shell line (one-hour report token) that downloads
 `…/bundle.tar.gz` into the current directory and replaces `.swp-extraction/`:
 `instructions.md` (static, `resources/extraction-bundle/`, English),

@@ -159,7 +159,7 @@ final class ReportController extends Controller
 
     /**
      * Either the shared `reports.api_key` as a Bearer header, or a one-hour
-     * token scoped to this one extraction (the "Report data key" button).
+     * token scoped to this one extraction (the "Copy Extraction URL" button).
      */
     private function accessGranted(string $siteId, string $extractionId): bool
     {

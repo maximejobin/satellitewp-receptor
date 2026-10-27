@@ -355,16 +355,15 @@ if ($status !== 'done'):
                     <button type="button" class="btn-ghost rerun-open"><?= report_icon('rerun') ?> Re-run probes</button>
                 <?php endif; ?>
                 <?php if ($findings !== null): ?>
-                    <a class="btn-ghost mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings"><?= report_icon('raw') ?> findings.json</a>
                     <button type="button" class="btn-ghost" id="xt-report-key-btn"
                             data-action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/report-token"
                             data-csrf="<?= e($csrf) ?>" title="Copy a one-hour link for the Google Docs report template">
-                        <?= report_icon('raw') ?> Report data key
+                        <?= report_icon('raw') ?> Copy Extraction URL
                     </button>
                     <button type="button" class="btn-ghost" id="xt-bundle-btn"
                             data-action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/bundle-command"
                             data-csrf="<?= e($csrf) ?>" title="Copy a one-hour shell command that downloads this extraction's data (personal data left out) into .swp-extraction/ of the current directory">
-                        <?= report_icon('raw') ?> AI bundle command
+                        <?= report_icon('raw') ?> Copy Bundle command
                     </button>
                 <?php endif; ?>
             </div>
@@ -1425,7 +1424,7 @@ if ($status !== 'done'):
                 <div class="rerun-probes">
                     <?php foreach ($probeProgress as $probeName => $state): ?>
                         <label class="obs-include">
-                            <input type="checkbox" name="probes[]" value="<?= e($probeName) ?>" <?= in_array($state, ['failed', 'not_started'], true) ? 'checked' : '' ?>>
+                            <input type="checkbox" name="probes[]" value="<?= e($probeName) ?>" <?= $state === 'not_started' ? 'checked' : '' ?>>
                             <span class="mono"><?= e($probeName) ?></span>
                         </label>
                     <?php endforeach; ?>

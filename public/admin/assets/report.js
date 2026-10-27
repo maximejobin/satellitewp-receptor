@@ -45,7 +45,7 @@
     });
   });
 
-  // "Report data key" and "AI bundle command" mint a one-hour, single-extraction
+  // "Copy Extraction URL" and "Copy Bundle command" mint a one-hour, single-extraction
   // token server-side and copy what carries it, so the shared reports.api_key is
   // never put on screen.
   function copyFromPost(btn, field, done, failed) {
