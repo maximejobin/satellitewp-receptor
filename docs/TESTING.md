@@ -150,8 +150,9 @@ Open `http://127.0.0.1:8081/`.
   Vulnerable, Abandoned) and wp.org links, raw JSON links.
 - ✅ A pending extraction shows only its status and **Run analysis** — never a
   partial report.
-- ✅ With `debugging_tools => true` in `config.local.php`, a re-run panel
-  appears on a done extraction; with it off, `POST …/rerun` answers 404.
+- ✅ **Re-run probes** on a done extraction queues the selected probes: the box
+  above the page lists each probe (not started → in progress → completed or
+  failed) until the worker has run them all, then disappears.
 - ✅ **Report data key** copies a one-hour URL; `curl` on it returns the report
   JSON with every `{{variable}}` of the Google Doc template.
 

@@ -54,6 +54,21 @@ final class Pipeline
     }
 
     /**
+     * The probes an analyst queued for re-run on a done or failed
+     * extraction. The extraction keeps its status and data meanwhile.
+     *
+     * @param list<string> $probes
+     * @return array<string, ProbeResult>
+     */
+    public function runQueuedProbes(string $siteId, string $extractionId, array $probes): array
+    {
+        $payload = $this->readPayload($siteId, $extractionId);
+        $this->selectProbes($probes);
+
+        return $this->process($siteId, $extractionId, $payload, $probes);
+    }
+
+    /**
      * The worker's run: only if the extraction is still queued when claimed,
      * so an abort pressed after the worker listed it is honoured.
      *
@@ -109,6 +124,7 @@ final class Pipeline
                 $site = $probe->name() === 'crm'
                     ? $this->withBlogvault($context->site, $siteId, $extractionId, $results)
                     : $context->site;
+                $this->index->upsertProbeRun($siteId, $extractionId, $probe->name(), Index::PROBE_RUNNING, gmdate('Y-m-d\TH:i:s\Z'), 0);
                 $result = $this->runProbe($probe, $site);
 
                 $this->store->writeProbeResult($siteId, $extractionId, $probe->name(), $result->toArray());
@@ -129,6 +145,7 @@ final class Pipeline
             $this->evaluateRules($siteId, $extractionId, $payload, $allProbes);
         } catch (Throwable $e) {
             $this->index->setExtractionStatus($siteId, $extractionId, Index::STATUS_ERROR);
+            $this->index->failUnfinishedProbeRuns($siteId, $extractionId);
 
             throw $e;
         }

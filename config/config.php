@@ -35,11 +35,6 @@ return [
     // Accept unsigned payloads (no X-SWP-Signature). Dev only.
     'allow_unsigned' => false,
 
-    // Dev only: a "Debugging tools" panel on the extraction page that re-runs
-    // chosen probes on demand, even on a done (frozen) extraction, spending
-    // real probe quota. Never enable in production.
-    'debugging_tools' => false,
-
     // Max age (seconds) of X-SWP-Timestamp, in both directions.
     'replay_window_seconds' => 300,
 

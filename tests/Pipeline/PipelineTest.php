@@ -70,6 +70,34 @@ final class PipelineTest extends TestCase
         $this->assertCount(2, $runs);
     }
 
+    public function testQueuedProbeRunsRunInTheBackgroundAndKeepTheExtractionDone(): void
+    {
+        $registry = new ProbeRegistry(['fine', 'other']);
+        $registry->register(new StubProbe('fine', ProbeResult::STATUS_OK));
+        $registry->register(new StubProbe('other', ProbeResult::STATUS_OK));
+        $this->pipeline($registry)->run(self::SITE_ID, $this->extractionId);
+
+        $this->index->queueProbeRuns(self::SITE_ID, $this->extractionId, ['fine']);
+        $job = $this->index->queuedProbeRuns()[0];
+        $this->assertSame(['fine'], $job['probes']);
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+
+        $this->pipeline($registry)->runQueuedProbes($job['site_id'], $job['extraction_id'], $job['probes']);
+
+        $this->assertSame([], $this->index->queuedProbeRuns());
+        $this->assertSame(['fine' => 'ok', 'other' => 'ok'], array_column($this->index->listProbeRuns(self::SITE_ID, $this->extractionId), 'status', 'probe'));
+        $this->assertSame('done', $this->index->getExtraction(self::SITE_ID, $this->extractionId)['status']);
+    }
+
+    public function testAProbeLeftRunningByADeadWorkerFails(): void
+    {
+        $this->index->upsertProbeRun(self::SITE_ID, $this->extractionId, 'fine', Index::PROBE_RUNNING, '2026-07-22T14:31:00Z', 0);
+
+        $this->index->requeueStale(30);
+
+        $this->assertSame('error', $this->index->listProbeRuns(self::SITE_ID, $this->extractionId)[0]['status']);
+    }
+
     public function testWritesNeutralFindingsWhenRuleEnginePresent(): void
     {
         $rules  = \SatelliteWP\Manager\Rules\RuleCatalog::load(dirname(__DIR__, 2) . '/config/rules.php');

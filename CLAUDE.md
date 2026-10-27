@@ -30,8 +30,9 @@ framework.
   of scope, not "coming soon".
 - **Snapshots are frozen.** A `done` extraction is never re-probed silently.
   Rule changes are applied to stored extractions with `rules:reevaluate`
-  (always `--dry-run` first); re-probing is the explicit `debugging_tools`
-  re-run or `pipeline:run`/`probe:run`, both of which overwrite stored data.
+  (always `--dry-run` first); re-probing is the analyst's explicit **Re-run probes**
+  (capability `extraction_run`) or `pipeline:run`/`probe:run`, all of which
+  overwrite stored data.
 - **Two repos, one protocol.** The plugin lives at
   `/home/extractor/webapps/wpsite/public/wp-content/plugins/satellitewp-plugin-maintenance`
   (own git repo, editable). Protocol changes (headers, signed string,
@@ -300,7 +301,14 @@ show its provenance (`src_note()`: payload = as reported by the plugin, probe
 filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `license_select()` saves via `fetch()` (`requestSubmit()`, since
 `form.submit()` fires no submit event). Assets are vendored, no CDN, no build.
-`debugging_tools` (config, dev only) adds a re-run panel on done or failed extractions.
+**Re-run probes** (done or failed extraction, `extraction_run`) queues the chosen
+probes as `queued` rows in `probe_runs`; `ingest:process` runs them
+(`Pipeline::runQueuedProbes`, each probe `running` while it runs) and
+re-evaluates the rules, the extraction keeping its status and data. While any
+enabled probe is not completed (no row or queued = not started, running or a
+pending audit = in progress, error = failed), a box above everything lists
+each probe's state; the page refreshes while the worker has queued or running
+probes. A worker that dies leaves `running` rows that `--requeue-stale` fails.
 Run and Abort are conditional updates (409 when the worker moved the
 extraction meanwhile); an abort is also stored in `meta.json` so
 `index:rebuild` keeps it.
@@ -351,7 +359,7 @@ Regenerate `docs/rules-catalog.md` after any rules or lang change.
 `config/config.php` (committed) + `config/config.local.php` (gitignored):
 API keys (`pagespeed`, `blogvault`, `wordfence`, `seranking`), `crm_db.*`, Google OAuth,
 `app.base_url` (absolute URLs for report links, icons and the OAuth
-callback; the request host is used only when empty), `debugging_tools`.
+callback; the request host is used only when empty).
 
 ## Decided — don't re-propose
 

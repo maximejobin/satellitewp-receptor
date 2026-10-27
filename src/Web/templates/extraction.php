@@ -153,12 +153,37 @@ $mobilePs = $ps['mobile'] ?? (is_array(reset($ps)) ? reset($ps) : []);
 
 <?php
 $status = (string) ($row['status'] ?? '');
-echo match ($notice) {
-    'rerun-done'   => notice('success', 'Probes re-run and findings re-evaluated.'),
-    'rerun-none'   => notice('warning', 'No probe selected — nothing was re-run.'),
-    'rerun-failed' => notice('critical', 'The re-run failed' . ($noticeRef !== '' ? ' (log ref <span class="mono">' . e($noticeRef) . '</span>)' : '') . '.'),
-    default        => '',
-};
+// Every probe's state while any of them is not completed; nothing once they all are.
+$progressStates = array_count_values($probeProgress);
+if (in_array($status, ['queued', 'running', 'done', 'error'], true) && count($probeProgress) !== ($progressStates['completed'] ?? 0)) {
+    $stateBadges = [
+        'not_started' => ['badge-muted', 'Not started'],
+        'in_progress' => ['badge-pending', 'In progress'],
+        'completed'   => ['badge-ok', 'Completed'],
+        'failed'      => ['badge-error', 'Failed'],
+    ];
+    $progressItems = '';
+    foreach ($probeProgress as $probeName => $state) {
+        [$badgeClass, $badgeText] = $stateBadges[$state];
+        $progressItems .= '<li><span class="mono">' . e($probeName) . '</span> <span class="badge ' . $badgeClass . '">' . $badgeText . '</span></li>';
+    }
+    echo notice(
+        $probesWorking ? 'progress' : (isset($progressStates['failed']) ? 'critical' : 'warning'),
+        '<strong>Probes: ' . ($progressStates['completed'] ?? 0) . ' of ' . count($probeProgress) . ' completed.</strong>'
+            . ($probesWorking ? ' This page refreshes until the worker is done.' : '')
+            . '<ul class="probe-progress">' . $progressItems . '</ul>'
+    );
+    if ($probesWorking && in_array($status, ['done', 'error'], true)): ?>
+        <script>
+        // Leaves an open dialog or a field being typed in alone.
+        setInterval(function () {
+          var busy = document.querySelector('dialog[open]') || (document.activeElement && document.activeElement.matches('input, textarea, select'));
+          if (!busy) { location.reload(); }
+        }, 5000);
+        </script>
+    <?php endif;
+}
+echo $notice === 'rerun-none' ? notice('warning', 'No probe selected — nothing was re-run.') : '';
 // Sections the plugin could not read are missing: their rules say "unknown", never a verdict.
 $collectorErrors = is_array($payload['collector_errors'] ?? null) ? array_values(array_filter($payload['collector_errors'], 'is_array')) : [];
 if ($collectorErrors !== []) {
@@ -215,6 +240,9 @@ if ($status !== 'done'):
                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                 <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
                 <button type="submit" class="btn">Retry analysis</button>
+                <?php if ($canRerun): ?>
+                    <button type="button" class="btn btn-secondary rerun-open">Re-run some probes</button>
+                <?php endif; ?>
             </form>
         <?php elseif ($status === 'aborted'): ?>
             <?= notice('info', '<b>Aborted.</b> This extraction was not analysed — an analyst chose to skip it.') ?>
@@ -323,6 +351,9 @@ if ($status !== 'done'):
             </div>
             <div class="xt-hero-actions">
                 <button type="button" class="btn-ghost" data-print><?= report_icon('printer') ?> Print report</button>
+                <?php if ($canRerun): ?>
+                    <button type="button" class="btn-ghost rerun-open"><?= report_icon('rerun') ?> Re-run probes</button>
+                <?php endif; ?>
                 <?php if ($findings !== null): ?>
                     <a class="btn-ghost mono" href="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/raw/findings"><?= report_icon('raw') ?> findings.json</a>
                     <button type="button" class="btn-ghost" id="xt-report-key-btn"
@@ -1381,22 +1412,43 @@ if ($status !== 'done'):
 </div>
 <?php endif; // status === 'done' ?>
 
-<?php if ($debuggingTools && in_array($status, ['done', 'error'], true)): ?>
-    <details class="section" style="margin-top:1.5rem">
-        <summary style="padding:.8rem 1.1rem;cursor:pointer"><b>Debugging tools</b> <span class="muted">(debugging_tools is on)</span></summary>
-        <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/rerun"
-              style="padding:0 1.1rem 1.1rem;display:flex;flex-direction:column;gap:.6rem"
-              onsubmit="return confirm('Re-run the selected probes now? This overwrites their stored results and re-evaluates every rule.')">
+<?php if ($canRerun && in_array($status, ['done', 'error'], true)): ?>
+    <dialog id="rerun-dialog" class="obs-dialog" aria-labelledby="rerun-dialog-title">
+        <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/rerun">
             <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-            <p class="muted" style="margin:0">Runs synchronously in this request, whatever the extraction's status — this bypasses the frozen-snapshot rule.</p>
-            <div style="display:flex;gap:1rem;flex-wrap:wrap">
-                <?php foreach ($rerunProbes as $probeName): ?>
-                    <label style="display:flex;gap:.3rem;align-items:center" class="mono">
-                        <input type="checkbox" name="probes[]" value="<?= e($probeName) ?>"> <?= e($probeName) ?>
-                    </label>
-                <?php endforeach; ?>
+            <header class="obs-dialog-head">
+                <h3 id="rerun-dialog-title">Re-run probes</h3>
+                <button type="button" class="json-dialog-close rerun-close" aria-label="Close">&times;</button>
+            </header>
+            <div class="obs-dialog-body">
+                <p style="margin:0">The selected probes run again in the background and replace their stored results; the findings are then re-evaluated.</p>
+                <div class="rerun-probes">
+                    <?php foreach ($probeProgress as $probeName => $state): ?>
+                        <label class="obs-include">
+                            <input type="checkbox" name="probes[]" value="<?= e($probeName) ?>" <?= in_array($state, ['failed', 'not_started'], true) ? 'checked' : '' ?>>
+                            <span class="mono"><?= e($probeName) ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
-            <div><button type="submit" class="btn btn-secondary">Re-run selected probes</button></div>
+            <footer class="obs-dialog-foot">
+                <button type="button" class="btn btn-muted rerun-all" style="margin-right:auto">Select all</button>
+                <button type="button" class="btn btn-muted rerun-close">Cancel</button>
+                <button type="submit" class="btn">Re-run</button>
+            </footer>
         </form>
-    </details>
+    </dialog>
+    <script>
+    (function () {
+      var dialog = document.getElementById('rerun-dialog');
+      if (!dialog || typeof dialog.showModal !== 'function') { return; }
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('.rerun-open')) { dialog.showModal(); return; }
+        if (e.target.closest('.rerun-close') || e.target === dialog) { dialog.close(); return; }
+        if (e.target.closest('.rerun-all')) {
+          dialog.querySelectorAll('input[type="checkbox"]').forEach(function (box) { box.checked = true; });
+        }
+      });
+    })();
+    </script>
 <?php endif; ?>

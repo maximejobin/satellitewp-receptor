@@ -6,6 +6,7 @@ namespace SatelliteWP\Manager\Tests\Http;
 
 use SatelliteWP\Manager\App;
 use SatelliteWP\Manager\Config;
+use SatelliteWP\Manager\Http\Controller\ExtractionController;
 use SatelliteWP\Manager\Http\Router;
 use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Tests\TestCase;
@@ -31,17 +32,41 @@ final class ExtractionRerunRouteTest extends TestCase
         parent::tearDown();
     }
 
-    public function testRerunIsNotFoundWhenDebuggingToolsAreOff(): void
+    public function testRerunQueuesTheSelectedProbesAndKeepsTheExtractionDone(): void
     {
-        $response = $this->post($this->app(['debugging_tools' => false]), ['probes' => ['http']]);
+        $app      = $this->app([]);
+        $response = $this->post($app, ['probes' => ['http', 'not-a-probe']]);
 
-        $this->assertSame(404, $response->status);
+        $this->assertSame(303, $response->status);
+        $this->assertSame([['site_id' => self::SITE, 'extraction_id' => $this->extractionId, 'probes' => ['http']]], $app->index()->queuedProbeRuns());
+        $this->assertSame(Index::STATUS_DONE, $app->index()->getExtraction(self::SITE, $this->extractionId)['status']);
+
+        $page = new RecordingResponse();
+        ob_start();
+        (new Router($app, $page))->dispatch('/site/' . self::SITE . '/extraction/' . $this->extractionId);
+        $page->body .= (string) ob_get_clean();
+        $this->assertStringContainsString('<span class="mono">http</span> <span class="badge badge-muted">Not started</span>', $page->body);
+        $this->assertStringContainsString('id="rerun-dialog"', $page->body);
+    }
+
+    public function testProbeProgressReadsEachProbesRow(): void
+    {
+        $this->assertSame(
+            ['dns' => 'not_started', 'http' => 'not_started', 'tls' => 'in_progress', 'seranking' => 'in_progress', 'mail' => 'failed', 'rdap' => 'completed', 'crm' => 'completed'],
+            ExtractionController::probeProgress(['dns', 'http', 'tls', 'seranking', 'mail', 'rdap', 'crm'], [
+                ['probe' => 'http', 'status' => 'queued'],
+                ['probe' => 'tls', 'status' => 'running'],
+                ['probe' => 'seranking', 'status' => 'pending'],
+                ['probe' => 'mail', 'status' => 'error'],
+                ['probe' => 'rdap', 'status' => 'ok'],
+                ['probe' => 'crm', 'status' => 'warn'],
+            ])
+        );
     }
 
     public function testRerunIsForbiddenWithoutTheExtractionRunCapability(): void
     {
         $app = $this->app([
-            'debugging_tools' => true,
             'auth'            => ['google' => ['client_id' => 'id', 'client_secret' => 'secret']],
         ]);
         $app->userStore()->add('admin@example.com', 'admin');
@@ -55,7 +80,7 @@ final class ExtractionRerunRouteTest extends TestCase
 
     public function testRerunOfAnUnknownExtractionIsNotFound(): void
     {
-        $app      = $this->app(['debugging_tools' => true]);
+        $app      = $this->app([]);
         $response = new RecordingResponse();
 
         (new Router($app, $response))->handlePost('/site/' . self::SITE . '/extraction/20260101T000000Z/rerun');
@@ -65,7 +90,7 @@ final class ExtractionRerunRouteTest extends TestCase
 
     public function testRerunWithNoKnownProbeSelectedRunsNothing(): void
     {
-        $response = $this->post($this->app(['debugging_tools' => true]), ['probes' => ['not-a-probe']]);
+        $response = $this->post($this->app([]), ['probes' => ['not-a-probe']]);
 
         $this->assertSame(303, $response->status);
         $this->assertStringContainsString('notice=rerun-none', (string) $response->location());
@@ -75,7 +100,7 @@ final class ExtractionRerunRouteTest extends TestCase
     {
         $_POST['_csrf'] = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
-        $response = $this->post($this->app(['debugging_tools' => true]), ['probes' => ['http']]);
+        $response = $this->post($this->app([]), ['probes' => ['http']]);
 
         $this->assertSame(400, $response->status);
     }

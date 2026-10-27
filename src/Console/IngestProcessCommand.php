@@ -66,8 +66,6 @@ final class IngestProcessCommand extends Command
             if ($queued === []) {
                 // Runs every minute from cron: an idle run writes nothing unless -v.
                 $output->writeln('No queued extractions.', OutputInterface::VERBOSITY_VERBOSE);
-
-                return $failures === 0 ? Command::SUCCESS : Command::FAILURE;
             }
 
             foreach ($queued as $row) {
@@ -90,11 +88,44 @@ final class IngestProcessCommand extends Command
                 }
             }
 
+            $failures += $this->rerunProbes($output, (int) $input->getOption('limit'));
+
             return $failures === 0 ? Command::SUCCESS : Command::FAILURE;
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
         }
+    }
+
+    /** @return int number of re-runs that failed */
+    private function rerunProbes(OutputInterface $output, int $limit): int
+    {
+        $index    = $this->app->index();
+        $failures = 0;
+        foreach ($index->queuedProbeRuns($limit) as $job) {
+            ['site_id' => $siteId, 'extraction_id' => $extractionId, 'probes' => $probes] = $job;
+            $status = (string) ($index->getExtraction($siteId, $extractionId)['status'] ?? '');
+            // A queued or running analysis re-runs every probe anyway.
+            if (in_array($status, [Index::STATUS_QUEUED, Index::STATUS_RUNNING], true)) {
+                continue;
+            }
+            if (!in_array($status, [Index::STATUS_DONE, Index::STATUS_ERROR], true)) {
+                $index->failUnfinishedProbeRuns($siteId, $extractionId);
+                continue;
+            }
+
+            $output->write("Re-running {$siteId}/{$extractionId} [" . implode(' ', $probes) . '] … ');
+            try {
+                $this->app->pipeline()->runQueuedProbes($siteId, $extractionId, $probes);
+                $output->writeln('<info>done</info>');
+            } catch (Throwable $e) {
+                $failures++;
+                $index->failUnfinishedProbeRuns($siteId, $extractionId);
+                $output->writeln('<error>failed: ' . $e->getMessage() . '</error>');
+            }
+        }
+
+        return $failures;
     }
 
     /** @return int 1 when polling failed, so the run exits non-zero */

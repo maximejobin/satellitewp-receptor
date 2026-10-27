@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager\Http\Controller;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
+use SatelliteWP\Manager\Domain\ProbeResult;
 use SatelliteWP\Manager\Http\ExtractionBundle;
 use SatelliteWP\Manager\Http\ReportContract;
 use SatelliteWP\Manager\Http\Router;
@@ -40,7 +41,8 @@ final class ExtractionController extends Controller
 
         // The pre-flights only matter while the analyst decides whether to run (live calls, so not on every queued-page refresh).
         $awaiting       = (string) ($row['status'] ?? '') === Index::STATUS_PENDING;
-        $debuggingTools = (bool) $this->app->config->get('debugging_tools', false) && $this->currentUserCan('extraction_run');
+        $probeNames     = array_map(static fn ($probe): string => $probe->name(), $this->app->probeRegistry()->enabled());
+        $probeRuns      = $this->app->index()->listProbeRuns($siteId, $extractionId);
 
         $this->render('extraction', [
             'title'               => 'Extraction ' . $extractionId,
@@ -69,12 +71,11 @@ final class ExtractionController extends Controller
             'observationsImport'  => $this->takeImportFlash("{$siteId}/{$extractionId}"),
             'observationErrors'   => $this->takeObservationErrors("{$siteId}/{$extractionId}"),
             'licenseStatuses'     => $store->readLicenses($siteId, $extractionId) ?? [],
-            'debuggingTools'      => $debuggingTools,
-            'rerunProbes'         => $debuggingTools
-                ? array_map(static fn ($probe): string => $probe->name(), $this->app->probeRegistry()->enabled())
-                : [],
+            'canRerun'            => $this->currentUserCan('extraction_run'),
+            'probeProgress'       => self::probeProgress($probeNames, $probeRuns),
+            // Only the worker's own steps refresh the page: a remote audit can stay pending for hours.
+            'probesWorking'       => array_intersect(array_column($probeRuns, 'status'), [Index::PROBE_QUEUED, Index::PROBE_RUNNING]) !== [],
             'notice'              => (string) ($_GET['notice'] ?? ''),
-            'noticeRef'           => (string) ($_GET['ref'] ?? ''),
         ]);
     }
 
@@ -183,21 +184,39 @@ final class ExtractionController extends Controller
     }
 
     /**
-     * POST …/rerun — config `debugging_tools` only (a dev escape hatch):
-     * re-runs the chosen probes synchronously on a done or failed extraction,
-     * the one deliberate bypass of the frozen-snapshot rule. Absent (404)
-     * when the flag is off.
+     * Each enabled probe's state for this extraction, from its index row:
+     * no row or queued = not started, running or a remote audit still
+     * pending = in progress, error = failed, anything else = completed.
+     *
+     * @param list<string> $probeNames
+     * @param list<array<string, mixed>> $runs
+     * @return array<string, string> probe name => not_started|in_progress|completed|failed
+     */
+    public static function probeProgress(array $probeNames, array $runs): array
+    {
+        $status = array_column($runs, 'status', 'probe');
+        $states = [];
+        foreach ($probeNames as $name) {
+            $states[$name] = match ($status[$name] ?? null) {
+                null, Index::PROBE_QUEUED                     => 'not_started',
+                Index::PROBE_RUNNING, ProbeResult::STATUS_PENDING => 'in_progress',
+                ProbeResult::STATUS_ERROR                     => 'failed',
+                default                                       => 'completed',
+            };
+        }
+
+        return $states;
+    }
+
+    /**
+     * POST …/rerun — queues the chosen probes of a done or failed extraction
+     * for the worker, which overwrites their stored results and re-evaluates
+     * the rules; the page shows each probe's progress meanwhile.
      *
      * @param array<string, string> $params
      */
     public function rerun(array $params): void
     {
-        if (!$this->app->config->get('debugging_tools', false)) {
-            $this->notFound();
-
-            return;
-        }
-
         [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
         // Pending or queued belongs to the worker: a partial run would mark it done.
         if (!$this->requireCapability('extraction_run')
@@ -218,16 +237,8 @@ final class ExtractionController extends Controller
             return;
         }
 
-        try {
-            $this->app->pipeline()->run($siteId, $extractionId, $probes);
-        } catch (\Throwable $e) {
-            $ref = $this->app->errorLog()->recordThrowable('rerun', $e);
-            $this->redirect(Router::withQueryParam(Router::withQueryParam($page, 'notice', 'rerun-failed'), 'ref', $ref));
-
-            return;
-        }
-
-        $this->redirect(Router::withQueryParam($page, 'notice', 'rerun-done'));
+        $this->app->index()->queueProbeRuns($siteId, $extractionId, $probes);
+        $this->redirect($page);
     }
 
     /**

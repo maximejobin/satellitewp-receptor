@@ -18,6 +18,9 @@ final class Index
     public const string STATUS_QUEUED  = 'queued';
     public const string STATUS_RUNNING = 'running';
     public const string STATUS_DONE    = 'done';
+    /** probe_runs statuses besides a ProbeResult's own (ok, warn, error, pending). */
+    public const string PROBE_QUEUED  = 'queued';
+    public const string PROBE_RUNNING = 'running';
     public const string STATUS_ERROR   = 'error';
     public const string STATUS_ABORTED = 'aborted';
 
@@ -238,6 +241,55 @@ final class Index
             SQL)->execute(['now' => gmdate('Y-m-d\TH:i:s\Z'), 'site_id' => $siteId, 'id' => $extractionId]);
     }
 
+    /**
+     * A re-run an analyst asked for: the worker picks these rows up
+     * (queuedProbeRuns()) while the extraction keeps its status and data.
+     *
+     * @param list<string> $probes
+     */
+    public function queueProbeRuns(string $siteId, string $extractionId, array $probes): void
+    {
+        foreach ($probes as $probe) {
+            $this->upsertProbeRun($siteId, $extractionId, $probe, self::PROBE_QUEUED, gmdate('Y-m-d\TH:i:s\Z'), 0);
+        }
+    }
+
+    /**
+     * Extractions with queued probe re-runs, oldest request first.
+     *
+     * @return list<array{site_id: string, extraction_id: string, probes: list<string>}>
+     */
+    public function queuedProbeRuns(int $limit = 10): array
+    {
+        $stmt = $this->pdo()->prepare(<<<'SQL'
+            SELECT site_id, extraction_id, probe FROM probe_runs
+            WHERE status = :status
+            ORDER BY ran_at ASC, probe ASC
+            SQL);
+        $stmt->execute(['status' => self::PROBE_QUEUED]);
+
+        $grouped = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $key = $row['site_id'] . '/' . $row['extraction_id'];
+            if (!isset($grouped[$key]) && count($grouped) >= $limit) {
+                continue;
+            }
+            $grouped[$key] ??= ['site_id' => (string) $row['site_id'], 'extraction_id' => (string) $row['extraction_id'], 'probes' => []];
+            $grouped[$key]['probes'][] = (string) $row['probe'];
+        }
+
+        return array_values($grouped);
+    }
+
+    /** Queued or running probe rows of an extraction whose run broke off become failures. */
+    public function failUnfinishedProbeRuns(string $siteId, string $extractionId): void
+    {
+        $this->pdo()->prepare(<<<'SQL'
+            UPDATE probe_runs SET status = 'error'
+            WHERE site_id = :site_id AND extraction_id = :extraction_id AND status IN ('queued', 'running')
+            SQL)->execute(['site_id' => $siteId, 'extraction_id' => $extractionId]);
+    }
+
     public function upsertProbeRun(
         string $siteId,
         string $extractionId,
@@ -312,6 +364,10 @@ final class Index
         $stmt->bindValue('max', self::MAX_ATTEMPTS, PDO::PARAM_INT);
         $stmt->bindValue('cutoff', $cutoff);
         $stmt->execute();
+
+        // A probe left running by a worker that died never finishes on its own.
+        $this->pdo()->prepare("UPDATE probe_runs SET status = 'error' WHERE status = :running AND ran_at < :cutoff")
+            ->execute(['running' => self::PROBE_RUNNING, 'cutoff' => $cutoff]);
 
         return $stmt->rowCount();
     }

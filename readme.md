@@ -28,7 +28,7 @@ chmod 600 config/config.local.php                          # il contient les sec
 `config/config.local.php` en production doit définir : `app.base_url` (URL de
 l'admin, sinon les liens du rapport et le retour OAuth suivent l'en-tête Host),
 `auth.google.*`, les clés `pagespeed`, `blogvault`, `wordfence`, `seranking`,
-`mail.*` et `crm_db.*`. Il ne doit **jamais** contenir `debugging_tools`,
+`mail.*` et `crm_db.*`. Il ne doit **jamais** contenir
 `allow_unsigned`, `auth.open_mode` ni `web.*` (secours de développement).
 
 **Deux applications, deux vhosts, qui ne se parlent pas.** Elles partagent le
