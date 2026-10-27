@@ -1125,7 +1125,7 @@ if ($status !== 'done'):
                     $auditNote = notice('warning', '<b>Site audit failed.</b> ' . e(implode(' ', (array) ($audit['errors'] ?? []))));
                 } else {
                     $totals    = (array) ($auditData['totals'] ?? []);
-                    $auditRows = field_raw('Health score', isset($auditData['score']) ? badge_score((int) $auditData['score']) : '', null, 'probe.seranking.score')
+                    $auditRows = field_raw('Health score', ($totals['pages'] ?? null) === 0 ? 'N/A' : (isset($auditData['score']) ? badge_score((int) $auditData['score']) : ''), null, 'probe.seranking.score')
                         . field('Pages crawled', $totals['pages'] ?? null, null, 'probe.seranking.totals.pages')
                         . field('Errors', $totals['errors'] ?? null, ($totals['errors'] ?? 0) > 0 ? 'error' : 'ok', 'probe.seranking.totals.errors')
                         . field('Warnings', $totals['warnings'] ?? null, ($totals['warnings'] ?? 0) > 0 ? 'warn' : 'ok', 'probe.seranking.totals.warnings')

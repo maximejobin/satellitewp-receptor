@@ -5,19 +5,26 @@ declare(strict_types=1);
 namespace SatelliteWP\Manager\Pipeline;
 
 use SatelliteWP\Manager\Probe\SeRankingProbe;
+use SatelliteWP\Manager\Rules\Context;
+use SatelliteWP\Manager\Rules\RuleEngine;
 use SatelliteWP\Manager\Storage\DataStore;
 use SatelliteWP\Manager\Storage\Index;
 
 /**
  * Completes SE Ranking audits the pipeline left `pending`: each due one is
  * polled once and its probes/seranking.json and index row are rewritten.
+ * A finished or failed audit re-scores the extraction: its rules were
+ * evaluated while the audit was still pending.
  */
 final class AuditPoller
 {
+    /** @param array<string, mixed> $referenceData */
     public function __construct(
         private readonly SeRankingProbe $probe,
         private readonly DataStore $store,
         private readonly Index $index,
+        private readonly ?RuleEngine $ruleEngine = null,
+        private readonly array $referenceData = [],
     ) {
     }
 
@@ -47,6 +54,9 @@ final class AuditPoller
                 $updated = $this->probe->poll($envelope, $now);
                 $this->store->writeProbeResult($siteId, $extractionId, $this->probe->name(), $updated);
                 $this->record($siteId, $extractionId, $updated, $row);
+                if (($updated['status'] ?? null) !== 'pending') {
+                    $this->rescore($siteId, $extractionId);
+                }
             } catch (\Throwable $e) {
                 $lines[] = "{$siteId}/{$extractionId} failed: " . get_class($e);
                 continue;
@@ -56,6 +66,20 @@ final class AuditPoller
         }
 
         return $lines;
+    }
+
+    private function rescore(string $siteId, string $extractionId): void
+    {
+        $payload = $this->store->readExtractionPayload($siteId, $extractionId);
+        if ($this->ruleEngine === null || $payload === null
+            || ($this->index->getExtraction($siteId, $extractionId)['status'] ?? null) !== Index::STATUS_DONE) {
+            return;
+        }
+
+        $findings = $this->ruleEngine->evaluate(new Context($payload, $this->store->readAllProbeResults($siteId, $extractionId), $this->referenceData));
+        $findings['site_id']       = $siteId;
+        $findings['extraction_id'] = $extractionId;
+        $this->store->writeFindings($siteId, $extractionId, $findings);
     }
 
     /**

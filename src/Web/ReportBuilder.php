@@ -240,6 +240,8 @@ final class ReportBuilder
             'wordpress_status_label' => $this->wordpressStatus($v),
             'auto_update_core'       => $this->autoUpdateCore($v),
             'score_100'              => is_numeric($v) ? ((int) round((float) $v)) . '/100' : '',
+            'seranking_score'        => self::seRankingCrawledNothing($v) ? $this->t->status('na')
+                : (is_numeric($v['score'] ?? null) ? ((int) round((float) $v['score'])) . '/100' : ''),
             'count'                  => is_array($v) ? (string) count($v) : '',
             'number'                 => is_numeric($v) ? $this->formatNumber((float) $v) : '',
             'seranking_error_types'   => self::seRankingIssueTypes($v, 'error'),
@@ -280,7 +282,8 @@ final class ReportBuilder
                 (float) $v >= 50 => 'orange',
                 default          => 'red',
             } : null,
-            'seranking_score'         => is_numeric($v) ? ((float) $v >= 90 ? 'green' : 'orange') : null,
+            'seranking_score'         => !self::seRankingCrawledNothing($v) && is_numeric($v['score'] ?? null)
+                ? ((float) $v['score'] >= 90 ? 'green' : 'orange') : null,
             'red_if_any'              => is_numeric($v) && (float) $v > 0 ? 'red' : null,
             'orange_if_any'           => is_numeric($v) && (float) $v > 0 ? 'orange' : null,
             'seranking_error_types'   => (int) self::seRankingIssueTypes($v, 'error') > 0 ? 'red' : null,
@@ -314,6 +317,15 @@ final class ReportBuilder
             'tbt'                     => self::band($v, 200, 600),
             default                  => null,
         };
+    }
+
+    /**
+     * SE Ranking starts at 100 and subtracts per issue found: an audit that
+     * crawled no page (site blocking the crawler) still reports 100.
+     */
+    private static function seRankingCrawledNothing(mixed $audit): bool
+    {
+        return is_array($audit) && ($audit['totals']['pages'] ?? null) === 0;
     }
 
     /**

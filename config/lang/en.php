@@ -394,6 +394,13 @@ return [
             'fail' => 'No reachable sitemap was found: search engines discover your pages less efficiently. Have a sitemap published and its address declared in robots.txt.',
             'pass' => '{observed} reachable {observed|sitemap|sitemaps}.',
         ],
+        'C8' => [
+            'title' => 'Visibility analysis',
+            'title_success' => 'Visibility analysed',
+            'title_failure' => 'Visibility not analysed',
+            'fail' => 'The search visibility audit could not read any page of the site: the site would have blocked the analysis tool\'s requests. Its visibility in search engines could therefore not be assessed. The firewall or the host should be checked for blocking legitimate crawlers.',
+            'pass' => 'The search visibility audit analysed {observed} {observed|page|pages} of the site.',
+        ],
         'D1' => [
             'title' => 'Permission to send email (SPF)',
             'title_success' => 'Email sending authorized (SPF)',

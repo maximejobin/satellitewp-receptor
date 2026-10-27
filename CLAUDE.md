@@ -184,8 +184,10 @@ optional calls need `try/catch`.
   pending runs through the index and checks each at most every
   `poll_minutes`: finished = `ok` with score, totals and a flat `checks` list
   (passed ones included); cancelled/expired/404 or older than `give_up_hours`
-  = `error`; a transient API failure stays pending (`last_error`). No rule
-  reads it yet; the report shows its score, totals, issue types, the table
+  = `error`; a transient API failure stays pending (`last_error`). A
+  finished or failed audit re-scores the extraction (its rules ran while it
+  was pending). `C8` fails a finished audit that crawled no page (SE Ranking
+  starts at 100 and subtracts, so its score is then N/A); the report shows its score, totals, issue types, the table
   of affected checks and SE Ranking's domain estimates (`seranking_*`; a type
   is a check with at least one affected page). The
   finished report's `totals.pages` is the crawl size: `pages_crawled` is the
@@ -194,7 +196,7 @@ optional calls need `try/catch`.
   `Support\Secret::redact()` masks keys raw and URL-encoded in every stored
   error.
 
-**Rules (`src/Rules`, `config/rules.php`).** 77 active rules. Ids are the
+**Rules (`src/Rules`, `config/rules.php`).** 78 active rules. Ids are the
 category letter of the plugin's `.github/validations-techniques.txt` plus a
 number, sequential within each letter, no suffixes (that file's numbers are
 the original plan, not the current ids); a retired rule's successors are

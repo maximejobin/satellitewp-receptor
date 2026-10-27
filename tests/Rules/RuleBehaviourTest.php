@@ -286,6 +286,17 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload(), ['http' => ['status_code' => 403, 'security_headers' => []]])['B7']['status']);
     }
 
+    public function testAVisibilityAuditThatCrawledNoPageFails(): void
+    {
+        $c8 = fn (array $data): string => $this->evaluate($this->payload(), ['seranking' => $data])['C8']['status'];
+
+        // SE Ranking still reports 100 for an audit that read nothing.
+        $this->assertSame(Status::Fail->value, $c8(['state' => 'finished', 'score' => 100, 'totals' => ['pages' => 0]]));
+        $this->assertSame(Status::Pass->value, $c8(['state' => 'finished', 'score' => 80, 'totals' => ['pages' => 402]]));
+        $this->assertSame(Status::Unknown->value, $c8(['state' => 'processing', 'pages_crawled' => 0]));
+        $this->assertSame(Status::Unknown->value, $this->evaluate($this->payload())['C8']['status']);
+    }
+
         public function testRobotsAndSitemapAreUnknownWhenTheirRequestFailed(): void
     {
         $http = fn (array $robots): array => $this->evaluate($this->payload(), ['http' => [
@@ -730,7 +741,7 @@ final class RuleBehaviourTest extends TestCase
         $this->assertSame([
             'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8',
             'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12',
-            'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'D1', 'D2', 'D3', 'D4', 'W1',
+            'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'D1', 'D2', 'D3', 'D4', 'W1',
             'PS1', 'PS2', 'PS3', 'PS4', 'PS5',
             'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'F13', 'F14',
             'G1', 'G2', 'G3', 'G4', 'G5', 'H1', 'H2', 'I1', 'I2', 'J1',

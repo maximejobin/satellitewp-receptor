@@ -230,7 +230,7 @@ final class App
 
     public function auditPoller(): AuditPoller
     {
-        return $this->services[AuditPoller::class] ??= new AuditPoller($this->seRankingProbe(), $this->dataStore(), $this->index());
+        return $this->services[AuditPoller::class] ??= new AuditPoller($this->seRankingProbe(), $this->dataStore(), $this->index(), $this->ruleEngine(), $this->referenceData());
     }
 
     public function userStore(): UserStore

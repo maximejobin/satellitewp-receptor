@@ -9,7 +9,7 @@ republier cette page après un changement de règle :
 php bin/swpmgr rules:doc > docs/rules-catalog.md
 ```
 
-77 règles, 16 groupes.
+78 règles, 16 groupes.
 
 ## A. TLS / SSL
 
@@ -469,6 +469,23 @@ php bin/swpmgr rules:doc > docs/rules-catalog.md
             }
 
             return Check::pass(count($sitemaps));
+        },
+```
+
+### C8 — Analyse de la visibilité
+
+- **Catégorie :** SEO · **Source :** EXT · **Sévérité de base :** Moyenne · **Seuil configurable :** —
+- **Réussite (FR) :** L'audit de référencement a analysé {observed} pages du site.
+- **Échec (FR) :** L'audit de référencement n'a pu lire aucune page du site : le site aurait bloqué les requêtes de l'outil d'analyse. Sa visibilité dans les moteurs de recherche n'a donc pas pu être évaluée. Il faudrait vérifier que le pare-feu ou l'hébergeur ne bloque pas les robots d'exploration.
+
+```php
+        'check' => static function (Context $c) {
+            $pages = $c->get('probe.seranking.totals.pages');
+            if (!$c->probeRan('seranking') || $c->get('probe.seranking.state') !== 'finished' || !is_int($pages)) {
+                return Check::unknown();
+            }
+
+            return $pages === 0 ? Check::fail(0) : Check::pass($pages);
         },
 ```
 

@@ -13,6 +13,8 @@ use SatelliteWP\Manager\Pipeline\AuditPoller;
 use SatelliteWP\Manager\Pipeline\Pipeline;
 use SatelliteWP\Manager\Probe\ProbeRegistry;
 use SatelliteWP\Manager\Probe\SeRankingProbe;
+use SatelliteWP\Manager\Rules\RuleCatalog;
+use SatelliteWP\Manager\Rules\RuleEngine;
 use SatelliteWP\Manager\Storage\DataStore;
 use SatelliteWP\Manager\Storage\Index;
 use SatelliteWP\Manager\Tests\TestCase;
@@ -92,6 +94,25 @@ final class AuditPollerTest extends TestCase
         // Finished audits are no longer polled.
         $this->assertSame([], $poller->pollPending($now + 3600));
         $this->assertSame(0, $this->api->count());
+    }
+
+    public function testAFinishedAuditReScoresTheExtraction(): void
+    {
+        $this->index->setExtractionStatus(self::SITE_ID, $this->extractionId, Index::STATUS_DONE);
+        $this->index->upsertProbeRun(self::SITE_ID, $this->extractionId, 'seranking', 'pending', '2026-07-22T14:31:00Z', 0);
+        $this->store->writeProbeResult(self::SITE_ID, $this->extractionId, 'seranking', [
+            'probe' => 'seranking', 'status' => 'pending', 'ran_at' => '2026-07-22T14:31:00Z',
+            'data' => ['audit_id' => 42, 'state' => 'processing', 'created_at' => gmdate('c')],
+        ]);
+        $engine = new RuleEngine(RuleCatalog::load(dirname(__DIR__, 2) . '/config/rules.php'));
+
+        $this->api->append($this->json(['status' => 'finished']), $this->json([
+            'is_finished' => true, 'score_percent' => 100, 'total_pages' => 0, 'sections' => [],
+        ]));
+        (new AuditPoller($this->probe, $this->store, $this->index, $engine))->pollPending(time(), force: true);
+
+        $findings = array_column((array) $this->store->readFindings(self::SITE_ID, $this->extractionId)['findings'], null, 'id');
+        $this->assertSame('fail', $findings['C8']['status']);
     }
 
     public function testAnIndexRowWhoseFileMovedOnFollowsTheFile(): void

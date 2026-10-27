@@ -446,6 +446,13 @@ final class ReportBuilderTest extends TestCase
         self::assertNull($fields['seranking_errors']['color'], 'no error: no red');
         self::assertNull($fields['seranking_error_types']['color']);
 
+        // SE Ranking starts at 100: with no page crawled the score means nothing.
+        $context['probe']['seranking']['score']           = 100;
+        $context['probe']['seranking']['totals']['pages'] = 0;
+        $fields = $this->builder()->build($contract, $context, [])['fields'];
+        self::assertSame('N/A', $fields['seranking_score']['value']);
+        self::assertNull($fields['seranking_score']['color']);
+
         // Audit still crawling: nothing is known yet, so every field stays empty.
         $context['probe']['seranking'] = ['state' => 'processing', 'pages_crawled' => 120];
         $fields = $this->builder()->build($contract, $context, [])['fields'];

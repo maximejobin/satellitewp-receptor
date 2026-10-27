@@ -392,6 +392,13 @@ return [
             'fail' => 'Aucun plan du site accessible n\'a été trouvé : les moteurs de recherche découvrent vos pages moins efficacement. Faites publier un plan du site et déclarez son adresse dans robots.txt.',
             'pass' => '{observed} {observed|plan du site accessible|plans du site accessibles}.',
         ],
+        'C8' => [
+            'title' => 'Analyse de la visibilité',
+            'title_success' => 'Visibilité analysée',
+            'title_failure' => 'Visibilité non analysée',
+            'fail' => 'L\'audit de référencement n\'a pu lire aucune page du site : le site aurait bloqué les requêtes de l\'outil d\'analyse. Sa visibilité dans les moteurs de recherche n\'a donc pas pu être évaluée. Il faudrait vérifier que le pare-feu ou l\'hébergeur ne bloque pas les robots d\'exploration.',
+            'pass' => 'L\'audit de référencement a analysé {observed} {observed|page|pages} du site.',
+        ],
         'D1' => [
             'title' => 'Autorisation d\'envoi des courriels (SPF)',
             'title_success' => 'Envoi des courriels autorisé (SPF)',

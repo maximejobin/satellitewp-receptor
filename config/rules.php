@@ -484,6 +484,18 @@ return [
             return Check::pass(count($sitemaps));
         },
     ],
+    [
+        // SE Ranking scores 100 minus its findings: a finished audit that crawled no page proves nothing.
+        'id' => 'C8', 'category' => Category::SEO, 'source' => 'EXT', 'severity' => Severity::Medium,
+        'check' => static function (Context $c) {
+            $pages = $c->get('probe.seranking.totals.pages');
+            if (!$c->probeRan('seranking') || $c->get('probe.seranking.state') !== 'finished' || !is_int($pages)) {
+                return Check::unknown();
+            }
+
+            return $pages === 0 ? Check::fail(0) : Check::pass($pages);
+        },
+    ],
 
     // ====================================================================
     //  D. EMAIL DELIVERABILITY                                     [EXT]
