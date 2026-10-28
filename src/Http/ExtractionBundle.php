@@ -59,6 +59,7 @@ final class ExtractionBundle
         $licenses     = $store->readLicenses($siteId, $extractionId);
         $observations = $store->readObservations($siteId, $extractionId);
         $findingsData = $store->readFindings($siteId, $extractionId) ?? [];
+        $exclusions   = $store->readReportExclusions($siteId, $extractionId);
         $language     = ReportController::reportLocale(null, $meta);
         $t            = $this->app->translator($language);
 
@@ -81,7 +82,8 @@ final class ExtractionBundle
             $probes,
             $licenses ?? [],
             $findingsData,
-            $observations
+            $observations,
+            $exclusions
         );
         $contract = ReportContract::load($this->app);
         $report['fields'] = array_diff_key($report['fields'], array_flip(self::crmFields($contract)));
@@ -108,6 +110,9 @@ final class ExtractionBundle
         }
         if ($licenses !== null) {
             $files["{$root}/analysis/licenses.json"] = self::json($licenses);
+        }
+        if ($exclusions !== []) {
+            $files["{$root}/analysis/report-exclusions.json"] = self::json(['rules' => $exclusions]);
         }
         return $files;
     }

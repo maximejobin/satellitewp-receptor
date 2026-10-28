@@ -66,6 +66,7 @@ final class Router
         'extraction_observations'        => [ExtractionController::class, 'observations'],
         'extraction_observations_import' => [ExtractionController::class, 'importObservations'],
         'extraction_licenses'            => [ExtractionController::class, 'licenses'],
+        'extraction_report_exclusions'   => [ExtractionController::class, 'reportExclusions'],
         'users'                          => [UserController::class, 'save'],
         'profile'                        => [UserController::class, 'saveProfile'],
         'keys'                           => [SiteController::class, 'keys'],
@@ -83,6 +84,7 @@ final class Router
         'observations'        => 'extraction_observations',
         'observations-import' => 'extraction_observations_import',
         'licenses'            => 'extraction_licenses',
+        'report-exclusions'   => 'extraction_report_exclusions',
     ];
 
     /** Single-segment POST targets; users, profile and catalog also have a GET page. */
@@ -279,7 +281,7 @@ final class Router
             return null;
         }
 
-        return in_array($name, ['payload', 'meta', 'findings', 'observations', 'licenses'], true)
+        return in_array($name, ['payload', 'meta', 'findings', 'observations', 'licenses', 'report-exclusions'], true)
             ? "{$name}.json"
             : "probes/{$name}.json";
     }

@@ -40,8 +40,8 @@ framework.
   mirrors the plugin's collectors exactly (maps keyed by plugin file /
   stylesheet, WP count objects, all 22 constants with the `"N/A"` sentinel).
 - **`data/` holds raw data + analysis only**: `payload.json`, `meta.json`,
-  `probes/*.json`, `findings.json`, plus analyst inputs `observations.json`
-  and `licenses.json`. No derived files. HTTP 500s go to `logs/`. Also
+  `probes/*.json`, `findings.json`, plus analyst inputs `observations.json`,
+  `licenses.json` and `report-exclusions.json`. No derived files. HTTP 500s go to `logs/`. Also
   written on purpose: `site.json`, `events/*.jsonl`, `integrity/*.json`,
   `*.lock` files and the replay/report-token caches.
 - **Source files are language-neutral.** Findings and probes carry ids,
@@ -320,6 +320,11 @@ HubSpot or Teamwork id, orphan subscriptions, CRM database unreachable; cached 5
 An absent value renders as an empty cell in the web UI, never a dash. In the
 client report too, a value whose source was never read stays empty, never
 a dash; "None"/"0" is only said of a source that was read.
+Each findings row with a text has a checkbox: unchecked, the rule is left
+out of that extraction's report (`report-exclusions.json`, rule ids, whatever
+the status: it survives `rules:reevaluate` and re-runs; `ReportDocument`
+filters it, so report.json and the bundle's report and Markdown omit it, raw
+`findings.json` keeps it).
 Observations are added and edited in a native `<dialog>` (one form for both, prefilled from the row's `data-obs`); they can also be appended from a CSV (`Web\ObservationsCsv`: header
 `section,color,title,description,include`, comma or semicolon, UTF-8; one
 invalid row and nothing is imported, the errors are flashed per line) and

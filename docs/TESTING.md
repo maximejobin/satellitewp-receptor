@@ -155,6 +155,9 @@ Open `http://127.0.0.1:8081/`.
   failed) until the worker has run them all, then disappears.
 - ✅ **Copy Extraction URL** copies a one-hour URL; `curl` on it returns the report
   JSON with every `{{variable}}` of the Google Doc template.
+- ✅ Unchecking a findings row dims it and saves at once (reload keeps it,
+  "Excluded from the report" filter lists it); the report JSON no longer has
+  that rule, even after a re-run changes its status.
 
 Guards:
 

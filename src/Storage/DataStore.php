@@ -12,7 +12,7 @@ use Throwable;
  *
  * Layout:
  *   data/sites/<site_id>/site.json
- *   data/sites/<site_id>/extractions/<id>/{payload,meta,findings,observations,licenses}.json
+ *   data/sites/<site_id>/extractions/<id>/{payload,meta,findings,observations,licenses,report-exclusions}.json
  *   data/sites/<site_id>/extractions/<id>/probes/<probe>.json
  *   data/sites/<site_id>/extractions/latest        (symlink)
  *   data/sites/<site_id>/events/<YYYY-MM>.jsonl
@@ -245,6 +245,30 @@ final class DataStore
         });
 
         return true;
+    }
+
+    /**
+     * report-exclusions.json: the rule ids the analyst left out of this
+     * extraction's report, whatever their status ({"rules": ["F12", ...]}).
+     *
+     * @return list<string>
+     */
+    public function readReportExclusions(string $siteId, string $extractionId): array
+    {
+        $decoded = $this->readJson($this->extractionDir($siteId, $extractionId) . '/report-exclusions.json');
+
+        return array_values(array_filter((array) ($decoded['rules'] ?? []), 'is_string'));
+    }
+
+    public function setReportExclusion(string $siteId, string $extractionId, string $ruleId, bool $excluded): void
+    {
+        $this->withExtractionLock($siteId, $extractionId, function () use ($siteId, $extractionId, $ruleId, $excluded): void {
+            $ids = array_values(array_diff($this->readReportExclusions($siteId, $extractionId), [$ruleId]));
+            if ($excluded) {
+                $ids[] = $ruleId;
+            }
+            $this->writeJson($this->extractionDir($siteId, $extractionId) . '/report-exclusions.json', ['rules' => $ids]);
+        });
     }
 
     /** @return array<string, mixed>|null */

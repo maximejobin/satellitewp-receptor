@@ -23,6 +23,7 @@ final class ReportDocument
      * @param array<string, mixed>                $licenses
      * @param array<string, mixed>                $findingsData  findings.json
      * @param array<string, mixed>|null           $observations  observations.json
+     * @param list<string>                        $excludedRules report-exclusions.json: left out of every field
      * @return array<string, mixed>
      */
     public static function build(
@@ -38,6 +39,7 @@ final class ReportDocument
         array $licenses,
         array $findingsData,
         ?array $observations,
+        array $excludedRules = [],
     ): array {
         $context = ReportContext::build(
             $payload,
@@ -51,7 +53,10 @@ final class ReportDocument
             gmdate('Y-m-d')
         );
 
-        $findings = ReportContext::translatedFindings($findingsData, $t);
+        $findings = array_values(array_filter(
+            ReportContext::translatedFindings($findingsData, $t),
+            static fn (array $f): bool => !in_array($f['id'], $excludedRules, true)
+        ));
         $contract = ReportContract::load($app);
         $resolved = DefaultObservations::resolve(DefaultObservations::items($observations, $contract), $t);
 

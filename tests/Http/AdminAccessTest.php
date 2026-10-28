@@ -215,6 +215,39 @@ final class AdminAccessTest extends TestCase
     }
 
     #[Test]
+    public function anExcludedRuleIsLeftOutOfTheReportWhateverItsStatus(): void
+    {
+        $app          = $this->app(['auth' => ['open_mode' => true]]);
+        $extractionId = $this->storeExtraction($app, Index::STATUS_DONE);
+        $base         = '/site/' . self::SITE . '/extraction/' . $extractionId;
+        $finding      = static fn (string $id, string $status, string $pastille): array => [
+            'id' => $id, 'category' => 'UPDATES', 'status' => $status, 'pastille' => $pastille, 'severity' => 'medium', 'data' => [],
+        ];
+        $app->dataStore()->writeFindings(self::SITE, $extractionId, ['findings' => [
+            $finding('F12', 'fail', 'orange'), $finding('F1', 'pass', 'green'),
+        ]]);
+
+        $this->assertSame(400, $this->post($app, $base . '/report-exclusions', ['rule' => 'Z9', 'excluded' => '1'])->status);
+        $this->assertSame(303, $this->post($app, $base . '/report-exclusions', ['rule' => 'F12', 'excluded' => '1'])->status);
+        $this->assertSame(['F12'], $app->dataStore()->readReportExclusions(self::SITE, $extractionId));
+        $this->assertStringContainsString('frow-excluded', $this->get($app, $base)->body);
+
+        // A re-evaluation that turns it green keeps it out.
+        $app->dataStore()->writeFindings(self::SITE, $extractionId, ['findings' => [
+            $finding('F12', 'pass', 'green'), $finding('F1', 'pass', 'green'),
+        ]]);
+        $_GET   = ['token' => $app->reportTokenStore()->issue(self::SITE, $extractionId)];
+        $report = json_decode($this->get($app, $base . '/report.json')->body, true);
+        $this->assertSame(['F1'], array_column($report['findings'], 'id'));
+        $titles = array_column($report['fields']['all_observations']['items'], 'title');
+        $this->assertNotContains($app->translator('fr')->title('F12', 'pass'), $titles);
+        $this->assertContains($app->translator('fr')->title('F1', 'pass'), $titles);
+
+        $this->post($app, $base . '/report-exclusions', ['rule' => 'F12', 'excluded' => '0']);
+        $this->assertSame([], $app->dataStore()->readReportExclusions(self::SITE, $extractionId));
+    }
+
+    #[Test]
     public function usersAreAddedAndEditedThroughTheDialog(): void
     {
         $app = $this->app(['auth' => ['open_mode' => true]]);

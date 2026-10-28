@@ -135,6 +135,8 @@ $byPast   = $counts['by_pastille'] ?? [];
 // category -> finding count, for the filter bar
 $catCount = [];
 foreach ($all as $f) { $catCount[$f['category']] = ($catCount[$f['category']] ?? 0) + 1; }
+// Rules left out of the report; a finding without text never reaches it anyway.
+$exclCount = count(array_filter($all, static fn (array $f): bool => in_array($f['id'], $reportExclusions, true) && $t->message($f) !== null));
 
 $stripe = static function (string $c): string {
     $pastille = Pastille::tryFrom($c);
@@ -450,7 +452,7 @@ if ($status !== 'done'):
 
         <?php if ($findings !== null): ?>
             <!-- Findings — full, filterable by type -->
-            <section class="findings">
+            <section class="findings" id="findings">
                 <header>
                     <h3><?= e($t->ui('findings')) ?></h3>
                     <span class="muted"><?= e($counts['total'] ?? 0) ?> checks · <?= e($counts['fail'] ?? 0) ?> need attention</span>
@@ -460,6 +462,7 @@ if ($status !== 'done'):
                 <div class="filt">
                     <button class="on" data-filter="all">All <b><?= e($counts['total'] ?? 0) ?></b></button>
                     <button data-filter="attn">Needs attention <b><?= e($attentionCount) ?></b></button>
+                    <button data-filter="excl">Excluded from the report <b id="excl-count"><?= e($exclCount) ?></b></button>
                     <span class="filt-sep"></span>
                     <?php foreach ($catCount as $cat => $n): ?>
                         <button data-filter="<?= e($cat) ?>"><?= e($t->category($cat)) ?> <b><?= e($n) ?></b></button>
@@ -467,13 +470,24 @@ if ($status !== 'done'):
                 </div>
                 <table class="ftable"><tbody>
                 <?php foreach ($all as $f): ?>
-                    <?php $col = $f['pastille']; ?>
-                    <tr class="frow <?= $stripe($col) ?>" data-cat="<?= e($f['category']) ?>" data-attn="<?= Pastille::tryFrom((string) $col)?->needsAttention() ? '1' : '0' ?>">
+                    <?php
+                    $col      = $f['pastille'];
+                    $message  = $t->message($f);
+                    $excluded = $message !== null && in_array($f['id'], $reportExclusions, true);
+                    ?>
+                    <tr class="frow <?= $stripe($col) ?><?= $excluded ? ' frow-excluded' : '' ?>" data-cat="<?= e($f['category']) ?>" data-attn="<?= Pastille::tryFrom((string) $col)?->needsAttention() ? '1' : '0' ?>" data-excl="<?= $excluded ? '1' : '0' ?>">
+                        <td class="export"><?php if ($message !== null): ?>
+                            <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/report-exclusions" class="excl-form">
+                                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                                <input type="hidden" name="rule" value="<?= e($f['id']) ?>">
+                                <input type="checkbox" title="In the report" aria-label="<?= e($f['id']) ?> in the report"<?= $excluded ? '' : ' checked' ?><?= $canEditObservations ? '' : ' disabled' ?>>
+                            </form>
+                        <?php endif; ?></td>
                         <td><?= pastille($col, $t->pastille($col)) ?></td>
                         <td class="id"><?= e($f['id']) ?></td>
                         <td class="tag"><?= e($t->category($f['category'])) ?></td>
                         <td class="rule"><?= e($t->title($f['id'], $f['status'] ?? null, is_string($f['data']['variant'] ?? null) ? $f['data']['variant'] : null)) ?></td>
-                        <td class="obs"><?= e($t->message($f) ?? '') ?></td>
+                        <td class="obs"><?= e($message ?? '') ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody></table>

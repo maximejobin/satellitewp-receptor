@@ -24,7 +24,9 @@ it was taken and in which language the client works.
 │   ├── findings.<lang>.md   the same verdicts as the client reads them
 │   ├── report.json          the data that fills the client's "Bilan de santé"
 │   ├── observations.json    analyst notes (present only when written)
-│   └── licenses.json        premium licence status (present only when set)
+│   ├── licenses.json        premium licence status (present only when set)
+│   └── report-exclusions.json rules the analyst left out of the client report
+│                            (present only when set)
 ```
 
 ### raw/payload.json
@@ -78,7 +80,9 @@ One entry per rule:
 ### analysis/findings.<lang>.md
 
 The same findings with their title and text in the client's language, worst
-first, followed by the analyst's observations. Use it as the tone and
+first, followed by the analyst's observations. Rules listed in
+`report-exclusions.json` are left out of it and of `report.json`, but stay in
+`findings.json`. Use it as the tone and
 vocabulary reference for anything written for the client.
 
 ### analysis/report.json

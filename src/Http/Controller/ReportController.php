@@ -80,7 +80,8 @@ final class ReportController extends Controller
             $store->readAllProbeResults($siteId, $extractionId),
             $store->readLicenses($siteId, $extractionId) ?? [],
             $store->readFindings($siteId, $extractionId) ?? [],
-            $store->readObservations($siteId, $extractionId)
+            $store->readObservations($siteId, $extractionId),
+            $store->readReportExclusions($siteId, $extractionId)
         );
 
         $this->response->json($document, 200, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

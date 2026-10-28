@@ -53,6 +53,7 @@ final class ExtractionController extends Controller
             'payload'             => $payload,
             'meta'                => $store->readMeta($siteId, $extractionId) ?? [],
             'findings'            => $store->readFindings($siteId, $extractionId),
+            'reportExclusions'    => $store->readReportExclusions($siteId, $extractionId),
             'probes'              => $store->readAllProbeResults($siteId, $extractionId),
             'row'                 => $row,
             'eol'                 => $this->app->endOfLife(),
@@ -476,6 +477,35 @@ final class ExtractionController extends Controller
         }
 
         $this->redirect(Router::safeReturn($_POST['return'] ?? null, "/site/{$siteId}/extraction/{$extractionId}"));
+    }
+
+    /**
+     * POST …/report-exclusions — leaves one rule out of this extraction's
+     * report (excluded=1) or puts it back (excluded=0).
+     *
+     * @param array<string, string> $params
+     */
+    public function reportExclusions(array $params): void
+    {
+        [$siteId, $extractionId] = [$params['site_id'], $params['extraction_id']];
+        if (!$this->requireCapability('extraction_observations_edit') || !$this->requireExtractionStatus($siteId, $extractionId, null)) {
+            return;
+        }
+
+        $store   = $this->app->dataStore();
+        $ruleId  = (string) ($_POST['rule'] ?? '');
+        $ruleIds = array_map(
+            static fn (mixed $f): string => is_array($f) ? (string) ($f['id'] ?? '') : '',
+            (array) (($store->readFindings($siteId, $extractionId) ?? [])['findings'] ?? [])
+        );
+        if ($ruleId === '' || !in_array($ruleId, $ruleIds, true)) {
+            $this->response->text(400, 'Unknown rule for this extraction.');
+
+            return;
+        }
+
+        $store->setReportExclusion($siteId, $extractionId, $ruleId, ($_POST['excluded'] ?? '') === '1');
+        $this->redirect("/site/{$siteId}/extraction/{$extractionId}#findings");
     }
 
     /**

@@ -263,6 +263,12 @@ table.kv td { text-align: left; word-break: break-word; font-variant-numeric: ta
 .ftable .tag { color: var(--faint); font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .ftable .rule { font-weight: 600; }
 .ftable .obs { color: var(--muted); }
+.ftable .export { width: 1.5rem; padding-right: 0; }
+.ftable .export form { margin: 0; }
+.ftable .export input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.ftable .export input:disabled { cursor: default; }
+.frow-excluded td:not(.export) { opacity: .45; }
+.frow-excluded .rule { text-decoration: line-through; }
 .frow.sev-red td:first-child { box-shadow: inset 3px 0 0 var(--error); }
 .frow.sev-orange td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .frow.sev-blue td:first-child { box-shadow: inset 3px 0 0 var(--info); }

@@ -166,9 +166,39 @@ $nav = $nav ?? 'sites';
       b.classList.add('on');
       var f = b.dataset.filter;
       document.querySelectorAll('.frow').forEach(function (r) {
-        var show = f === 'all' || (f === 'attn' && r.dataset.attn === '1') || r.dataset.cat === f;
+        var show = f === 'all' || (f === 'attn' && r.dataset.attn === '1') || (f === 'excl' && r.dataset.excl === '1') || r.dataset.cat === f;
         r.style.display = show ? '' : 'none';
       });
+    });
+
+    // A findings row's checkbox saves at once; the row is dimmed while left out of the report.
+    document.addEventListener('change', function (e) {
+      var box = e.target;
+      var form = box.closest ? box.closest('.excl-form') : null;
+      if (!form || box.type !== 'checkbox') { return; }
+      var row = form.closest('.frow');
+      var body = new FormData(form);
+      body.set('excluded', box.checked ? '0' : '1');
+      box.disabled = true;
+      fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
+        .then(function (r) {
+          box.disabled = false;
+          if (r.type === 'opaqueredirect' || r.ok) {
+            row.classList.toggle('frow-excluded', !box.checked);
+            row.dataset.excl = box.checked ? '0' : '1';
+            var count = document.getElementById('excl-count');
+            if (count) { count.textContent = document.querySelectorAll('.frow[data-excl="1"]').length; }
+            showToast(box.checked ? 'Back in the report.' : 'Left out of the report.', false);
+          } else {
+            box.checked = !box.checked;
+            showToast('Could not save — try again.', true);
+          }
+        })
+        .catch(function () {
+          box.disabled = false;
+          box.checked = !box.checked;
+          showToast('Could not save — try again.', true);
+        });
     });
 
     // .lic-form dropdowns save via fetch() (same POST, no page reload); each
