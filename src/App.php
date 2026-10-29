@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager;
 use SatelliteWP\Manager\Catalog\SoftwareCatalog;
 use SatelliteWP\Manager\Crm\ClientsDb;
 use SatelliteWP\Manager\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\WebsiteVulnerability;
 use SatelliteWP\Manager\Http\GoogleAuth;
 use SatelliteWP\Manager\Http\LoginLockout;
 use SatelliteWP\Manager\Http\PayloadValidator;
@@ -289,6 +290,15 @@ final class App
         return $this->services[WordfenceIndex::class] ??= new WordfenceIndex(
             (string) $this->config->get('data_dir') . '/reference/wordfence.json',
             $this->isConfigured('wordfence') ? $this->wordfence() : null
+        );
+    }
+
+    public function websiteVulnerability(): WebsiteVulnerability
+    {
+        return $this->services[WebsiteVulnerability::class] ??= new WebsiteVulnerability(
+            $this->endOfLife(),
+            $this->wordfenceIndex(),
+            $this->ignoredVulnerabilities()
         );
     }
 

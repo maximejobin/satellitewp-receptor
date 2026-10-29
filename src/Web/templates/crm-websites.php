@@ -55,7 +55,7 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
 <?php else: ?>
     <table id="websites-table" class="display" style="width:100%">
         <thead>
-        <tr><th>URL</th><th>Client</th><th>WordPress</th><th>Tags</th><th>Connection</th><th></th></tr>
+        <tr><th>URL</th><th>Client</th><th>WordPress</th><th>Tags</th><th>Connection</th><th>Security</th><th></th></tr>
         </thead>
         <tbody>
         <?php foreach ($websites as $w): ?>
@@ -73,6 +73,7 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
                 <td><?php foreach ($w['tags'] as $tag): ?><span class="badge badge-muted"><?= e($tag) ?></span> <?php endforeach; ?></td>
                 <td><span class="badge <?= ($w['connection_status'] ?? '') === 'CONNECTED' ? 'badge-ok' : 'badge-error' ?>">
                         <?= e($w['connection_status'] ?? '') ?></span></td>
+                <td><?php if ($w['vulnerable_reasons'] !== []): ?><span class="badge badge-error" title="<?= e(implode(' · ', $w['vulnerable_reasons'])) ?>">Vulnerable</span><?php endif; ?></td>
                 <td><?= external_link_icon(
                     $links['blogvault_view_website'] ?? null,
                     isset($w['blogvault_site_id']) ? substr((string) $w['blogvault_site_id'], 0, 8) : null,

@@ -59,7 +59,7 @@ class ClientsRepositoryTest extends TestCase
                 id INTEGER PRIMARY KEY, url VARCHAR(255) NOT NULL, url_standard VARCHAR(255) NOT NULL,
                 blogvault_site_id VARCHAR(255) NOT NULL, created VARCHAR(255) NOT NULL, updated VARCHAR(255) NOT NULL,
                 connection_status VARCHAR(255), host VARCHAR(255), php_version VARCHAR(255), mysql_version VARCHAR(255),
-                wp_core_version VARCHAR(255), wp_core_is_vulnerable INTEGER, date_sync VARCHAR(255) NOT NULL
+                wp_core_version VARCHAR(255), date_sync VARCHAR(255) NOT NULL
             );
             CREATE TABLE swp_website_items (
                 id INTEGER PRIMARY KEY, website_id INTEGER NOT NULL, type VARCHAR(255) NOT NULL,
@@ -537,6 +537,23 @@ class ClientsRepositoryTest extends TestCase
         $this->assertSame([1], array_map(static fn (array $w): int => (int) $w['id'], $this->repo->websitesByBlogvaultSiteId('BV-1')));
         $this->assertSame([], $this->repo->websitesByBlogvaultSiteId('bv'));
         $this->assertSame([], $this->repo->websitesByBlogvaultSiteId(''));
+    }
+
+    public function testComponentsByWebsiteIdsKeepsPluginsAndThemesOfTheGivenWebsites(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("INSERT INTO swp_website_items
+            (id, website_id, type, name, slug, version, is_active, is_vulnerable, is_update_available, bv_date_sync, date_sync) VALUES
+            (1, 1, 'plugin', 'WooCommerce', 'woocommerce', '8.0', 1, 0, 0, '2026-01-01 00:00:00', '2026-01-01 00:00:00'),
+            (2, 1, 'Theme', 'Storefront', 'storefront', '4.0', 1, 1, 0, '2026-01-01 00:00:00', '2026-01-01 00:00:00'),
+            (3, 1, 'mu-plugin', 'Custom MU', 'custom-mu', '1.0', 1, 0, 0, '2026-01-01 00:00:00', '2026-01-01 00:00:00'),
+            (4, 2, 'plugin', 'Akismet', 'akismet', '5.0', 1, 1, 0, '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
+
+        $byWebsite = $this->repo->componentsByWebsiteIds([1]);
+
+        $this->assertSame([1], array_keys($byWebsite));
+        $this->assertSame(['woocommerce', 'storefront'], array_column($byWebsite[1], 'slug'));
+        $this->assertSame([], $this->repo->componentsByWebsiteIds([]));
     }
 
     public function testItemsForWebsiteGroupsByTypePluginThemeOther(): void

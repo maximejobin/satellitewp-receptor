@@ -291,7 +291,13 @@ websites refused server-side). Portable SQL only: the suite runs on SQLite throu
 and on a real MySQL with `composer test:mysql` (`SWPMGR_TEST_MYSQL_DSN`/`_USER`/
 `_PASSWORD`, a disposable database) — run it after any change to CRM SQL. LIKE
 input escaped via `Storage\SqlLike` (`ESCAPE '!'`, never `'\'`). Entities are flat siblings (`/websites`,
-`/items`, `/clients`, `/products`) — the business works by website first.
+`/items`, `/clients`, `/products`) — the business works by website first. A
+website's security state is Manager's own (`Crm\WebsiteVulnerability`), never a
+CRM column: WordPress core against the local Wordfence index, PHP / database /
+WordPress against endoflife.date ("Outdated"), plugins and themes against the
+synced `is_vulnerable` or Wordfence; ignored ids never count. Any of them
+lights the "Vulnerable" badge on `/websites` and the website page (`/items`
+still filters on the synced flag).
 Access runbook: `docs/acces-mysql-distant.md`.
 
 **Web UI.** English chrome, light theme, orange accent `#f26f2b`. The

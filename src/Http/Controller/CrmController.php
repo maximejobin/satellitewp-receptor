@@ -95,17 +95,26 @@ final class CrmController extends Controller
             $search     = trim((string) ($_GET['q'] ?? ''));
             $connection = trim((string) ($_GET['connection'] ?? ''));
 
+            $websites = $repo->listWebsites(
+                $tags !== [] ? $tags : null,
+                null,
+                $search !== '' ? $search : null,
+                $connection !== '' ? $connection : null,
+                $excludeTags !== [] ? $excludeTags : null
+            );
+            $components    = $repo->componentsByWebsiteIds(array_map(static fn (array $w): int => (int) $w['id'], $websites));
+            $vulnerability = $this->app->websiteVulnerability();
+            $vulnerability->preload(array_merge([], ...array_values($components)));
+            foreach ($websites as &$website) {
+                $website['vulnerable_reasons'] = $vulnerability->reasons($website, $components[(int) $website['id']] ?? []);
+            }
+            unset($website);
+
             $this->render('crm-websites', [
                 'title'               => 'Websites',
                 'nav'                 => 'crm-websites',
                 'dataTables'          => true,
-                'websites'            => $repo->listWebsites(
-                    $tags !== [] ? $tags : null,
-                    null,
-                    $search !== '' ? $search : null,
-                    $connection !== '' ? $connection : null,
-                    $excludeTags !== [] ? $excludeTags : null
-                ),
+                'websites'            => $websites,
                 'selectedTags'        => $tags,
                 'selectedExcludeTags' => $excludeTags,
                 'selectedConnection'  => $connection,
@@ -154,6 +163,10 @@ final class CrmController extends Controller
                 return;
             }
 
+            $items         = $repo->itemsForWebsite($id);
+            $vulnerability = $this->app->websiteVulnerability();
+            $vulnerability->preload(array_merge($items['plugin'], $items['theme']));
+
             $this->render('crm-website', [
                 'title'         => SiteDisplay::of($website['url']),
                 'nav'           => 'crm-websites',
@@ -161,11 +174,11 @@ final class CrmController extends Controller
                 'website'       => $website,
                 'clients'       => $repo->clientsForWebsite($id),
                 'subscriptions' => $repo->subscriptionsForWebsite($id),
-                'items'         => $repo->itemsForWebsite($id),
+                'items'         => $items,
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
                 'links'         => $this->app->config->get('external_links', []),
-                'eol'           => $this->app->endOfLife(),
+                'vulnerability' => $vulnerability,
             ]);
         });
     }

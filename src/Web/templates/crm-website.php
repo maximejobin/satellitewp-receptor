@@ -7,7 +7,7 @@
  * @var string $csrf
  * @var string $notice
  * @var array<string, string|null> $links external_links config (see config/config.php)
- * @var \SatelliteWP\Manager\Reference\EndOfLife $eol
+ * @var \SatelliteWP\Manager\Crm\WebsiteVulnerability $vulnerability
  */
 use SatelliteWP\Manager\Crm\ClientsRepository;
 
@@ -31,19 +31,15 @@ $versionField = static function (string $label, mixed $version, ?array $eolStatu
 
     return field_raw($label, e($version) . $tags);
 };
-$eolPhp = $eol->eolStatus('php', (string) ($website['php_version'] ?? ''));
-// swp_websites has no engine column; the version string carries it ("10.6.27-MariaDB").
-$dbVersionRaw = (string) ($website['mysql_version'] ?? '');
-$dbEngine     = str_contains(strtolower($dbVersionRaw), 'mariadb') ? 'mariadb' : 'mysql';
-$eolMysql     = $eol->eolStatus($dbEngine, $dbVersionRaw);
-$eolWp        = $eol->eolStatus('wordpress', (string) ($website['wp_core_version'] ?? ''));
+$eolStatus = $vulnerability->endOfLife($website);
+$reasons   = $vulnerability->reasons($website, array_merge($items['plugin'], $items['theme']));
 
 $clientLabels = array_map(
     static fn (array $c): string => '<a href="/clients/' . (int) $c['id'] . '">' . e(ClientsRepository::clientLabel($c)) . '</a>',
     $clients
 );
 ?>
-<h1><?= e(site_display($website['url'])) ?></h1>
+<h1><?= e(site_display($website['url'])) ?><?php if ($reasons !== []): ?> <span class="badge badge-error" title="<?= e(implode(' · ', $reasons)) ?>">Vulnerable</span><?php endif; ?></h1>
 
 <?php if (isset($notices[$notice])): [$level, $text] = $notices[$notice]; ?>
     <?= notice($level, e($text)) ?>
@@ -55,9 +51,9 @@ $clientLabels = array_map(
     <table class="kv"><tbody><?= implode('', [
         field_raw('URL', link_or_text($website['url'] ?? null, site_display($website['url'] ?? ''), true)),
         field('Connection status', $website['connection_status'] ?? null),
-        $versionField('PHP version', $website['php_version'] ?? null, $eolPhp),
-        $versionField('MySQL version', $website['mysql_version'] ?? null, $eolMysql),
-        $versionField('WordPress version', $website['wp_core_version'] ?? null, $eolWp, !empty($website['wp_core_is_vulnerable'])),
+        $versionField('PHP version', $website['php_version'] ?? null, $eolStatus['php']),
+        $versionField('MySQL version', $website['mysql_version'] ?? null, $eolStatus['database']),
+        $versionField('WordPress version', $website['wp_core_version'] ?? null, $eolStatus['wordpress'], $vulnerability->coreVulnerabilities($website) !== []),
         field_raw('BlogVault site id', external_link(
             $links['blogvault_view_website'] ?? null,
             isset($website['blogvault_site_id']) ? substr((string) $website['blogvault_site_id'], 0, 8) : null,
@@ -98,7 +94,7 @@ $clientLabels = array_map(
 <?php endif; ?>
 
 <?php
-$itemTable = static function (array $rows): string {
+$itemTable = static function (array $rows) use ($vulnerability): string {
     if ($rows === []) {
         return '<p class="empty">None.</p>';
     }
@@ -110,7 +106,7 @@ $itemTable = static function (array $rows): string {
             . '<td class="mono">' . e($item['slug']) . '</td>'
             . '<td class="mono">' . e($item['version']) . '</td>'
             . '<td class="mono">' . (!empty($item['is_update_available']) ? e($item['new_version'] ?? '?') : '') . '</td>'
-            . '<td>' . (!empty($item['is_vulnerable']) ? '<span class="badge badge-error">Vulnerable</span>' : '') . '</td>'
+            . '<td>' . ($vulnerability->itemIsVulnerable($item) ? '<span class="badge badge-error">Vulnerable</span>' : '') . '</td>'
             . '<td>' . status_dot(!empty($item['is_active']) ? 'active' : 'inactive') . '</td>'
             . '</tr>';
     }

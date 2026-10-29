@@ -426,6 +426,31 @@ final class ClientsRepository
     }
 
     /**
+     * Plugin and theme rows of several websites, keyed by website id.
+     *
+     * @param list<int> $websiteIds
+     * @return array<int, list<array<string, mixed>>>
+     */
+    public function componentsByWebsiteIds(array $websiteIds): array
+    {
+        $result = [];
+        // Bounded IN lists: a long portfolio must not hit the driver's placeholder limit.
+        foreach (array_chunk($websiteIds, 500) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt         = $this->pdo->prepare(
+                "SELECT website_id, type, slug, version, is_vulnerable FROM swp_website_items
+                 WHERE website_id IN ({$placeholders}) AND LOWER(type) IN ('plugin', 'theme')"
+            );
+            $stmt->execute($chunk);
+            foreach ($stmt->fetchAll() as $row) {
+                $result[(int) $row['website_id']][] = $row;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @return list<string>
      */
     public function searchTags(string $query, int $limit = 50): array
