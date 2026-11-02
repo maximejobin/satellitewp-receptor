@@ -93,7 +93,7 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
                 <td><?= e($s['creation_date'] !== null ? substr((string) $s['creation_date'], 0, 10) : '') ?></td>
                 <td><?= e($s['last_payment_date'] !== null ? substr((string) $s['last_payment_date'], 0, 10) : '') ?></td>
                 <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
-                <td><?= subscription_website_form($s + ['client_label' => $company !== '' ? $company : ClientsRepository::clientLabel($client)], '/clients/' . (int) $client['id']) ?></td>
+                <td><?= subscription_website_form($s, '/clients/' . (int) $client['id']) ?></td>
                 <td><?= external_link_button($links['wordpress_edit_subscription'] ?? null, $s['id'], 'Edit') ?></td>
             </tr>
         <?php endforeach; ?>

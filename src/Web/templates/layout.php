@@ -448,7 +448,7 @@ $nav = $nav ?? 'sites';
       wfForm.elements.subscription_id.value = d.id;
       wfForm.elements['return'].value = d['return'];
       wfBody.innerHTML = '';
-      d.rows.concat([['Linked website', d.website_label || 'Unassigned']]).forEach(function (r) {
+      d.rows.forEach(function (r) {
         var tr = document.createElement('tr');
         tr.innerHTML = '<th></th><td></td>';
         tr.firstChild.textContent = r[0];

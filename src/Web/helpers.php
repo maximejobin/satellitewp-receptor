@@ -326,8 +326,8 @@ function license_status_select(
  * The linked website of a subscription and the button opening
  * subscription_link_dialog(), which reads the row's details from data-wf.
  *
- * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url',
- *                                           'client_label' and the product/status/date columns
+ * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url'
+ *                                           and the product columns
  */
 function subscription_website_form(array $subscription, string $return): string
 {
@@ -335,7 +335,6 @@ function subscription_website_form(array $subscription, string $return): string
     $currentUrl = $subscription['website_url'] ?? null;
     $subId      = (int) $subscription['id'];
     $label      = $currentId !== null ? (site_display($currentUrl) ?: ('#' . $currentId)) : null;
-    $date       = static fn (mixed $d): string => $d !== null ? substr((string) $d, 0, 10) : '';
 
     $details = [
         'id'            => $subId,
@@ -346,10 +345,6 @@ function subscription_website_form(array $subscription, string $return): string
             ['Product', (string) ($subscription['product_name'] ?? '')],
             ['License', (string) ($subscription['license_slug'] ?? '')],
             ['Category', (string) ($subscription['product_category'] ?? '')],
-            ['Client', (string) ($subscription['client_label'] ?? '')],
-            ['Status', ucfirst(str_replace('-', ' ', (string) ($subscription['subscription_status'] ?? '')))],
-            ['Created', $date($subscription['creation_date'] ?? null)],
-            ['Next renewal', $date($subscription['next_renewal_date'] ?? null)],
             ['Subscription id', (string) $subId],
         ], static fn (array $row): bool => $row[1] !== '')),
     ];
