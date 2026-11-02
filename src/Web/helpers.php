@@ -323,40 +323,65 @@ function license_status_select(
 }
 
 /**
- * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url'
+ * The linked website of a subscription and the button opening
+ * subscription_link_dialog(), which reads the row's details from data-wf.
+ *
+ * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url',
+ *                                           'client_label' and the product/status/date columns
  */
-function subscription_website_form(array $subscription, string $csrf, string $return): string
+function subscription_website_form(array $subscription, string $return): string
 {
     $currentId  = isset($subscription['website_id']) ? (int) $subscription['website_id'] : null;
     $currentUrl = $subscription['website_url'] ?? null;
     $subId      = (int) $subscription['id'];
     $label      = $currentId !== null ? (site_display($currentUrl) ?: ('#' . $currentId)) : null;
+    $date       = static fn (mixed $d): string => $d !== null ? substr((string) $d, 0, 10) : '';
 
-    $display = '<span class="wf-display" data-wf-id="' . $subId . '">'
+    $details = [
+        'id'            => $subId,
+        'return'        => $return,
+        'website_id'    => $currentId,
+        'website_label' => $label,
+        'rows'          => array_values(array_filter([
+            ['Product', (string) ($subscription['product_name'] ?? '')],
+            ['License', (string) ($subscription['license_slug'] ?? '')],
+            ['Category', (string) ($subscription['product_category'] ?? '')],
+            ['Client', (string) ($subscription['client_label'] ?? '')],
+            ['Status', ucfirst(str_replace('-', ' ', (string) ($subscription['subscription_status'] ?? '')))],
+            ['Created', $date($subscription['creation_date'] ?? null)],
+            ['Next renewal', $date($subscription['next_renewal_date'] ?? null)],
+            ['Subscription id', (string) $subId],
+        ], static fn (array $row): bool => $row[1] !== '')),
+    ];
+
+    return '<span class="wf-display">'
         . ($label !== null
             ? '<a href="/websites/' . $currentId . '">' . e($label) . '</a>'
             : '<span class="val-error">Unassigned</span>')
-        . ' <button type="button" class="wf-edit-btn" data-wf-id="' . $subId . '" '
+        . ' <button type="button" class="wf-edit-btn" data-wf="' . e((string) json_encode($details)) . '" '
         . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
         . '</span>';
+}
 
-    $options = '<option value=""></option>';
-    if ($currentId !== null) {
-        $options .= '<option value="' . $currentId . '" selected>' . e((string) $label) . '</option>';
-    }
-
-    $form = '<form method="post" action="/subscriptions" class="wf-edit-form" data-wf-id="' . $subId . '" '
-        . 'style="display:none;gap:.3rem;align-items:center;margin:0">'
+/** The one dialog every subscription_website_form() button of the page opens. */
+function subscription_link_dialog(string $csrf): string
+{
+    return '<dialog id="wf-dialog" class="obs-dialog" aria-labelledby="wf-dialog-title">'
+        . '<form method="post" action="/subscriptions">'
         . '<input type="hidden" name="_csrf" value="' . e($csrf) . '">'
-        . '<input type="hidden" name="subscription_id" value="' . $subId . '">'
-        . '<input type="hidden" name="return" value="' . e($return) . '">'
-        . '<select name="website_id" class="wf-select" data-ajax-url="/websites/search" data-placeholder="— None —">'
-        . $options . '</select>'
-        . '<button type="submit" class="btn" style="padding:.25rem .6rem">Save</button>'
-        . '<button type="button" class="btn btn-muted wf-cancel-btn" style="padding:.25rem .6rem">Cancel</button>'
-        . '</form>';
-
-    return $display . $form;
+        . '<input type="hidden" name="subscription_id" value="">'
+        . '<input type="hidden" name="return" value="">'
+        . '<header class="obs-dialog-head"><h3 id="wf-dialog-title">Link a website</h3>'
+        . '<button type="button" class="json-dialog-close wf-close" aria-label="Close">&times;</button></header>'
+        . '<div class="obs-dialog-body">'
+        . '<table class="kv wf-details"><tbody></tbody></table>'
+        . '<div class="obs-field"><label for="wf-select">Website</label>'
+        . '<select name="website_id" id="wf-select" data-ajax-url="/websites/search" data-placeholder="— None —"></select></div>'
+        . '</div>'
+        . '<footer class="obs-dialog-foot">'
+        . '<button type="button" class="btn btn-muted wf-close">Cancel</button>'
+        . '<button type="submit" class="btn">Save</button>'
+        . '</footer></form></dialog>';
 }
 
 /** Colored pastille (green/orange/red/purple/blue/grey) + label — the analyst signal. */

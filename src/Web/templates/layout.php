@@ -249,12 +249,13 @@ $nav = $nav ?? 'sites';
   }
 
   // select2; with data-ajax-url it searches server-side as the user types.
-  // dropdownParent: body, or a table's overflow:hidden clips the dropdown.
-  function initSelect2($el) {
+  // dropdownParent: body, or a table's overflow:hidden clips the dropdown; a
+  // modal dialog's own element, since the top layer hides anything outside it.
+  function initSelect2($el, $parent) {
     var ajaxUrl = $el.data('ajax-url');
     var options = {
-      width: '18rem',
-      dropdownParent: jQuery(document.body),
+      width: $parent ? '100%' : '18rem',
+      dropdownParent: $parent || jQuery(document.body),
       placeholder: $el.data('placeholder') || null,
       allowClear: !!$el.data('placeholder')
     };
@@ -431,40 +432,41 @@ $nav = $nav ?? 'sites';
   }
   document.querySelectorAll('.tag-filter').forEach(initTagFilter);
 
-  document.addEventListener('click', function (e) {
-    var editBtn = e.target.closest('.wf-edit-btn');
-    if (editBtn) {
-      var id = editBtn.dataset.wfId;
-      var display = document.querySelector('.wf-display[data-wf-id="' + id + '"]');
-      var form = document.querySelector('.wf-edit-form[data-wf-id="' + id + '"]');
-      if (display) { display.style.display = 'none'; }
-      if (form) {
-        form.style.display = 'flex';
-        if (window.jQuery) {
-          var $select = jQuery(form).find('.wf-select');
-          if ($select.length && !$select.hasClass('select2-hidden-accessible')) {
-            $select.data('wf-original', $select.val());
-            initSelect2($select);
-          }
-        }
+  // Linked website of a subscription: one dialog, filled from the clicked row.
+  var wfDialog = document.getElementById('wf-dialog');
+  if (wfDialog) {
+    var wfForm   = wfDialog.querySelector('form');
+    var wfSelect = wfDialog.querySelector('#wf-select');
+    var wfBody   = wfDialog.querySelector('.wf-details tbody');
+    var $wf      = window.jQuery ? jQuery(wfSelect) : null;
+    if ($wf && jQuery.fn.select2) { initSelect2($wf, jQuery(wfDialog)); }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.wf-edit-btn');
+      if (!btn) { return; }
+      var d = JSON.parse(btn.dataset.wf);
+      wfForm.elements.subscription_id.value = d.id;
+      wfForm.elements['return'].value = d['return'];
+      wfBody.innerHTML = '';
+      d.rows.concat([['Linked website', d.website_label || 'Unassigned']]).forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<th></th><td></td>';
+        tr.firstChild.textContent = r[0];
+        tr.lastChild.textContent = r[1];
+        wfBody.appendChild(tr);
+      });
+      wfSelect.innerHTML = '<option value=""></option>';
+      if (d.website_id !== null) {
+        var opt = new Option(d.website_label, d.website_id, true, true);
+        wfSelect.appendChild(opt);
       }
-      return;
-    }
-    var cancelBtn = e.target.closest('.wf-cancel-btn');
-    if (cancelBtn) {
-      var form2 = cancelBtn.closest('.wf-edit-form');
-      var id2 = form2.dataset.wfId;
-      if (window.jQuery) {
-        // Discard an unsaved pick so reopening shows the real linked website.
-        var $select2 = jQuery(form2).find('.wf-select');
-        if ($select2.length) { $select2.val($select2.data('wf-original')).trigger('change'); }
-      }
-      form2.style.display = 'none';
-      var display2 = document.querySelector('.wf-display[data-wf-id="' + id2 + '"]');
-      if (display2) { display2.style.display = ''; }
-      return;
-    }
-  });
+      if ($wf) { $wf.trigger('change'); }
+      wfDialog.showModal();
+    });
+    wfDialog.querySelectorAll('.wf-close').forEach(function (b) {
+      b.addEventListener('click', function () { wfDialog.close(); });
+    });
+  }
 </script>
 <?php if (!empty($reportAssets)): ?>
 <script src="/assets/report.js"></script>

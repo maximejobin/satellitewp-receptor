@@ -534,6 +534,13 @@ dialog.json-dialog::backdrop { background: rgba(15, 23, 42, .45); }
     color: var(--text);
 }
 
+/* Subscription → website link: the obs-dialog shell; visible overflow so the
+   select2 dropdown, attached to the dialog, can extend past its bottom edge. */
+dialog#wf-dialog { overflow: visible; width: min(520px, calc(100vw - 2rem)); }
+#wf-dialog .obs-dialog-body { overflow: visible; }
+#wf-dialog table.wf-details { margin: 0; }
+#wf-dialog table.wf-details th { width: 1%; white-space: nowrap; }
+
 /* Observation editor: one native <dialog> for add and edit. */
 .obs-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin: -.4rem 0 .8rem; }
 .obs-toolbar .btn { margin: 0; }

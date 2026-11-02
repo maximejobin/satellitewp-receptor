@@ -83,14 +83,14 @@ $clientLabels = array_map(
                 <td><?= status_dot((string) $s['subscription_status']) ?></td>
                 <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
                 <td><?= subscription_website_form(
-                    $s + ['website_id' => $website['id'], 'website_url' => $website['url']],
-                    $csrf,
+                    $s + ['website_id' => $website['id'], 'website_url' => $website['url'], 'client_label' => ClientsRepository::clientLabel($s)],
                     '/websites/' . (int) $website['id']
                 ) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
+    <?= subscription_link_dialog($csrf) ?>
 <?php endif; ?>
 
 <?php
