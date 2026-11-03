@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SatelliteWP\Manager\Http;
 
 use SatelliteWP\Manager\App;
+use SatelliteWP\Manager\Crm\ExternalWebsites;
 use SatelliteWP\Manager\Http\Controller\AuthController;
 use SatelliteWP\Manager\Http\Controller\CatalogController;
 use SatelliteWP\Manager\Http\Controller\Controller;
@@ -51,6 +52,7 @@ final class Router
         'crm_websites_search'         => [CrmController::class, 'websitesSearch'],
         'crm_tags_search'             => [CrmController::class, 'tagsSearch'],
         'crm_website'                 => [CrmController::class, 'website'],
+        'crm_external_website'        => [CrmController::class, 'externalWebsite'],
         'crm_products'                => [CrmController::class, 'products'],
         'crm_items'                   => [CrmController::class, 'items'],
         'crm_items_search'            => [CrmController::class, 'itemsSearch'],
@@ -72,6 +74,9 @@ final class Router
         'keys'                           => [SiteController::class, 'keys'],
         'catalog'                        => [CatalogController::class, 'save'],
         'subscriptions'                  => [CrmController::class, 'linkSubscription'],
+        'external_website_add'           => [CrmController::class, 'addExternalWebsite'],
+        'external_website_update'        => [CrmController::class, 'updateExternalWebsite'],
+        'external_website_delete'        => [CrmController::class, 'deleteExternalWebsite'],
     ];
 
     /** Actions POSTed to /site/{uuid}/extraction/{id}/<action>. */
@@ -183,6 +188,10 @@ final class Router
             return ['route' => $segments[0] === 'clients' ? 'crm_client' : 'crm_website', 'params' => ['id' => $segments[1]]];
         }
 
+        if ($count === 2 && $segments[0] === 'websites' && ExternalWebsites::parseId($segments[1]) !== null) {
+            return ['route' => 'crm_external_website', 'params' => ['id' => (string) ExternalWebsites::parseId($segments[1])]];
+        }
+
         if ($count === 2 && $segments[0] === 'site' && PayloadValidator::isUuid($segments[1])) {
             return ['route' => 'site', 'params' => ['site_id' => $segments[1]]];
         }
@@ -227,6 +236,14 @@ final class Router
 
         if (count($segments) === 1 && in_array($segments[0], self::FLAT_POST_ROUTES, true)) {
             return ['route' => $segments[0], 'params' => []];
+        }
+
+        if ($segments === ['websites', 'external']) {
+            return ['route' => 'external_website_add', 'params' => []];
+        }
+        if (count($segments) === 3 && $segments[0] === 'websites' && ExternalWebsites::parseId($segments[1]) !== null
+            && in_array($segments[2], ['update', 'delete'], true)) {
+            return ['route' => 'external_website_' . $segments[2], 'params' => ['id' => (string) ExternalWebsites::parseId($segments[1])]];
         }
 
         $extraction = self::extractionParams($segments);

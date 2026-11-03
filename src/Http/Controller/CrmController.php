@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace SatelliteWP\Manager\Http\Controller;
 
 use SatelliteWP\Manager\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ExternalWebsites;
 use SatelliteWP\Manager\Http\Router;
 use SatelliteWP\Manager\Support\SiteDisplay;
+use SatelliteWP\Manager\Web\StatusChecks;
 
 /**
  * The external CRM browser: clients, websites, products and items as flat
  * sibling routes (a technician starts from a website, not a client), plus
- * the one CRM write — re-linking a subscription to a website.
+ * the one CRM write — re-linking a subscription to a website — and the
+ * Manager-side non-WordPress websites (ExternalWebsites) it can also link to.
  */
 final class CrmController extends Controller
 {
@@ -22,6 +25,7 @@ final class CrmController extends Controller
             $status        = (string) ($_GET['status'] ?? 'active');
             $search        = trim((string) ($_GET['q'] ?? ''));
             $subscriptions = (string) ($_GET['subscriptions'] ?? 'all');
+            $externalLinks = $this->app->externalWebsites()->links();
 
             $this->render('crm-clients', [
                 'title'                 => 'Clients',
@@ -31,14 +35,15 @@ final class CrmController extends Controller
                 'clients'               => $repo->listClients(
                     $status !== 'all' ? $status : null,
                     $search !== '' ? $search : null,
-                    $subscriptions !== 'all' ? $subscriptions : null
+                    $subscriptions !== 'all' ? $subscriptions : null,
+                    $externalLinks
                 ),
                 'selectedStatus'        => $status,
                 'search'                => $search,
                 'selectedSubscriptions' => $subscriptions,
                 'lastSyncedAt'          => $repo->clientsLastSyncedAt(),
                 // Independent of the filters, so the warning survives a subset that hides every orphan.
-                'orphanCount'           => $repo->countOrphanSubscriptions(),
+                'orphanCount'           => $repo->countOrphanSubscriptions(array_keys($externalLinks)),
             ]);
         });
     }
@@ -61,7 +66,7 @@ final class CrmController extends Controller
                 'select2'       => true,
                 'tooltip'       => true,
                 'client'        => $client,
-                'subscriptions' => $repo->subscriptionsForClient($id),
+                'subscriptions' => $this->withExternalWebsites($repo->subscriptionsForClient($id)),
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
                 'links'         => $this->app->config->get('external_links', []),
@@ -94,8 +99,9 @@ final class CrmController extends Controller
                 : [ClientsRepository::TAG_EXCLUDED_FROM_ASSIGNMENT];
             $search     = trim((string) ($_GET['q'] ?? ''));
             $connection = trim((string) ($_GET['connection'] ?? ''));
+            $source     = in_array($_GET['source'] ?? '', ['wordpress', 'external'], true) ? (string) $_GET['source'] : '';
 
-            $websites = $repo->listWebsites(
+            $websites = $source === 'external' ? [] : $repo->listWebsites(
                 $tags !== [] ? $tags : null,
                 null,
                 $search !== '' ? $search : null,
@@ -110,6 +116,12 @@ final class CrmController extends Controller
             }
             unset($website);
 
+            // External websites have no tags or connection: a filter on either leaves them out.
+            if ($source !== 'wordpress' && $tags === [] && $connection === '') {
+                $websites = array_merge($websites, $this->externalWebsiteRows($repo, $search));
+                usort($websites, static fn (array $a, array $b): int => strcmp(SiteDisplay::of($a['url']), SiteDisplay::of($b['url'])));
+            }
+
             $this->render('crm-websites', [
                 'title'               => 'Websites',
                 'nav'                 => 'crm-websites',
@@ -118,7 +130,11 @@ final class CrmController extends Controller
                 'selectedTags'        => $tags,
                 'selectedExcludeTags' => $excludeTags,
                 'selectedConnection'  => $connection,
+                'selectedSource'      => $source,
                 'search'              => $search,
+                'canEdit'             => $this->currentUserCan('crm_subscription_edit'),
+                'csrf'                => $this->csrfToken(),
+                'notice'              => (string) ($_GET['notice'] ?? ''),
                 'allTags'             => $repo->searchTags('', 500),
                 'links'               => $this->app->config->get('external_links', []),
             ]);
@@ -145,10 +161,21 @@ final class CrmController extends Controller
      */
     public function websitesSearch(array $params): void
     {
-        $this->jsonSearch(static fn (ClientsRepository $repo, string $q): array => array_map(
-            static fn (array $w): array => ['id' => (int) $w['id'], 'text' => SiteDisplay::of($w['url'])],
-            $repo->searchAssignableWebsites($q)
-        ));
+        $external = $this->app->externalWebsites()->all();
+        $this->jsonSearch(static function (ClientsRepository $repo, string $q) use ($external): array {
+            $results = array_map(
+                static fn (array $w): array => ['id' => (int) $w['id'], 'text' => SiteDisplay::of($w['url'])],
+                $repo->searchAssignableWebsites($q)
+            );
+            foreach ($external as $w) {
+                if ($q === '' || stripos($w['url'], $q) !== false) {
+                    $results[] = ['id' => ExternalWebsites::publicId($w['id']), 'text' => SiteDisplay::of($w['url']) . ' (External)'];
+                }
+            }
+            usort($results, static fn (array $a, array $b): int => strcmp($a['text'], $b['text']));
+
+            return array_slice($results, 0, 50);
+        });
     }
 
     /** @param array<string, string> $params */
@@ -180,6 +207,90 @@ final class CrmController extends Controller
                 'links'         => $this->app->config->get('external_links', []),
                 'vulnerability' => $vulnerability,
             ]);
+        });
+    }
+
+    /** @param array<string, string> $params */
+    public function externalWebsite(array $params): void
+    {
+        $website = $this->app->externalWebsites()->get((int) $params['id']);
+        $this->withRepository('Website', 'crm-websites', function (ClientsRepository $repo) use ($website): void {
+            if ($website === null) {
+                $this->notFound();
+
+                return;
+            }
+
+            $subscriptions = $repo->subscriptionsByIds($website['subscription_ids']);
+            $this->render('crm-external-website', [
+                'title'         => SiteDisplay::of($website['url']),
+                'nav'           => 'crm-websites',
+                'select2'       => true,
+                'website'       => $website,
+                'clients'       => self::clientsOf($subscriptions),
+                'subscriptions' => $subscriptions,
+                'canEdit'       => $this->currentUserCan('crm_subscription_edit'),
+                'csrf'          => $this->csrfToken(),
+                'notice'        => (string) ($_GET['notice'] ?? ''),
+            ]);
+        });
+    }
+
+    /**
+     * POST /websites/external — a non-WordPress website subscriptions can be linked to.
+     *
+     * @param array<string, string> $params
+     */
+    public function addExternalWebsite(array $params): void
+    {
+        if (!$this->requireCapability('crm_subscription_edit')) {
+            return;
+        }
+
+        $this->withCrmWrite('/websites', function (ClientsRepository $repo): string {
+            $id = $this->app->externalWebsites()->add((string) ($_POST['url'] ?? ''), $repo->allWebsiteUrls(), (string) $this->currentUser());
+
+            return '/websites/' . ExternalWebsites::publicId($id) . '?notice=external-added';
+        });
+    }
+
+    /** @param array<string, string> $params */
+    public function updateExternalWebsite(array $params): void
+    {
+        if (!$this->requireCapability('crm_subscription_edit')) {
+            return;
+        }
+
+        $id   = (int) $params['id'];
+        $page = '/websites/' . ExternalWebsites::publicId($id);
+        $this->withCrmWrite($page, function (ClientsRepository $repo) use ($id, $page): string {
+            if (!$this->app->externalWebsites()->updateUrl($id, (string) ($_POST['url'] ?? ''), $repo->allWebsiteUrls())) {
+                return '/websites?notice=external-not-found';
+            }
+
+            return $page . '?notice=external-updated';
+        });
+    }
+
+    /** @param array<string, string> $params */
+    public function deleteExternalWebsite(array $params): void
+    {
+        if (!$this->requireCapability('crm_subscription_edit')) {
+            return;
+        }
+
+        $id   = (int) $params['id'];
+        $page = '/websites/' . ExternalWebsites::publicId($id);
+        $this->withCrmWrite($page, function (ClientsRepository $repo) use ($id, $page): string {
+            $website = $this->app->externalWebsites()->get($id);
+            if ($website === null) {
+                return '/websites?notice=external-not-found';
+            }
+            $existing = array_map('intval', array_column($repo->subscriptionsByIds($website['subscription_ids']), 'id'));
+
+            return $this->app->externalWebsites()->delete($id, $existing)
+                ? '/websites?notice=external-deleted'
+                : $page . '?notice=external-linked';
         });
     }
 
@@ -293,15 +404,21 @@ final class CrmController extends Controller
         }
 
         $repo           = $this->app->crmRepository();
+        $external       = $this->app->externalWebsites();
         $subscriptionId = (int) ($_POST['subscription_id'] ?? 0);
         $websiteIdRaw   = trim((string) ($_POST['website_id'] ?? ''));
+        $externalId     = ExternalWebsites::parseId($websiteIdRaw);
         $websiteId      = $websiteIdRaw !== '' && ctype_digit($websiteIdRaw) ? (int) $websiteIdRaw : null;
+        $valid          = $websiteIdRaw === '' || $websiteId !== null
+            || ($externalId !== null && $external->get($externalId) !== null);
 
         $notice = 'website-update-failed';
-        if ($repo !== null && $subscriptionId > 0) {
+        if ($repo !== null && $subscriptionId > 0 && $valid) {
             try {
-                if ($repo->setSubscriptionWebsite($subscriptionId, $websiteId)) {
+                // The CRM row first: it also proves the subscription exists before the file names it.
+                if ($repo->setSubscriptionWebsite($subscriptionId, $websiteId) && $external->link($subscriptionId, $externalId)) {
                     $notice = 'website-updated';
+                    (new StatusChecks($this->app))->forgetAlert();
                 }
             } catch (\PDOException $e) {
                 $this->app->errorLog()->recordThrowable('crm_db', $e);
@@ -309,6 +426,107 @@ final class CrmController extends Controller
         }
 
         $this->redirect(Router::withQueryParam(Router::safeReturn($_POST['return'] ?? '/clients', '/clients'), 'notice', $notice));
+    }
+
+    /**
+     * An external-website write that compares against the CRM's URLs: an
+     * invalid or duplicate URL and an unreachable CRM go back to $back with
+     * a notice, as does success to the URL $write returns.
+     *
+     * @param callable(ClientsRepository): string $write
+     */
+    private function withCrmWrite(string $back, callable $write): void
+    {
+        $repo = $this->app->crmRepository();
+        if ($repo === null) {
+            $this->redirect(Router::withQueryParam($back, 'notice', 'external-failed'));
+
+            return;
+        }
+
+        try {
+            $this->redirect($write($repo));
+        } catch (\InvalidArgumentException $e) {
+            $this->redirect(Router::withQueryParam($back, 'notice', 'external-' . $e->getMessage()));
+        } catch (\PDOException $e) {
+            $this->app->errorLog()->recordThrowable('crm_db', $e);
+            $this->redirect(Router::withQueryParam($back, 'notice', 'external-failed'));
+        }
+    }
+
+    /**
+     * Client subscriptions with no CRM website get their external one, as
+     * website_id "x3" and website_url.
+     *
+     * @param list<array<string, mixed>> $subscriptions
+     * @return list<array<string, mixed>>
+     */
+    private function withExternalWebsites(array $subscriptions): array
+    {
+        $links = $this->app->externalWebsites()->links();
+        $urls  = array_column($this->app->externalWebsites()->all(), 'url', 'id');
+        foreach ($subscriptions as &$s) {
+            $externalId = $links[(int) $s['id']] ?? null;
+            if (empty($s['website_id']) && $externalId !== null) {
+                $s['website_id']  = ExternalWebsites::publicId($externalId);
+                $s['website_url'] = $urls[$externalId] ?? '';
+            }
+        }
+        unset($s);
+
+        return $subscriptions;
+    }
+
+    /**
+     * External websites as /websites rows, matched like listWebsites() on
+     * the URL or the client's company.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function externalWebsiteRows(ClientsRepository $repo, string $search): array
+    {
+        $rows = [];
+        foreach ($this->app->externalWebsites()->all() as $w) {
+            $clients = self::clientsOf($repo->subscriptionsByIds($w['subscription_ids']));
+            $matches = $search === '' || stripos($w['url'], $search) !== false
+                || array_filter($clients, static fn (array $c): bool => stripos((string) ($c['company'] ?? ''), $search) !== false) !== [];
+            if ($matches) {
+                $rows[] = [
+                    'id'                 => ExternalWebsites::publicId($w['id']),
+                    'url'                => $w['url'],
+                    'external'           => true,
+                    'clients'            => $clients,
+                    'tags'               => [],
+                    'vulnerable_reasons' => [],
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The distinct clients of subscriptionsByIds() rows, as swp_clients-shaped rows.
+     *
+     * @param list<array<string, mixed>> $subscriptions
+     * @return list<array<string, mixed>>
+     */
+    private static function clientsOf(array $subscriptions): array
+    {
+        $clients = [];
+        foreach ($subscriptions as $s) {
+            $clients[(int) $s['client_id']] = [
+                'id'         => (int) $s['client_id'],
+                'email'      => $s['client_email'] ?? null,
+                'first_name' => $s['first_name'] ?? null,
+                'last_name'  => $s['last_name'] ?? null,
+                'company'    => $s['company'] ?? null,
+            ];
+        }
+        $clients = array_values($clients);
+        usort($clients, static fn (array $a, array $b): int => strcmp(ClientsRepository::clientLabel($a), ClientsRepository::clientLabel($b)));
+
+        return $clients;
     }
 
     /** @param callable(ClientsRepository): void $render */

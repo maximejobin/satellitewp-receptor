@@ -432,6 +432,15 @@ $nav = $nav ?? 'sites';
   }
   document.querySelectorAll('.tag-filter').forEach(initTagFilter);
 
+  // A static dialog: data-open-dialog="<id>" opens it, .dialog-close inside closes it.
+  document.addEventListener('click', function (e) {
+    var opener = e.target.closest('[data-open-dialog]');
+    var target = opener && document.getElementById(opener.dataset.openDialog);
+    if (target) { target.showModal(); return; }
+    var closer = e.target.closest('dialog .dialog-close');
+    if (closer) { closer.closest('dialog').close(); }
+  });
+
   // Linked website of a subscription: one dialog, filled from the clicked row.
   var wfDialog = document.getElementById('wf-dialog');
   if (wfDialog) {

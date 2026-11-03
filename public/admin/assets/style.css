@@ -538,8 +538,8 @@ dialog.json-dialog::backdrop { background: rgba(15, 23, 42, .45); }
    select2 dropdown, attached to the dialog, can extend past its bottom edge. */
 dialog#wf-dialog { overflow: visible; width: min(520px, calc(100vw - 2rem)); }
 #wf-dialog .obs-dialog-body { overflow: visible; }
-#wf-dialog table.wf-details { margin: 0; }
-#wf-dialog table.wf-details th { width: 1%; white-space: nowrap; }
+dialog.obs-dialog table.kv { margin: 0; }
+dialog.obs-dialog table.kv th { width: 1%; white-space: nowrap; }
 
 /* Observation editor: one native <dialog> for add and edit. */
 .obs-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin: -.4rem 0 .8rem; }
@@ -574,7 +574,7 @@ table.obs-columns td.mono { white-space: nowrap; width: 1%; }
 .obs-field > label, .obs-field > legend { font-size: .82rem; font-weight: 600; padding: 0; margin-bottom: .35rem; }
 .obs-field > label { margin-bottom: 0; }
 .obs-field small, .obs-include small { color: var(--muted); font-size: .76rem; }
-.obs-field input[type="text"], .obs-field input[type="email"], .obs-field select, .obs-field textarea {
+.obs-field input[type="text"], .obs-field input[type="email"], .obs-field input[type="url"], .obs-field select, .obs-field textarea {
     width: 100%; box-sizing: border-box; padding: .55rem .7rem; font: inherit; font-size: .92rem; color: var(--text);
     background: var(--surface); border: 1px solid var(--border); border-radius: 7px;
 }

@@ -53,15 +53,18 @@ final class ClientsRepository
      *        subscription with no linked website), 'no_unassigned' (every
      *        subscription is linked, or the client has none at all), or
      *        null/'' for every client
+     * @param array<int, int> $externalLinks subscription id => external website id (ExternalWebsites::links()):
+     *        those subscriptions are linked, and their websites count in website_count
      * @return list<array<string, mixed>>
      */
     public function listClients(
         ?string $serviceFilter = null,
         ?string $search = null,
         ?string $subscriptionFilter = null,
+        array $externalLinks = [],
     ): array {
-        $where  = [];
-        $params = [];
+        $where                  = [];
+        [$notExternal, $params] = self::notInClause('s.id', array_keys($externalLinks), 'ext');
         if ($search !== null && $search !== '') {
             $where[]     = sprintf('(c.company LIKE :q %1$s OR c.first_name LIKE :q %1$s OR c.last_name LIKE :q %1$s OR c.email LIKE :q %1$s)', SqlLike::ESCAPE);
             $params['q'] = SqlLike::contains($search);
@@ -78,9 +81,10 @@ final class ClientsRepository
                      WHERE s.client_id = c.id AND s.subscription_status = 'active') AS active_subscription_count,
                    (SELECT COUNT(*) FROM swp_subscriptions s
                       LEFT JOIN swp_subscriptions_websites sw ON sw.subscription_id = s.id
-                     WHERE s.client_id = c.id AND sw.website_id IS NULL) AS orphan_subscription_count
+                     WHERE s.client_id = c.id AND sw.website_id IS NULL%s) AS orphan_subscription_count
             FROM swp_clients c
             SQL;
+        $sql = sprintf($sql, $notExternal);
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
@@ -89,6 +93,15 @@ final class ClientsRepository
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
+
+        $externalByClient = [];
+        foreach ($this->clientIdsBySubscriptionIds(array_keys($externalLinks)) as $subscriptionId => $clientId) {
+            $externalByClient[$clientId][$externalLinks[$subscriptionId]] = true;
+        }
+        foreach ($rows as &$row) {
+            $row['website_count'] = (int) $row['website_count'] + count($externalByClient[(int) $row['id']] ?? []);
+        }
+        unset($row);
 
         if ($serviceFilter === 'active') {
             $rows = array_values(array_filter($rows, static fn (array $r): bool => (int) $r['active_subscription_count'] > 0));
@@ -120,13 +133,61 @@ final class ClientsRepository
         return is_string($value) && $value !== '' ? $value : null;
     }
 
-    public function countOrphanSubscriptions(): int
+    /**
+     * Subscriptions linked to no website, of any status.
+     *
+     * @param list<int> $linkedElsewhere subscriptions linked to an external website (ExternalWebsites)
+     */
+    public function countOrphanSubscriptions(array $linkedElsewhere = []): int
     {
-        return (int) $this->pdo->query(<<<'SQL'
+        [$notExternal, $params] = self::notInClause('s.id', $linkedElsewhere, 'ext');
+        $stmt                   = $this->pdo->prepare(<<<SQL
             SELECT COUNT(*) FROM swp_subscriptions s
             LEFT JOIN swp_subscriptions_websites sw ON sw.subscription_id = s.id
-            WHERE sw.website_id IS NULL
-            SQL)->fetchColumn();
+            WHERE sw.website_id IS NULL{$notExternal}
+            SQL);
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * " AND $column NOT IN (:p0, …)" with its parameters; empty for an empty
+     * list, which MySQL refuses as NOT IN ().
+     *
+     * @param list<int> $ids
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private static function notInClause(string $column, array $ids, string $prefix): array
+    {
+        if ($ids === []) {
+            return ['', []];
+        }
+        $params = [];
+        foreach ($ids as $i => $id) {
+            $params[$prefix . $i] = $id;
+        }
+
+        return [" AND {$column} NOT IN (:" . implode(', :', array_keys($params)) . ')', $params];
+    }
+
+    /**
+     * @param list<int> $subscriptionIds
+     * @return array<int, int> subscription id => client id, for the ones that exist
+     */
+    private function clientIdsBySubscriptionIds(array $subscriptionIds): array
+    {
+        $result = [];
+        foreach (array_chunk($subscriptionIds, 500) as $chunk) {
+            $stmt = $this->pdo->prepare('SELECT id, client_id FROM swp_subscriptions WHERE id IN ('
+                . implode(',', array_fill(0, count($chunk), '?')) . ')');
+            $stmt->execute($chunk);
+            foreach ($stmt->fetchAll() as $row) {
+                $result[(int) $row['id']] = (int) $row['client_id'];
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -403,6 +464,51 @@ final class ClientsRepository
         $stmt->execute(['website_id' => $websiteId]);
 
         return $stmt->fetchAll();
+    }
+
+    /**
+     * Subscriptions by id, shaped like subscriptionsForWebsite() — those of
+     * an external website. Ids no longer in the CRM are simply absent.
+     *
+     * @param list<int> $subscriptionIds
+     * @return list<array<string, mixed>>
+     */
+    public function subscriptionsByIds(array $subscriptionIds): array
+    {
+        $rows = [];
+        foreach (array_chunk($subscriptionIds, 500) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt         = $this->pdo->prepare(<<<SQL
+                SELECT s.*,
+                       p.name AS product_name, p.category AS product_category,
+                       l.slug AS license_slug,
+                       CASE WHEN mp.auto_id IS NOT NULL THEN 1 ELSE 0 END AS is_maintenance_plan,
+                       c.id AS client_id, c.email AS client_email,
+                       c.first_name, c.last_name, c.company
+                FROM swp_subscriptions s
+                JOIN swp_products p ON p.id = s.product_id
+                LEFT JOIN swp_licenses l ON l.auto_id = p.auto_id
+                LEFT JOIN swp_maintenance_plans mp ON mp.auto_id = p.auto_id
+                JOIN swp_clients c ON c.id = s.client_id
+                WHERE s.id IN ({$placeholders})
+                SQL);
+            $stmt->execute($chunk);
+            $rows = array_merge($rows, $stmt->fetchAll());
+        }
+        usort($rows, static fn (array $a, array $b): int => strcmp((string) $b['creation_date'], (string) $a['creation_date']));
+
+        return $rows;
+    }
+
+    /**
+     * Every swp_websites URL, DEV-tagged ones included — what an external
+     * website may not duplicate.
+     *
+     * @return list<string>
+     */
+    public function allWebsiteUrls(): array
+    {
+        return array_map('strval', $this->pdo->query('SELECT url FROM swp_websites')->fetchAll(PDO::FETCH_COLUMN));
     }
 
     /**

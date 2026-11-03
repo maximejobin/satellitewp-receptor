@@ -7,6 +7,7 @@ namespace SatelliteWP\Manager;
 use SatelliteWP\Manager\Catalog\SoftwareCatalog;
 use SatelliteWP\Manager\Crm\ClientsDb;
 use SatelliteWP\Manager\Crm\ClientsRepository;
+use SatelliteWP\Manager\Crm\ExternalWebsites;
 use SatelliteWP\Manager\Crm\WebsiteVulnerability;
 use SatelliteWP\Manager\Http\GoogleAuth;
 use SatelliteWP\Manager\Http\LoginLockout;
@@ -357,6 +358,13 @@ final class App
         }
 
         return $this->services[ClientsRepository::class] ??= new ClientsRepository($this->crmDb()->pdo());
+    }
+
+    public function externalWebsites(): ExternalWebsites
+    {
+        return $this->services[ExternalWebsites::class] ??= new ExternalWebsites(
+            (string) $this->config->get('data_dir') . '/crm/external-websites.json'
+        );
     }
 
     public function pipeline(): Pipeline

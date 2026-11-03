@@ -43,7 +43,7 @@ framework.
   `probes/*.json`, `findings.json`, plus analyst inputs `observations.json`,
   `licenses.json` and `report-exclusions.json`. No derived files. HTTP 500s go to `logs/`. Also
   written on purpose: `site.json`, `events/*.jsonl`, `integrity/*.json`,
-  `*.lock` files and the replay/report-token caches.
+  `*.lock` files, the replay/report-token caches and `crm/external-websites.json`.
 - **Source files are language-neutral.** Findings and probes carry ids,
   status, observed values and data — never prose. Sentences live in
   `config/lang/{fr,en}.php`, rendered by `Rules\Translator`.
@@ -298,6 +298,18 @@ WordPress against endoflife.date ("Outdated"), plugins and themes against the
 synced `is_vulnerable` or Wordfence; ignored ids never count. Any of them
 lights the "Vulnerable" badge on `/websites` and the website page (`/items`
 still filters on the synced flag).
+Every subscription, whatever its status, must be linked to a website; a
+non-WordPress one (absent from swp_websites, which BlogVault feeds) links to
+an **external website** (`Crm\ExternalWebsites`, `data/crm/external-websites.json`,
+URL only, ids `x3`, each holding its subscription ids). A subscription has one
+website at most: linking it to an external one deletes its
+swp_subscriptions_websites row, and the reverse. Orphan counts exclude them
+(`countOrphanSubscriptions`/`listClients` take the links); `/websites` merges
+them ("External" badge, Source filter; a tag or connection filter hides them),
+`/websites/x3` is their page; created only from `/websites`, refused when the
+URL is already a website, deleted only once no CRM subscription holds them.
+Managed with `crm_subscription_edit` (admin, maintenance, coordinator). The CRM
+sync never writes swp_subscriptions_websites: links are manual.
 Access runbook: `docs/acces-mysql-distant.md`.
 
 **Web UI.** English chrome, light theme, orange accent `#f26f2b`. The

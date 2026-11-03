@@ -64,7 +64,7 @@ final class StatusChecks
                     'activeEmptyCompanyClients' => $crmRepo->clientsActiveWithEmptyCompany(),
                     'activeNoHubspotClients'    => $crmRepo->clientsActiveWithoutHubspotId(),
                     'activeNoTeamworkClients'   => $crmRepo->clientsActiveWithoutTeamworkId(),
-                    'orphanSubscriptions'       => $crmRepo->countOrphanSubscriptions(),
+                    'orphanSubscriptions'       => $crmRepo->countOrphanSubscriptions(array_keys($this->app->externalWebsites()->links())),
                 ];
             } catch (\Throwable $e) {
                 $crm = ['error' => $this->app->errorLog()->recordThrowable('crm_db', $e)];
@@ -136,6 +136,12 @@ final class StatusChecks
         }
 
         return self::needsAttention($this->collect());
+    }
+
+    /** Drops the cached verdict, after a change that can clear or raise an alert. */
+    public function forgetAlert(): void
+    {
+        @unlink($this->cacheFile());
     }
 
     private function storeAlert(bool $alert): void

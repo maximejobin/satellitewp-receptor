@@ -120,6 +120,20 @@ final class RouterTest extends TestCase
         $this->assertSame('not_found', Router::matchRoute('/websites/7/extra')['route']);
     }
 
+    public function testExternalWebsiteRoutesTakeOnlyThePrefixedId(): void
+    {
+        $this->assertSame(['route' => 'crm_external_website', 'params' => ['id' => '3']], Router::matchRoute('/websites/x3'));
+        $this->assertSame('not_found', Router::matchRoute('/websites/x0')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/websites/x3/extra')['route']);
+        $this->assertSame('not_found', Router::matchRoute('/clients/x3')['route']);
+
+        $this->assertSame('external_website_add', Router::matchPostRoute('/websites/external')['route']);
+        $this->assertSame(['route' => 'external_website_update', 'params' => ['id' => '3']], Router::matchPostRoute('/websites/x3/update'));
+        $this->assertSame(['route' => 'external_website_delete', 'params' => ['id' => '3']], Router::matchPostRoute('/websites/x3/delete'));
+        $this->assertSame('not_found', Router::matchPostRoute('/websites/7/delete')['route']);
+        $this->assertSame('not_found', Router::matchPostRoute('/websites/x3/rename')['route']);
+    }
+
     public function testWithQueryParamKeepsAnExistingQueryAndFragment(): void
     {
         $this->assertSame('/clients?notice=saved', Router::withQueryParam('/clients', 'notice', 'saved'));

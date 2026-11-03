@@ -15,18 +15,8 @@ use SatelliteWP\Manager\Crm\ClientsRepository;
  */
 class ClientsRepositoryTest extends TestCase
 {
-    protected PDO $pdo;
-    private ClientsRepository $repo;
-
-    protected function connect(): PDO
-    {
-        return new PortableSqlPdo();
-    }
-
-    protected function setUp(): void
-    {
-        $this->pdo = $this->connect();
-        $this->pdo->exec(<<<'SQL'
+    /** The CRM tables, portable: also seeded by route tests that need a CRM. */
+    public const string SCHEMA = <<<'SQL'
             CREATE TABLE swp_clients (
                 id INTEGER PRIMARY KEY, email VARCHAR(255) NOT NULL, first_name VARCHAR(255), last_name VARCHAR(255),
                 company VARCHAR(255), teamwork_id VARCHAR(255), hubspot_id VARCHAR(255), blogvault_client_id VARCHAR(255),
@@ -74,7 +64,20 @@ class ClientsRepositoryTest extends TestCase
                 date_added VARCHAR(255) NOT NULL, date_sync VARCHAR(255) NOT NULL,
                 PRIMARY KEY (website_id, tag)
             );
-            SQL);
+            SQL;
+
+    protected PDO $pdo;
+    private ClientsRepository $repo;
+
+    protected function connect(): PDO
+    {
+        return new PortableSqlPdo();
+    }
+
+    protected function setUp(): void
+    {
+        $this->pdo = $this->connect();
+        $this->pdo->exec(self::SCHEMA);
 
         $this->repo = new ClientsRepository($this->pdo);
     }
@@ -204,6 +207,48 @@ class ClientsRepositoryTest extends TestCase
             (3001, 2, 300, 'active', '2026-01-01 00:00:00', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
 
         $this->assertSame(2, $this->repo->countOrphanSubscriptions());
+    }
+
+    public function testASubscriptionLinkedToAnExternalWebsiteIsNotAnOrphan(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("INSERT INTO swp_subscriptions (id, client_id, product_id, subscription_status, creation_date, last_payment_date, date_sync) VALUES
+            (3000, 1, 300, 'cancelled', '2026-01-01 00:00:00', '2026-01-01 00:00:00', '2026-01-01 00:00:00'),
+            (3001, 2, 300, 'active', '2026-01-01 00:00:00', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
+
+        $this->assertSame(2, $this->repo->countOrphanSubscriptions([]), 'every status counts');
+        $this->assertSame(1, $this->repo->countOrphanSubscriptions([3000]));
+        $this->assertSame(0, $this->repo->countOrphanSubscriptions([3000, 3001]));
+
+        $clients = array_column($this->repo->listClients(externalLinks: [3000 => 7]), null, 'id');
+        $this->assertSame(0, (int) $clients[1]['orphan_subscription_count']);
+        $this->assertSame(2, $clients[1]['website_count'], 'its CRM website plus the external one');
+        $this->assertSame(1, (int) $clients[2]['orphan_subscription_count']);
+        $this->assertSame([2], array_column($this->repo->listClients(subscriptionFilter: 'have_unassigned', externalLinks: [3000 => 7]), 'id'));
+    }
+
+    public function testSubscriptionsByIdsSkipsIdsNoLongerInTheCrm(): void
+    {
+        $this->seedBasicPortfolio();
+
+        $rows = $this->repo->subscriptionsByIds([2000, 1000, 999999]);
+
+        $this->assertSame([2000, 1000], array_map('intval', array_column($rows, 'id')), 'newest first');
+        $this->assertSame('Acme Inc', $rows[1]['company']);
+        $this->assertSame('Care Plan Gold', $rows[0]['product_name']);
+        $this->assertSame([], $this->repo->subscriptionsByIds([]));
+    }
+
+    public function testAllWebsiteUrlsIncludesDevTaggedWebsites(): void
+    {
+        $this->seedBasicPortfolio();
+        $this->pdo->exec("INSERT INTO swp_website_tags (website_id, tag, date_added, date_sync) VALUES
+            (2, 'DEV', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
+
+        $urls = $this->repo->allWebsiteUrls();
+        sort($urls);
+
+        $this->assertSame(['https://siteone.test', 'https://sitetwo.test'], $urls);
     }
 
     public function testClientsLastSyncedAtIsTheMostRecentDateSync(): void

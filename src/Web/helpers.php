@@ -326,12 +326,12 @@ function license_status_select(
  * The linked website of a subscription and the button opening
  * subscription_link_dialog(), which reads the row's details from data-wf.
  *
- * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id'/'website_url'
- *                                           and the product columns
+ * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id' (CRM id or
+ *                                           ExternalWebsites "x3"), 'website_url' and the product columns
  */
 function subscription_website_form(array $subscription, string $return): string
 {
-    $currentId  = isset($subscription['website_id']) ? (int) $subscription['website_id'] : null;
+    $currentId  = isset($subscription['website_id']) && $subscription['website_id'] !== '' ? (string) $subscription['website_id'] : null;
     $currentUrl = $subscription['website_url'] ?? null;
     $subId      = (int) $subscription['id'];
     $label      = $currentId !== null ? (site_display($currentUrl) ?: ('#' . $currentId)) : null;
@@ -351,7 +351,7 @@ function subscription_website_form(array $subscription, string $return): string
 
     return '<span class="wf-display">'
         . ($label !== null
-            ? '<a href="/websites/' . $currentId . '">' . e($label) . '</a>'
+            ? '<a href="/websites/' . e($currentId) . '">' . e($label) . '</a>'
             : '<span class="val-error">Unassigned</span>')
         . ' <button type="button" class="wf-edit-btn" data-wf="' . e((string) json_encode($details)) . '" '
         . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
@@ -376,6 +376,29 @@ function subscription_link_dialog(string $csrf): string
         . '<footer class="obs-dialog-foot">'
         . '<button type="button" class="btn btn-muted wf-close">Cancel</button>'
         . '<button type="submit" class="btn">Save</button>'
+        . '</footer></form></dialog>';
+}
+
+/**
+ * Add or edit dialog of a non-WordPress website (ExternalWebsites), opened
+ * by any button with data-open-dialog="<$id>".
+ */
+function external_website_dialog(string $id, string $action, string $title, string $submit, string $csrf, string $url = ''): string
+{
+    return '<dialog id="' . e($id) . '" class="obs-dialog" aria-labelledby="' . e($id) . '-title">'
+        . '<form method="post" action="' . e($action) . '">'
+        . '<input type="hidden" name="_csrf" value="' . e($csrf) . '">'
+        . '<header class="obs-dialog-head"><h3 id="' . e($id) . '-title">' . e($title) . '</h3>'
+        . '<button type="button" class="json-dialog-close dialog-close" aria-label="Close">&times;</button></header>'
+        . '<div class="obs-dialog-body">'
+        . '<table class="kv"><tbody>' . field('Site type', 'Non-WordPress') . '</tbody></table>'
+        . '<div class="obs-field"><label for="' . e($id) . '-url">URL</label>'
+        . '<input id="' . e($id) . '-url" type="url" name="url" required maxlength="255" value="' . e($url) . '" '
+        . 'placeholder="https://www.example.com" autocomplete="off"></div>'
+        . '</div>'
+        . '<footer class="obs-dialog-foot">'
+        . '<button type="button" class="btn btn-muted dialog-close">Cancel</button>'
+        . '<button type="submit" class="btn">' . e($submit) . '</button>'
         . '</footer></form></dialog>';
 }
 

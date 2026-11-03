@@ -5,7 +5,11 @@
  * @var list<string> $selectedExcludeTags
  * @var list<string> $allTags
  * @var string $selectedConnection
+ * @var string $selectedSource '', 'wordpress' or 'external'
  * @var string $search
+ * @var bool $canEdit
+ * @var string $csrf
+ * @var string $notice
  * @var array<string, string|null> $links
  */
 use SatelliteWP\Manager\Crm\ClientsRepository;
@@ -25,9 +29,29 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
 };
 ?>
 <h1>Websites</h1>
-<p class="muted">From the external CRM/billing database. Filter by tag or connection below —
-    DEV-tagged sites are excluded by default ("Exclude tags"). Search matches the site's URL or
-    its client's company name.</p>
+<p class="muted">From the external CRM/billing database, plus the non-WordPress websites added here
+    ("External"). Filter by tag or connection below — DEV-tagged sites are excluded by default
+    ("Exclude tags"). Search matches the site's URL or its client's company name.</p>
+
+<?php
+$notices = [
+    'external-deleted'   => ['success', 'External website deleted.'],
+    'external-invalid'   => ['critical', 'Enter an absolute http(s) URL.'],
+    'external-duplicate' => ['critical', 'This URL is already a website.'],
+    'external-not-found' => ['critical', 'External website not found.'],
+    'external-failed'    => ['critical', 'Could not save the external website.'],
+];
+?>
+<?php if (isset($notices[$notice])): [$level, $text] = $notices[$notice]; ?>
+    <?= notice($level, e($text)) ?>
+<?php endif; ?>
+
+<?php if ($canEdit): ?>
+<div class="obs-toolbar">
+    <button type="button" class="btn" data-open-dialog="external-add">+ Add external website</button>
+</div>
+<?= external_website_dialog('external-add', '/websites/external', 'New external website', 'Add website', $csrf) ?>
+<?php endif; ?>
 
 <div class="search-group">
 <form method="get" class="search">
@@ -43,8 +67,13 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
         <option value="CONNECTED" <?= $selectedConnection === 'CONNECTED' ? 'selected' : '' ?>>Connected</option>
         <option value="DISCONNECTED" <?= $selectedConnection === 'DISCONNECTED' ? 'selected' : '' ?>>Disconnected</option>
     </select>
+    <select name="source" class="js-filter-dropdown" data-label="Source">
+        <option value="">Any source</option>
+        <option value="wordpress" <?= $selectedSource === 'wordpress' ? 'selected' : '' ?>>WordPress</option>
+        <option value="external" <?= $selectedSource === 'external' ? 'selected' : '' ?>>External</option>
+    </select>
     <button type="submit" class="btn btn-secondary js-apply-filters">Filter</button>
-    <?php if ($selectedTags !== [] || $selectedConnection !== '' || $search !== ''
+    <?php if ($selectedTags !== [] || $selectedConnection !== '' || $search !== '' || $selectedSource !== ''
         || $selectedExcludeTags !== [ClientsRepository::TAG_EXCLUDED_FROM_ASSIGNMENT]): ?>
         <a href="/websites" class="search-reset">Reset filter</a>
     <?php endif; ?>
@@ -67,12 +96,13 @@ $tagFilter = static function (string $id, string $label, string $field, array $s
             );
             ?>
             <tr>
-                <td><a href="/websites/<?= (int) $w['id'] ?>"><?= e(site_display($w['url'])) ?></a></td>
+                <td><a href="/websites/<?= e((string) $w['id']) ?>"><?= e(site_display($w['url'])) ?></a><?php if (!empty($w['external'])): ?>
+                    <span class="badge badge-muted">External</span><?php endif; ?></td>
                 <td><?= $clientLabels !== [] ? implode(', ', $clientLabels) : '' ?></td>
                 <td class="mono"><?= e($w['wp_core_version'] ?? '') ?></td>
                 <td><?php foreach ($w['tags'] as $tag): ?><span class="badge badge-muted"><?= e($tag) ?></span> <?php endforeach; ?></td>
-                <td><span class="badge <?= ($w['connection_status'] ?? '') === 'CONNECTED' ? 'badge-ok' : 'badge-error' ?>">
-                        <?= e($w['connection_status'] ?? '') ?></span></td>
+                <td><?php if (($w['connection_status'] ?? '') !== ''): ?><span class="badge <?= $w['connection_status'] === 'CONNECTED' ? 'badge-ok' : 'badge-error' ?>">
+                        <?= e($w['connection_status']) ?></span><?php endif; ?></td>
                 <td><?php if ($w['vulnerable_reasons'] !== []): ?><span class="badge badge-error" title="<?= e(implode(' · ', $w['vulnerable_reasons'])) ?>">Vulnerable</span><?php endif; ?></td>
                 <td><?= external_link_icon(
                     $links['blogvault_view_website'] ?? null,
