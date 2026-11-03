@@ -453,13 +453,17 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
     display: flex !important; align-items: center;
     color: var(--text) !important;
     line-height: normal !important;
-    padding: 0;
+    padding: 0 1.1rem 0 0; /* room for the arrow */
+    flex: 1 1 auto; min-width: 0; /* fills the box; long text ellipsizes */
 }
 .select2-container--default .select2-selection--single .select2-selection__placeholder {
     color: var(--muted); line-height: normal !important;
 }
+/* A flex sibling of the rendered text, so float:right no longer applies:
+   order puts it after the text, the margin clears the absolute arrow. */
 .select2-container--default .select2-selection--single .select2-selection__clear {
-    color: var(--faint); margin-right: .35rem; font-size: 1.05rem;
+    order: 1; height: auto;
+    color: var(--faint); margin-right: 1rem; font-size: 1.05rem;
 }
 .select2-container--default .select2-selection--single .select2-selection__clear:hover { color: var(--muted); }
 .select2-container--default .select2-selection--single .select2-selection__arrow {

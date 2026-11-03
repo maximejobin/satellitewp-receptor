@@ -10,7 +10,6 @@ $nav = $nav ?? 'sites';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title><?= e($title ?? 'Manager') ?> — SatelliteWP Manager</title>
-    <link rel="stylesheet" href="/assets/style.css">
     <?php // jQuery is shared by dataTables and select2 — loaded once, before either. ?>
     <?php if (!empty($dataTables) || !empty($select2)): ?>
     <script src="/assets/vendor/jquery/jquery-3.7.1.min.js"></script>
@@ -43,6 +42,8 @@ $nav = $nav ?? 'sites';
     <script src="/assets/vendor/popper/popper.min.js"></script>
     <script src="/assets/vendor/tippy/tippy-bundle.umd.min.js"></script>
     <?php endif; ?>
+    <?php // After the vendor sheets: at equal specificity, the app's overrides of them win by order. ?>
+    <link rel="stylesheet" href="/assets/style.css">
     <?php if (!empty($reportAssets)): ?>
     <link rel="stylesheet" href="/assets/report.css">
     <?php endif; ?>
