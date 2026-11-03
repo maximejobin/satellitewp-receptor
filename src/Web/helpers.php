@@ -343,7 +343,6 @@ function subscription_website_form(array $subscription, string $return): string
         'website_label' => $label,
         'rows'          => array_values(array_filter([
             ['Product', (string) ($subscription['product_name'] ?? '')],
-            ['License', (string) ($subscription['license_slug'] ?? '')],
             ['Category', (string) ($subscription['product_category'] ?? '')],
             ['Subscription id', (string) $subId],
         ], static fn (array $row): bool => $row[1] !== '')),
