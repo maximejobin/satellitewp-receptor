@@ -17,6 +17,17 @@ function e(mixed $value): string
 }
 
 /**
+ * An /assets/ URL with ?ver= set to the file's modification time: a deploy (git pull)
+ * rewrites only changed files, so only their URL changes and browsers refetch them.
+ */
+function asset(string $path): string
+{
+    $mtime = @filemtime(dirname(__DIR__, 2) . '/public/admin' . $path);
+
+    return e($mtime !== false ? $path . '?ver=' . $mtime : $path);
+}
+
+/**
  * $url when it is an absolute http(s) URL, else null: a javascript: or data:
  * URL from a payload, probe or CRM row must never become a clickable href.
  */

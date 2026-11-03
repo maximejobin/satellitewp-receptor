@@ -318,7 +318,8 @@ show its provenance (`src_note()`: payload = as reported by the plugin, probe
 = measured by Manager). Datatables: explicit Search/Filter button, never live
 filtering; server-side AJAX when row counts grow. Select2 in AJAX mode only.
 `license_select()` saves via `fetch()` (`requestSubmit()`, since
-`form.submit()` fires no submit event). Assets are vendored, no CDN, no build.
+`form.submit()` fires no submit event). Assets are vendored, no CDN, no build; templates link them through `asset()`
+(`?ver=` = file mtime, so a `git pull` busts the cache of changed files only).
 **Re-run probes** (done or failed extraction, `extraction_run`) queues the chosen
 probes as `queued` rows in `probe_runs`; `ingest:process` runs them
 (`Pipeline::runQueuedProbes`, each probe `running` while it runs) and

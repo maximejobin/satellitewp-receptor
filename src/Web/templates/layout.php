@@ -12,11 +12,11 @@ $nav = $nav ?? 'sites';
     <title><?= e($title ?? 'Manager') ?> — SatelliteWP Manager</title>
     <?php // jQuery is shared by dataTables and select2 — loaded once, before either. ?>
     <?php if (!empty($dataTables) || !empty($select2)): ?>
-    <script src="/assets/vendor/jquery/jquery-3.7.1.min.js"></script>
+    <script src="<?= asset('/assets/vendor/jquery/jquery-3.7.1.min.js') ?>"></script>
     <?php endif; ?>
     <?php if (!empty($dataTables)): ?>
-    <link rel="stylesheet" href="/assets/vendor/datatables/dataTables.dataTables.min.css">
-    <script src="/assets/vendor/datatables/dataTables.min.js"></script>
+    <link rel="stylesheet" href="<?= asset('/assets/vendor/datatables/dataTables.dataTables.min.css') ?>">
+    <script src="<?= asset('/assets/vendor/datatables/dataTables.min.js') ?>"></script>
     <script>
       (function () {
         var collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
@@ -33,19 +33,19 @@ $nav = $nav ?? 'sites';
     </script>
     <?php endif; ?>
     <?php if (!empty($select2)): ?>
-    <link rel="stylesheet" href="/assets/vendor/select2/select2.min.css">
-    <script src="/assets/vendor/select2/select2.min.js"></script>
+    <link rel="stylesheet" href="<?= asset('/assets/vendor/select2/select2.min.css') ?>">
+    <script src="<?= asset('/assets/vendor/select2/select2.min.js') ?>"></script>
     <?php endif; ?>
     <?php if (!empty($tooltip)): ?>
-    <link rel="stylesheet" href="/assets/vendor/tippy/tippy.css">
-    <link rel="stylesheet" href="/assets/vendor/tippy/light-border.css">
-    <script src="/assets/vendor/popper/popper.min.js"></script>
-    <script src="/assets/vendor/tippy/tippy-bundle.umd.min.js"></script>
+    <link rel="stylesheet" href="<?= asset('/assets/vendor/tippy/tippy.css') ?>">
+    <link rel="stylesheet" href="<?= asset('/assets/vendor/tippy/light-border.css') ?>">
+    <script src="<?= asset('/assets/vendor/popper/popper.min.js') ?>"></script>
+    <script src="<?= asset('/assets/vendor/tippy/tippy-bundle.umd.min.js') ?>"></script>
     <?php endif; ?>
     <?php // After the vendor sheets: at equal specificity, the app's overrides of them win by order. ?>
-    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="<?= asset('/assets/style.css') ?>">
     <?php if (!empty($reportAssets)): ?>
-    <link rel="stylesheet" href="/assets/report.css">
+    <link rel="stylesheet" href="<?= asset('/assets/report.css') ?>">
     <?php endif; ?>
 </head>
 <body>
@@ -479,7 +479,7 @@ $nav = $nav ?? 'sites';
   }
 </script>
 <?php if (!empty($reportAssets)): ?>
-<script src="/assets/report.js"></script>
+<script src="<?= asset('/assets/report.js') ?>"></script>
 <?php endif; ?>
 </body>
 </html>
