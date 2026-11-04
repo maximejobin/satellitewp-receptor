@@ -826,6 +826,19 @@ class ClientsRepositoryTest extends TestCase
         $this->assertSame('Storefront', $updateAvailable['rows'][0]['name']);
     }
 
+    public function testSearchItemsFiltersByWebsiteTags(): void
+    {
+        $this->seedItemsForSearch();
+
+        $vip = $this->repo->searchItems(['tags' => ['vip']], 0, 50);
+        $this->assertSame(2, $vip['filtered'], 'items of the vip site only');
+        $this->assertSame([1], array_values(array_unique(array_map('intval', array_column($vip['rows'], 'website_id')))));
+
+        $this->assertSame(1, $this->repo->searchItems(['excludeTags' => ['vip']], 0, 50)['filtered']);
+        $this->assertSame(0, $this->repo->searchItems(['tags' => ['ecommerce'], 'excludeTags' => ['ecommerce']], 0, 50)['filtered'], 'exclusion wins');
+        $this->assertSame(3, $this->repo->searchItems(['tags' => [], 'excludeTags' => []], 0, 50)['filtered']);
+    }
+
     public function testSearchItemsFreeTextMatchesNameSlugOrWebsiteUrl(): void
     {
         $this->seedItemsForSearch();

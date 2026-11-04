@@ -152,6 +152,30 @@ final class ClientsRepository
     }
 
     /**
+     * Website tag filters: $tags OR-matched (a website carrying one of them is kept),
+     * $excludeTags drop a website carrying any of them, even one matching $tags.
+     *
+     * @param list<string>         $where
+     * @param array<string, mixed> $params
+     * @param list<string>         $tags
+     * @param list<string>         $excludeTags
+     */
+    private static function addTagClauses(array &$where, array &$params, string $websiteColumn, array $tags, array $excludeTags): void
+    {
+        foreach (['IN' => [$tags, 'tag'], 'NOT IN' => [$excludeTags, 'extag']] as $operator => [$list, $prefix]) {
+            if ($list === []) {
+                continue;
+            }
+            $placeholders = [];
+            foreach ($list as $i => $tag) {
+                $placeholders[]       = ':' . $prefix . $i;
+                $params[$prefix . $i] = $tag;
+            }
+            $where[] = "{$websiteColumn} {$operator} (SELECT website_id FROM swp_website_tags WHERE tag IN (" . implode(',', $placeholders) . '))';
+        }
+    }
+
+    /**
      * " AND $column NOT IN (:p0, …)" with its parameters; empty for an empty
      * list, which MySQL refuses as NOT IN ().
      *
@@ -350,24 +374,7 @@ final class ClientsRepository
             )';
             $params['client_id'] = $clientId;
         }
-        if ($tags !== null && $tags !== []) {
-            $placeholders = [];
-            foreach ($tags as $i => $tag) {
-                $name                = 'tag' . $i;
-                $placeholders[]      = ':' . $name;
-                $params[$name]       = $tag;
-            }
-            $where[] = 'w.id IN (SELECT website_id FROM swp_website_tags WHERE tag IN (' . implode(',', $placeholders) . '))';
-        }
-        if ($excludeTags !== null && $excludeTags !== []) {
-            $placeholders = [];
-            foreach ($excludeTags as $i => $tag) {
-                $name           = 'extag' . $i;
-                $placeholders[] = ':' . $name;
-                $params[$name]  = $tag;
-            }
-            $where[] = 'w.id NOT IN (SELECT website_id FROM swp_website_tags WHERE tag IN (' . implode(',', $placeholders) . '))';
-        }
+        self::addTagClauses($where, $params, 'w.id', $tags ?? [], $excludeTags ?? []);
         if ($search !== null && $search !== '') {
             $esc         = SqlLike::ESCAPE;
             $where[]     = "(w.url LIKE :q {$esc} OR w.host LIKE :q {$esc} OR w.id IN (
@@ -804,7 +811,7 @@ final class ClientsRepository
     /**
      * Paginated cross-site browse of every item, with its website's URL.
      *
-     * @param array{type?: string, q?: string, vulnerable?: bool, updateAvailable?: bool} $filters
+     * @param array{type?: string, q?: string, vulnerable?: bool, updateAvailable?: bool, tags?: list<string>, excludeTags?: list<string>} $filters
      * @return array{total: int, filtered: int, rows: list<array<string, mixed>>}
      */
     public function searchItems(array $filters, int $offset, int $limit): array
@@ -823,6 +830,7 @@ final class ClientsRepository
         if (!empty($filters['updateAvailable'])) {
             $where[] = 'i.is_update_available = 1';
         }
+        self::addTagClauses($where, $params, 'i.website_id', $filters['tags'] ?? [], $filters['excludeTags'] ?? []);
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
             $where[]     = sprintf('(i.name LIKE :q %1$s OR i.slug LIKE :q %1$s OR w.url LIKE :q %1$s)', SqlLike::ESCAPE);

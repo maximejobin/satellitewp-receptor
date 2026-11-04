@@ -748,3 +748,25 @@ function wp_version_status_badge(string $status): string
         default    => '<span class="badge badge-warn">Outdated</span>',
     };
 }
+
+/**
+ * Tag multi-select driven by initTagFilter() (layout.php): picks are submitted as
+ * hidden "$field[]" inputs and shown as removable chips under the form.
+ *
+ * @param list<string> $selected
+ * @param list<string> $allTags
+ */
+function tag_filter(string $id, string $label, string $field, array $selected, array $allTags, bool $exclude): string
+{
+    $options = '';
+    foreach ($allTags as $tag) {
+        $options .= '<button type="button" data-tag="' . e($tag) . '">' . e($tag) . '</button>';
+    }
+
+    return '<div class="filter-dropdown tag-filter' . ($exclude ? ' tag-filter-exclude' : '') . '" id="' . e($id) . '" '
+        . 'data-field="' . e($field) . '" data-selected="' . e(implode(',', $selected)) . '">'
+        . '<button type="button" class="filter-dropdown-btn">' . e($label)
+        . ' <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        . 'stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>'
+        . '<div class="filter-dropdown-panel">' . $options . '</div></div>';
+}

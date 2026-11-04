@@ -320,10 +320,12 @@ final class CrmController extends Controller
     {
         $this->withRepository('Items', 'crm-items', function (ClientsRepository $repo): void {
             $this->render('crm-items', [
-                'title'      => 'Items',
-                'nav'        => 'crm-items',
-                'dataTables' => true,
-                'types'      => $repo->distinctItemTypes(),
+                'title'       => 'Items',
+                'nav'         => 'crm-items',
+                'dataTables'  => true,
+                'types'       => $repo->distinctItemTypes(),
+                'allTags'     => $repo->searchTags('', 500),
+                'excludeTags' => [ClientsRepository::TAG_EXCLUDED_FROM_ASSIGNMENT],
             ]);
         });
     }
@@ -351,6 +353,11 @@ final class CrmController extends Controller
                 'type'            => (string) ($_GET['type'] ?? ''),
                 'vulnerable'      => !empty($_GET['vulnerable']),
                 'updateAvailable' => !empty($_GET['updateAvailable']),
+                'tags'            => self::stringList($_GET['tag'] ?? []),
+                // An empty list is not sent at all: exclude_tag_present tells "cleared" from "not sent".
+                'excludeTags'     => isset($_GET['exclude_tag_present'])
+                    ? self::stringList($_GET['excludeTag'] ?? [])
+                    : [ClientsRepository::TAG_EXCLUDED_FROM_ASSIGNMENT],
             ], max(0, (int) ($_GET['start'] ?? 0)), $length);
         } catch (\PDOException $e) {
             $ref = $this->app->errorLog()->recordThrowable('crm_db', $e);

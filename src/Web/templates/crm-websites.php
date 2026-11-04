@@ -13,20 +13,6 @@
  * @var array<string, string|null> $links
  */
 use SatelliteWP\Manager\Crm\ClientsRepository;
-
-$tagFilter = static function (string $id, string $label, string $field, array $selected, array $allTags, bool $excludeStyle): string {
-    $options = '';
-    foreach ($allTags as $tag) {
-        $options .= '<button type="button" data-tag="' . e($tag) . '">' . e($tag) . '</button>';
-    }
-
-    return '<div class="filter-dropdown tag-filter' . ($excludeStyle ? ' tag-filter-exclude' : '') . '" id="' . e($id) . '" '
-        . 'data-field="' . e($field) . '" data-selected="' . e(implode(',', $selected)) . '">'
-        . '<button type="button" class="filter-dropdown-btn">' . e($label)
-        . ' <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-        . 'stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>'
-        . '<div class="filter-dropdown-panel">' . $options . '</div></div>';
-};
 ?>
 <h1>Websites</h1>
 <p class="muted">From the external CRM/billing database, plus the non-WordPress websites added here
@@ -57,9 +43,8 @@ $notices = [
 <form method="get" class="search">
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search…">
 
-    <?php // Small tag vocabulary: plain dropdowns driven by initTagFilter() (layout.php). ?>
-    <?= $tagFilter('tags-include-filter', 'Include tags', 'tag', $selectedTags, $allTags, false) ?>
-    <?= $tagFilter('tags-exclude-filter', 'Exclude tags', 'excludeTag', $selectedExcludeTags, $allTags, true) ?>
+    <?= tag_filter('tags-include-filter', 'Include tags', 'tag', $selectedTags, $allTags, false) ?>
+    <?= tag_filter('tags-exclude-filter', 'Exclude tags', 'excludeTag', $selectedExcludeTags, $allTags, true) ?>
     <input type="hidden" name="exclude_tag_present" value="1">
 
     <select name="connection" class="js-filter-dropdown" data-label="Connection">

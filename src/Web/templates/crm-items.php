@@ -1,12 +1,17 @@
 <?php
-/** @var list<string> $types */
+/**
+ * @var list<string> $types
+ * @var list<string> $allTags
+ * @var list<string> $excludeTags
+ */
 ?>
 <h1>Items</h1>
 <p class="muted">Every plugin/theme item across every website in the external CRM database —
-    "which sites have which plugins", filterable and searchable (name, slug or site URL).</p>
+    "which sites have which plugins", filterable and searchable (name, slug or site URL).
+    DEV-tagged sites are excluded by default ("Exclude tags").</p>
 
 <div class="search-group">
-<form class="search" onsubmit="return false">
+<form class="search" id="items-filters" onsubmit="return false">
     <input type="search" id="items-q" placeholder="Search…">
     <select id="items-type" class="js-filter-dropdown" data-label="Type">
         <option value="">All types</option>
@@ -14,6 +19,8 @@
             <option value="<?= e($type) ?>"><?= e(ucfirst($type)) ?></option>
         <?php endforeach; ?>
     </select>
+    <?= tag_filter('tags-include-filter', 'Include tags', 'tag', [], $allTags, false) ?>
+    <?= tag_filter('tags-exclude-filter', 'Exclude tags', 'excludeTag', $excludeTags, $allTags, true) ?>
     <label><input type="checkbox" id="items-vulnerable"> Vulnerable only</label>
     <label><input type="checkbox" id="items-update"> Update available only</label>
     <button type="button" class="btn btn-secondary js-apply-filters" id="items-filter-btn">Filter</button>
@@ -40,6 +47,9 @@
           d.type = $('#items-type').val();
           d.vulnerable = $('#items-vulnerable').is(':checked') ? 1 : '';
           d.updateAvailable = $('#items-update').is(':checked') ? 1 : '';
+          d.tag = $('#items-filters input[name="tag[]"]').map(function () { return this.value; }).get();
+          d.excludeTag = $('#items-filters input[name="excludeTag[]"]').map(function () { return this.value; }).get();
+          d.exclude_tag_present = 1;
         }
       },
       // Cells arrive as escaped HTML from CrmController::itemRows().
