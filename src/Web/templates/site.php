@@ -3,6 +3,7 @@
  * @var \SatelliteWP\Manager\Rules\Translator $t
  * @var array<string, mixed>|null $keyRow
  * @var array{site_id: string, key: string, origin: string|null}|null $createdKey
+ * @var array{add: bool, revoke: bool, rebind: bool, http_auth: bool} $can
  */
 ?>
 <?= breadcrumb([
@@ -82,9 +83,15 @@
     <summary class="muted" style="cursor:pointer">⚙ Site settings (API key, address)</summary>
     <div style="margin-top:.8rem">
         <?php if ($keyRow !== null): ?>
-            <?php $apiKey = (string) ($keyRow['api_key'] ?? ''); $revoked = !empty($keyRow['revoked']); ?>
+            <?php
+            $apiKey     = (string) ($keyRow['api_key'] ?? '');
+            $revoked    = !empty($keyRow['revoked']);
+            $managesKey = $can['add'] || $can['revoke'] || $can['rebind'];
+            ?>
             <table class="kv" style="max-width:40rem"><tbody>
+                <?php if ($managesKey): ?>
                 <tr><th>Key</th><td class="mono"><?= $apiKey !== '' ? e(substr($apiKey, 0, 6)) . '…' : '' ?></td></tr>
+                <?php endif; ?>
                 <tr><th>Origin</th><td class="mono"><?= e($keyRow['origin'] ?? '') ?></td></tr>
                 <tr><th>Created</th><td class="muted"><?= e($keyRow['created_at'] ?? '') ?></td></tr>
                 <tr><th>Status</th><td><?= $revoked
@@ -92,7 +99,9 @@
                         : '<span class="badge badge-ok">active</span>' ?></td></tr>
             </tbody></table>
 
+            <?php if ($can['rebind'] || ($can['revoke'] && !$revoked)): ?>
             <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.7rem">
+                <?php if ($can['rebind']): ?>
                 <form method="post" action="/keys" style="margin:0;display:flex;gap:.4rem;align-items:center">
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                     <input type="hidden" name="action" value="rebind">
@@ -101,7 +110,8 @@
                            style="padding:.35rem .5rem;font:inherit;min-width:18rem">
                     <button type="submit" class="btn" style="padding:.25rem .6rem;margin:0">Rebind</button>
                 </form>
-                <?php if (!$revoked): ?>
+                <?php endif; ?>
+                <?php if ($can['revoke'] && !$revoked): ?>
                     <form method="post" action="/keys" style="margin:0"
                           onsubmit="return confirm('Revoke this key? The site won\'t be able to send an extraction until a new key is created.')">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -111,13 +121,17 @@
                     </form>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
+            <?php if ($can['add']): ?>
             <p class="muted" style="font-size:.85rem;margin-top:.7rem">
                 Rotate the key by creating a new one below — it replaces this entry and reactivates it if revoked.
             </p>
+            <?php endif; ?>
         <?php else: ?>
             <p class="muted">No key registered for this site yet.</p>
         <?php endif; ?>
 
+        <?php if ($can['add']): ?>
         <form method="post" action="/keys" style="margin-top:.3rem">
             <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
             <input type="hidden" name="action" value="add">
@@ -126,6 +140,7 @@
                    style="padding:.45rem .6rem;min-width:20rem;font:inherit">
             <button type="submit" class="btn"><?= $keyRow === null ? 'Create key' : 'Create new key (rotate)' ?></button>
         </form>
+        <?php endif; ?>
 
         <?php if ($keyRow !== null): // stored on the site's key record ?>
             <?php $httpAuth = is_array($keyRow['http_auth'] ?? null) ? $keyRow['http_auth'] : null; ?>
@@ -141,8 +156,11 @@
             <?php if ($httpAuth !== null): ?>
                 <p style="margin:0 0 .5rem">
                     <span class="badge badge-ok">configured</span>
+                    <?php if ($can['http_auth']): ?>
                     <span class="mono muted">user: <?= e($httpAuth['username'] ?? '') ?></span>
+                    <?php endif; ?>
                 </p>
+                <?php if ($can['http_auth']): ?>
                 <form method="post" action="/keys" style="margin:0"
                       onsubmit="return confirm('Remove the stored Basic Auth credentials for this site?')">
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -150,6 +168,9 @@
                     <input type="hidden" name="site_id" value="<?= e($siteId) ?>">
                     <button type="submit" class="btn btn-danger" style="padding:.25rem .6rem">Remove</button>
                 </form>
+                <?php endif; ?>
+            <?php elseif (!$can['http_auth']): ?>
+                <p style="margin:0"><span class="badge badge-muted">not configured</span></p>
             <?php else: ?>
                 <form method="post" action="/keys" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">

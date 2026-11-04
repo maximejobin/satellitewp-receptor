@@ -24,7 +24,7 @@ final class DataTablesEscapingTest extends TestCase
             'name'      => self::XSS,
             'license'   => 'unknown',
             'suggested' => ['not', 'a', 'string'],
-        ]], str_repeat('a', 32));
+        ]], str_repeat('a', 32), true);
 
         $this->assertSame('plugin', $rows[0][0]);
         $this->assertSame('evil&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;', $rows[0][1]);

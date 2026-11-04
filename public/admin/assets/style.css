@@ -294,16 +294,16 @@ table.kv td { text-align: left; word-break: break-word; font-variant-numeric: ta
 .b-upd { font-family: var(--mono); color: var(--warn); font-size: .82rem; }
 .lic-form { margin: 0; }
 .lic-form select { font: inherit; font-size: .8rem; padding: .15rem .4rem; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
-.lic-form select.lic-free { border-color: var(--ok); color: var(--ok); }
-.lic-form select.lic-premium, .lic-form select.lic-mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
-.lic-form select.lic-unknown { border-color: var(--border); color: var(--muted); }
-.lic-form select.lic-custom { border-color: var(--info); color: var(--info); }
+.lic-form select.lic-free, .lic-value.lic-free { border-color: var(--ok); color: var(--ok); }
+.lic-form select.lic-premium, .lic-form select.lic-mixed, .lic-value.lic-premium, .lic-value.lic-mixed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+.lic-form select.lic-unknown, .lic-value.lic-unknown { border-color: var(--border); color: var(--muted); }
+.lic-form select.lic-custom, .lic-value.lic-custom { border-color: var(--info); color: var(--info); }
 /* Per-site licence-key status (license_status_select()) — a different
    dropdown than the free/premium classification above, same .lic-form. */
-.lic-form select.lic-active { border-color: var(--ok); color: var(--ok); font-weight: 600; }
-.lic-form select.lic-missing { border-color: var(--error); color: var(--error); font-weight: 600; }
-.lic-form select.lic-to_validate { border-color: var(--warn); color: var(--warn); }
-.lic-form select.lic-n_a { border-color: var(--border); color: var(--muted); }
+.lic-form select.lic-active, .lic-value.lic-active { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.lic-form select.lic-missing, .lic-value.lic-missing { border-color: var(--error); color: var(--error); font-weight: 600; }
+.lic-form select.lic-to_validate, .lic-value.lic-to_validate { border-color: var(--warn); color: var(--warn); }
+.lic-form select.lic-n_a, .lic-value.lic-n_a { border-color: var(--border); color: var(--muted); }
 .lic-form select.lic-saved { box-shadow: 0 0 0 2px var(--bg-ok), 0 0 0 3px var(--ok); }
 .lic-form select:disabled { opacity: .6; cursor: wait; }
 tr.needs-license td:first-child { box-shadow: inset 3px 0 0 var(--warn); }

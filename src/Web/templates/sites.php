@@ -1,4 +1,9 @@
-<?php /** @var \SatelliteWP\Manager\Rules\Translator $t */ ?>
+<?php
+/**
+ * @var \SatelliteWP\Manager\Rules\Translator $t
+ * @var bool $canAdd
+ */
+?>
 <h1><?= e($t->ui('sites')) ?></h1>
 
 <form method="get" class="search">
@@ -16,6 +21,7 @@ if (isset($notices[$notice ?? ''])):
     <?= notice($level, e($text)) ?>
 <?php endif; ?>
 
+<?php if ($canAdd): ?>
 <details style="margin:.2rem 0 1rem">
     <summary class="muted" style="cursor:pointer">Pair a new site</summary>
     <div style="margin-top:.6rem">
@@ -37,6 +43,7 @@ if (isset($notices[$notice ?? ''])):
         </form>
     </div>
 </details>
+<?php endif; ?>
 
 <?php if ($sites === []): ?>
     <p class="empty">No site yet. A site appears as soon as its first extraction is received.</p>

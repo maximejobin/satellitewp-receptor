@@ -4,6 +4,7 @@
  * @var list<array<string, mixed>> $clients
  * @var list<array<string, mixed>> $subscriptions
  * @var bool $canEdit
+ * @var bool $canLink
  * @var string $csrf
  * @var string $notice
  */
@@ -71,10 +72,10 @@ $clientLabels = array_map(
                 <td><a href="/clients/<?= (int) $s['client_id'] ?>"><?= e(ClientsRepository::clientLabel($s + ['email' => $s['client_email'] ?? null])) ?></a></td>
                 <td><?= status_dot((string) $s['subscription_status']) ?></td>
                 <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
-                <td><?= subscription_website_form($s + ['website_id' => $publicId, 'website_url' => $website['url']], $page) ?></td>
+                <td><?= subscription_website_form($s + ['website_id' => $publicId, 'website_url' => $website['url']], $page, $canLink) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
-    <?= subscription_link_dialog($csrf) ?>
+    <?php if ($canLink): ?><?= subscription_link_dialog($csrf) ?><?php endif; ?>
 <?php endif; ?>

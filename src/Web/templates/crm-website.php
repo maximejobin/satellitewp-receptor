@@ -4,6 +4,7 @@
  * @var list<array<string, mixed>> $clients
  * @var list<array<string, mixed>> $subscriptions
  * @var array{plugin: list<array<string,mixed>>, theme: list<array<string,mixed>>, other: list<array<string,mixed>>} $items
+ * @var bool $canLink
  * @var string $csrf
  * @var string $notice
  * @var array<string, string|null> $links external_links config (see config/config.php)
@@ -84,13 +85,14 @@ $clientLabels = array_map(
                 <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
                 <td><?= subscription_website_form(
                     $s + ['website_id' => $website['id'], 'website_url' => $website['url']],
-                    '/websites/' . (int) $website['id']
+                    '/websites/' . (int) $website['id'],
+                    $canLink
                 ) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
-    <?= subscription_link_dialog($csrf) ?>
+    <?php if ($canLink): ?><?= subscription_link_dialog($csrf) ?><?php endif; ?>
 <?php endif; ?>
 
 <?php

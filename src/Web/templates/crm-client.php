@@ -2,6 +2,7 @@
 /**
  * @var array<string, mixed> $client
  * @var list<array<string, mixed>> $subscriptions
+ * @var bool $canLink
  * @var string $csrf
  * @var string $notice
  * @var array<string, string|null> $links external_links config (see config/config.php)
@@ -93,14 +94,14 @@ $editButton = external_link_button($links['wordpress_edit_user'] ?? null, $clien
                 <td><?= e($s['creation_date'] !== null ? substr((string) $s['creation_date'], 0, 10) : '') ?></td>
                 <td><?= e($s['last_payment_date'] !== null ? substr((string) $s['last_payment_date'], 0, 10) : '') ?></td>
                 <td><?= e($s['next_renewal_date'] !== null ? substr((string) $s['next_renewal_date'], 0, 10) : '') ?></td>
-                <td><?= subscription_website_form($s, '/clients/' . (int) $client['id']) ?></td>
+                <td><?= subscription_website_form($s, '/clients/' . (int) $client['id'], $canLink) ?></td>
                 <td><?= external_link_button($links['wordpress_edit_subscription'] ?? null, $s['id'], 'Edit') ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
     </div>
-    <?= subscription_link_dialog($csrf) ?>
+    <?php if ($canLink): ?><?= subscription_link_dialog($csrf) ?><?php endif; ?>
     <script>
       (function () {
         var $search = document.getElementById('svc-search');

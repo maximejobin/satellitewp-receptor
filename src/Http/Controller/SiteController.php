@@ -23,6 +23,7 @@ final class SiteController extends Controller
             'sites'  => $this->app->index()->listSites($_GET['q'] ?? null),
             'search' => (string) ($_GET['q'] ?? ''),
             'notice' => (string) ($_GET['notice'] ?? ''),
+            'canAdd' => $this->currentUserCan('site_key_add'),
         ]);
     }
 
@@ -63,6 +64,12 @@ final class SiteController extends Controller
             'events'      => $this->recentEvents($siteId, 20),
             'keyRow'      => $keyRow,
             'createdKey'  => $created,
+            'can'         => [
+                'add'       => $this->currentUserCan('site_key_add'),
+                'revoke'    => $this->currentUserCan('site_key_revoke'),
+                'rebind'    => $this->currentUserCan('site_key_rebind'),
+                'http_auth' => $this->currentUserCan('site_http_auth_edit'),
+            ],
             'csrf'        => $this->csrfToken(),
         ]);
     }

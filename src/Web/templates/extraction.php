@@ -238,14 +238,14 @@ if ($status !== 'done'):
             <script>setTimeout(function () { location.reload(); }, 5000);</script>
         <?php elseif ($status === 'error'): ?>
             <?= notice('critical', '<b>Analysis failed.</b> Check the worker logs if needed, then retry.') ?>
+            <?php if ($canRerun): ?>
             <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run">
                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                 <input type="hidden" name="return" value="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>">
                 <button type="submit" class="btn">Retry analysis</button>
-                <?php if ($canRerun): ?>
-                    <button type="button" class="btn btn-secondary rerun-open">Re-run some probes</button>
-                <?php endif; ?>
+                <button type="button" class="btn btn-secondary rerun-open">Re-run some probes</button>
             </form>
+            <?php endif; ?>
         <?php elseif ($status === 'aborted'): ?>
             <?= notice('info', '<b>Aborted.</b> This extraction was not analysed — an analyst chose to skip it.') ?>
         <?php else: ?>
@@ -302,6 +302,7 @@ if ($status !== 'done'):
                 . e(json_encode(implode("\n\n", $runWarnings) . "\n\nRun the analysis anyway?"))
                 . ')"';
             ?>
+            <?php if ($canRerun): ?>
             <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
                 <form method="post" action="/site/<?= e($siteId) ?>/extraction/<?= e($extractionId) ?>/run" <?= $confirm ?>
                       style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
@@ -323,6 +324,7 @@ if ($status !== 'done'):
                     <button type="submit" class="btn btn-secondary">Abort</button>
                 </form>
             </div>
+            <?php endif; ?>
         <?php endif; ?>
         </div>
     </section>
@@ -762,7 +764,7 @@ if ($status !== 'done'):
                         <?php $pluginLicense = (string) $str($licenseStatuses['plugin:' . $slug] ?? 'n_a'); ?>
                         <td><?= $stateCell($inactive, $merged, $arr($wporg['plugins'][$slug] ?? null), is_bool($pl['auto_update'] ?? null) ? $pl['auto_update'] : in_array($file, $autoUpdatePlugins, true)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'plugin', $slug, $pluginLicense, $csrf,
-                            "/site/{$siteId}/extraction/{$extractionId}") ?></td>
+                            "/site/{$siteId}/extraction/{$extractionId}", $canEditLicenses) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody></table>
@@ -790,7 +792,7 @@ if ($status !== 'done'):
                         <?php $themeLicense = (string) $str($licenseStatuses['theme:' . $slug] ?? 'n_a'); ?>
                         <td><?= $stateCell($inactive, $merged, $arr($wporg['themes'][$slug] ?? null)) ?></td>
                         <td><?= license_status_select($siteId, $extractionId, 'theme', $slug, $themeLicense, $csrf,
-                            "/site/{$siteId}/extraction/{$extractionId}") ?></td></tr>
+                            "/site/{$siteId}/extraction/{$extractionId}", $canEditLicenses) ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             <?php endif; ?>

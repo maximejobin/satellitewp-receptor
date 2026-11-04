@@ -95,7 +95,7 @@ final class ExternalWebsiteRouteTest extends TestCase
         $this->assertNotNull($app->externalWebsites()->get($id));
     }
 
-    public function testTheCoordinatorManagesExternalWebsitesAndTheSaleRoleDoesNot(): void
+    public function testTheCoordinatorManagesExternalWebsitesAndTheSaleRoleOnlyLinks(): void
     {
         $app = $this->app(['auth' => ['open_mode' => false, 'google' => ['client_id' => 'id', 'client_secret' => 'secret']]]);
         $app->userStore()->add('admin@example.com', 'admin');
@@ -104,7 +104,7 @@ final class ExternalWebsiteRouteTest extends TestCase
 
         $_SESSION['user_email'] = 'sale@example.com';
         $this->assertSame(403, $this->post($app, '/websites/external', ['url' => 'https://shop.example.org'])->status);
-        $this->assertSame(403, $this->post($app, '/subscriptions', ['subscription_id' => '3000', 'website_id' => ''])->status);
+        $this->assertSame(303, $this->post($app, '/subscriptions', ['subscription_id' => '3000', 'website_id' => ''])->status, 'sale links subscriptions');
 
         $_SESSION['user_email'] = 'coordinator@example.com';
         $this->assertSame(303, $this->post($app, '/websites/external', ['url' => 'https://shop.example.org'])->status);

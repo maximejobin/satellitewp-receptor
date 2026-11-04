@@ -201,9 +201,14 @@ abstract class Controller
             ?? (!$this->app->googleAuth()->isConfigured()
                 || ($vars['currentUser'] !== null && $this->app->userStore()->isAdmin($vars['currentUser'])));
 
-        $vars['navUnclassified'] = $this->currentUserCan('catalog_view') ? $this->app->softwareCatalog()->unclassifiedCount() : 0;
-        $vars['navPending']      = $this->currentUserCan('extraction_view_technical') && $this->app->index()->countPending() > 0;
-        $vars['navStatusAlert']  = $this->currentUserCan('data_view') && (new StatusChecks($this->app))->alert();
+        // The menu shows only the pages the routes would let this user open.
+        $vars['navCan'] = [];
+        foreach (['crm_view', 'data_view', 'extraction_view_technical', 'catalog_view', 'styleguide_view'] as $capability) {
+            $vars['navCan'][$capability] = $this->currentUserCan($capability);
+        }
+        $vars['navUnclassified'] = $vars['navCan']['catalog_view'] ? $this->app->softwareCatalog()->unclassifiedCount() : 0;
+        $vars['navPending']      = $vars['navCan']['extraction_view_technical'] && $this->app->index()->countPending() > 0;
+        $vars['navStatusAlert']  = $vars['navCan']['data_view'] && (new StatusChecks($this->app))->alert();
 
         extract($vars, EXTR_SKIP);
         $templateFile = dirname(__DIR__, 2) . '/Web/templates/' . $template . '.php';

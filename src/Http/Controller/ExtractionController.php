@@ -73,6 +73,7 @@ final class ExtractionController extends Controller
             'observationErrors'   => $this->takeObservationErrors("{$siteId}/{$extractionId}"),
             'licenseStatuses'     => $store->readLicenses($siteId, $extractionId) ?? [],
             'canRerun'            => $this->currentUserCan('extraction_run'),
+            'canEditLicenses'     => $this->currentUserCan('catalog_edit'),
             'probeProgress'       => self::probeProgress($probeNames, $probeRuns),
             // Only the worker's own steps refresh the page: a remote audit can stay pending for hours.
             'probesWorking'       => array_intersect(array_column($probeRuns, 'status'), [Index::PROBE_QUEUED, Index::PROBE_RUNNING]) !== [],

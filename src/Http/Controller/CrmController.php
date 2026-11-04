@@ -67,6 +67,7 @@ final class CrmController extends Controller
                 'tooltip'       => true,
                 'client'        => $client,
                 'subscriptions' => $this->withExternalWebsites($repo->subscriptionsForClient($id)),
+                'canLink'       => $this->currentUserCan('crm_subscription_edit'),
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
                 'links'         => $this->app->config->get('external_links', []),
@@ -132,7 +133,7 @@ final class CrmController extends Controller
                 'selectedConnection'  => $connection,
                 'selectedSource'      => $source,
                 'search'              => $search,
-                'canEdit'             => $this->currentUserCan('crm_subscription_edit'),
+                'canEdit'             => $this->currentUserCan('crm_website_edit'),
                 'csrf'                => $this->csrfToken(),
                 'notice'              => (string) ($_GET['notice'] ?? ''),
                 'allTags'             => $repo->searchTags('', 500),
@@ -202,6 +203,7 @@ final class CrmController extends Controller
                 'clients'       => $repo->clientsForWebsite($id),
                 'subscriptions' => $repo->subscriptionsForWebsite($id),
                 'items'         => $items,
+                'canLink'       => $this->currentUserCan('crm_subscription_edit'),
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
                 'links'         => $this->app->config->get('external_links', []),
@@ -229,7 +231,8 @@ final class CrmController extends Controller
                 'website'       => $website,
                 'clients'       => self::clientsOf($subscriptions),
                 'subscriptions' => $subscriptions,
-                'canEdit'       => $this->currentUserCan('crm_subscription_edit'),
+                'canEdit'       => $this->currentUserCan('crm_website_edit'),
+                'canLink'       => $this->currentUserCan('crm_subscription_edit'),
                 'csrf'          => $this->csrfToken(),
                 'notice'        => (string) ($_GET['notice'] ?? ''),
             ]);
@@ -243,7 +246,7 @@ final class CrmController extends Controller
      */
     public function addExternalWebsite(array $params): void
     {
-        if (!$this->requireCapability('crm_subscription_edit')) {
+        if (!$this->requireCapability('crm_website_edit')) {
             return;
         }
 
@@ -257,7 +260,7 @@ final class CrmController extends Controller
     /** @param array<string, string> $params */
     public function updateExternalWebsite(array $params): void
     {
-        if (!$this->requireCapability('crm_subscription_edit')) {
+        if (!$this->requireCapability('crm_website_edit')) {
             return;
         }
 
@@ -275,7 +278,7 @@ final class CrmController extends Controller
     /** @param array<string, string> $params */
     public function deleteExternalWebsite(array $params): void
     {
-        if (!$this->requireCapability('crm_subscription_edit')) {
+        if (!$this->requireCapability('crm_website_edit')) {
             return;
         }
 

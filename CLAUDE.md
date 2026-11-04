@@ -100,7 +100,10 @@ Basic auth / explicit `auth.open_mode` only as dev fallbacks (neither = access r
 every request. `data/users.json`: first entry is the admin; no "first sign-in
 becomes admin" bootstrap (seed with `users:add`). Capabilities are
 `<entity>_<verb>` (`config/roles.php`); `Controller::requireCapability()` is
-the single gate (permissive only under Basic auth or open mode). `/users`
+the single gate (permissive only under Basic auth or open mode). The UI never
+offers what the gate would refuse: menu entries follow `navCan`, an action a
+role can't take is not rendered and a value it can't edit renders as text
+(`tests/Http/RoleUiTest.php`). `/styleguide` is admin only (`styleguide_view`). `/users`
 mutations additionally require a real Google identity. The last active admin
 can't be removed, demoted or suspended.
 
@@ -308,7 +311,9 @@ swp_subscriptions_websites row, and the reverse. Orphan counts exclude them
 them ("External" badge, Source filter; a tag or connection filter hides them),
 `/websites/x3` is their page; created only from `/websites`, refused when the
 URL is already a website, deleted only once no CRM subscription holds them.
-Managed with `crm_subscription_edit` (admin, maintenance, coordinator). The CRM
+Linking needs `crm_subscription_edit` (every role, sale included); creating,
+editing or deleting an external website `crm_website_edit` (admin, maintenance,
+coordinator). The CRM
 sync never writes swp_subscriptions_websites: links are manual.
 Access runbook: `docs/acces-mysql-distant.md`.
 

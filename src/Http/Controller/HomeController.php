@@ -15,6 +15,10 @@ final class HomeController extends Controller
     /** @param array<string, string> $params */
     public function styleguide(array $params): void
     {
+        if (!$this->requireCapability('styleguide_view')) {
+            return;
+        }
+
         $this->render('styleguide', [
             'title'      => 'Style guide',
             'nav'        => 'styleguide',

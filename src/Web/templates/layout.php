@@ -67,28 +67,42 @@ $nav = $nav ?? 'sites';
     <aside class="side" id="sideNav">
         <a class="brand" href="/"><b>SatelliteWP</b> Manager</a>
 
+        <?php if (!empty($navCan['data_view'])): ?>
         <a class="nav-item <?= $nav === 'status' ? 'active' : '' ?>" href="/status">Status<?php if (!empty($navStatusAlert)): ?> <span class="nav-count" title="Something on this page needs a look">Alert</span><?php endif; ?></a>
+        <?php endif; ?>
 
+        <?php if (!empty($navCan['crm_view'])): ?>
         <a class="nav-item <?= $nav === 'crm-clients' ? 'active' : '' ?>" href="/clients">Clients</a>
         <a class="nav-item <?= $nav === 'crm-websites' ? 'active' : '' ?>" href="/websites">Websites</a>
         <a class="nav-item <?= $nav === 'crm-items' ? 'active' : '' ?>" href="/items">Items</a>
         <a class="nav-item <?= $nav === 'crm-products' ? 'active' : '' ?>" href="/products">Products</a>
+        <?php endif; ?>
 
+        <?php if (!empty($navCan['extraction_view_technical']) || !empty($navCan['catalog_view'])): ?>
         <div class="nav-label">Extractor</div>
+        <?php endif; ?>
+        <?php if (!empty($navCan['extraction_view_technical'])): ?>
         <a class="nav-item <?= $nav === 'sites' ? 'active' : '' ?>" href="/extractions"><?= e($t->ui('sites')) ?><?php if (!empty($navPending)): ?> <span class="nav-dot" title="Extractions waiting for analysis"></span><?php endif; ?></a>
+        <?php endif; ?>
+        <?php if (!empty($navCan['catalog_view'])): ?>
         <a class="nav-item <?= $nav === 'catalog' ? 'active' : '' ?>" href="/catalog">Catalogue<?php if (($navUnclassified ?? 0) > 0): ?> <span class="nav-count" title="Not yet classified"><?= (int) $navUnclassified ?></span><?php endif; ?></a>
+        <?php endif; ?>
 
+        <?php if (!empty($navCan['data_view'])): ?>
         <div class="nav-label">Data</div>
         <a class="nav-item <?= $nav === 'data-wp-versions' ? 'active' : '' ?>" href="/data/wp-versions">WordPress versions</a>
         <a class="nav-item <?= $nav === 'data-php-versions' ? 'active' : '' ?>" href="/data/php-versions">PHP versions</a>
         <a class="nav-item <?= $nav === 'data-databases' ? 'active' : '' ?>" href="/data/databases">Databases</a>
         <a class="nav-item <?= $nav === 'data-vulnerabilities' ? 'active' : '' ?>" href="/data/vulnerabilities">Vulnerabilities</a>
+        <?php endif; ?>
 
         <div class="nav-label">Management</div>
         <?php if (!empty($canSeeUsersNav)): ?>
             <a class="nav-item <?= $nav === 'users' ? 'active' : '' ?>" href="/users">Users</a>
         <?php endif; ?>
-        <a class="nav-item <?= $nav === 'styleguide' ? 'active' : '' ?>" href="/styleguide">Style guide</a>
+        <?php if (!empty($navCan['styleguide_view'])): ?>
+            <a class="nav-item <?= $nav === 'styleguide' ? 'active' : '' ?>" href="/styleguide">Style guide</a>
+        <?php endif; ?>
         <?php // Profile and sign-out only exist for a signed-in identity. ?>
         <?php if (!empty($currentUser)): ?>
             <a class="nav-item <?= $nav === 'profile' ? 'active' : '' ?>" href="/profile">My profile</a>

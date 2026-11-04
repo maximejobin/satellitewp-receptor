@@ -275,7 +275,8 @@ function license_select(
     string $current,
     string $csrf,
     string $return,
-    ?string $suggested = null
+    ?string $suggested = null,
+    bool $canEdit = true
 ): string {
     $labels = ['unknown' => 'unknown', 'free' => 'free', 'premium' => 'premium', 'mixed' => 'mixed', 'custom' => 'custom code'];
     $options = '';
@@ -288,6 +289,11 @@ function license_select(
     }
 
     $cls = 'lic-' . e(($current === 'unknown' && $suggested) ? $suggested : $current);
+    if (!$canEdit) {
+        $label = $current === 'unknown' && $suggested ? "unknown ({$suggested}?)" : ($labels[$current] ?? $current);
+
+        return '<span class="lic-value ' . $cls . '">' . e($label) . '</span>';
+    }
 
     return '<form method="post" action="/catalog" class="lic-form">'
         . '<input type="hidden" name="_csrf" value="' . e($csrf) . '">'
@@ -310,7 +316,8 @@ function license_status_select(
     string $slug,
     string $current,
     string $csrf,
-    string $return
+    string $return,
+    bool $canEdit = true
 ): string {
     $labels = [
         'n_a'         => 'N/A',
@@ -318,6 +325,9 @@ function license_status_select(
         'missing'     => 'Missing license',
         'to_validate' => 'To validate',
     ];
+    if (!$canEdit) {
+        return '<span class="lic-value lic-' . e($current) . '">' . e($labels[$current] ?? $current) . '</span>';
+    }
     $options = '';
     foreach ($labels as $status => $label) {
         $selected = $status === $current ? ' selected' : '';
@@ -334,13 +344,13 @@ function license_status_select(
 }
 
 /**
- * The linked website of a subscription and the button opening
+ * The linked website of a subscription and, when $canLink, the button opening
  * subscription_link_dialog(), which reads the row's details from data-wf.
  *
  * @param array<string, mixed> $subscription carries 'id' and optionally 'website_id' (CRM id or
  *                                           ExternalWebsites "x3"), 'website_url' and the product columns
  */
-function subscription_website_form(array $subscription, string $return): string
+function subscription_website_form(array $subscription, string $return, bool $canLink): string
 {
     $currentId  = isset($subscription['website_id']) && $subscription['website_id'] !== '' ? (string) $subscription['website_id'] : null;
     $currentUrl = $subscription['website_url'] ?? null;
@@ -363,8 +373,10 @@ function subscription_website_form(array $subscription, string $return): string
         . ($label !== null
             ? '<a href="/websites/' . e($currentId) . '">' . e($label) . '</a>'
             : '<span class="val-error">Unassigned</span>')
-        . ' <button type="button" class="wf-edit-btn" data-wf="' . e((string) json_encode($details)) . '" '
-        . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
+        . ($canLink
+            ? ' <button type="button" class="wf-edit-btn" data-wf="' . e((string) json_encode($details)) . '" '
+                . 'title="Change linked website" aria-label="Change linked website">' . icon_edit() . '</button>'
+            : '')
         . '</span>';
 }
 

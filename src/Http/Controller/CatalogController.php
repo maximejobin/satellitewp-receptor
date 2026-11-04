@@ -53,7 +53,7 @@ final class CatalogController extends Controller
             'draw'            => (int) ($_GET['draw'] ?? 0),
             'recordsTotal'    => $result['total'],
             'recordsFiltered' => $result['filtered'],
-            'data'            => self::tableRows($result['rows'], $this->csrfToken()),
+            'data'            => self::tableRows($result['rows'], $this->csrfToken(), $this->currentUserCan('catalog_edit')),
         ]);
     }
 
@@ -64,7 +64,7 @@ final class CatalogController extends Controller
      * @param list<array<string, mixed>> $rows
      * @return list<list<string>>
      */
-    public static function tableRows(array $rows, string $csrf): array
+    public static function tableRows(array $rows, string $csrf, bool $canEdit): array
     {
         require_once dirname(__DIR__, 2) . '/Web/helpers.php';
 
@@ -78,7 +78,8 @@ final class CatalogController extends Controller
                 (string) ($e['license'] ?? 'unknown'),
                 $csrf,
                 '/catalog',
-                is_string($e['suggested'] ?? null) ? $e['suggested'] : null
+                is_string($e['suggested'] ?? null) ? $e['suggested'] : null,
+                $canEdit
             ),
         ], $rows);
     }
